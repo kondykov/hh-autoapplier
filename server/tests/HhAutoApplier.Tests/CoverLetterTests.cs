@@ -50,6 +50,17 @@ public class CoverLetterTests
         Assert.Contains("имя кандидата, подпись и контакты — только из шаблона", text2);
     }
 
+    // #92: прямые ссылки — к теневому бану hh.ru; адрес остаётся текстом, контакт не теряется
+    [Fact]
+    public void Parse_RemovesLinkSchemes_KeepsAddressAsText()
+    {
+        var letter = CoverLetterWriting.Parse(
+            "Здравствуйте! Мой код — https://github.com/kondykov, пишите в Telegram: HTTP://www.t.me/kondykov или @kondykov.");
+
+        Assert.Equal("Здравствуйте! Мой код — github.com/kondykov, пишите в Telegram: t.me/kondykov или @kondykov.", letter);
+        Assert.Contains("Без ссылок с http:// и https://", CoverLetterWriting.BuildRequest(Card(), null).Messages[0].Content);
+    }
+
     [Fact]
     public void Parse_StripsWrappersAndRejectsGarbage()
     {
