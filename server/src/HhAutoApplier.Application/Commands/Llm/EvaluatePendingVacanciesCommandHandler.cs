@@ -55,7 +55,7 @@ public class EvaluatePendingVacanciesCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request, ct);
+                result = await llm.CompleteAsync(request with { Purpose = VacancyAssessment.Purpose }, ct);
             }
             catch (LlmUnavailableException e)
             {
@@ -145,7 +145,7 @@ public class EvaluatePendingVacanciesCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request, ct);
+                result = await llm.CompleteAsync(request with { Purpose = LetterRequestExtraction.Purpose }, ct);
             }
             catch (LlmUnavailableException e)
             {

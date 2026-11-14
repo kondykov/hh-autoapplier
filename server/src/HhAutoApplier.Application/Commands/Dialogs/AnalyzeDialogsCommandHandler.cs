@@ -66,7 +66,7 @@ public class AnalyzeDialogsCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request, ct);
+                result = await llm.CompleteAsync(request with { Purpose = DialogAnalysis.Purpose }, ct);
             }
             catch (LlmUnavailableException e)
             {

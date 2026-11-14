@@ -48,6 +48,9 @@ public class LlmOptions
     // json_object или none (JSON задаётся промптом); пусто — как в профиле. Поддержка зависит и от конкретной модели
     public string? JsonMode { get; set; }
 
+    // Маршруты под задачи (#104): Evaluation, Letters, Questionnaires, Dialogs — см. LlmRoutes
+    public Dictionary<string, LlmRouteOptions> Routes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     // Методы, а не свойства: привязка конфигурации не должна читать профиль, пока Provider не задан
     public LlmProviderProfile GetProfile() => LlmProviders.All[ProviderName()];
 
