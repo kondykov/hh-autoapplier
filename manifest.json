@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HH AutoApplier",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Полуавтоматические отклики на hh.ru",
   "permissions": [
     "storage"
@@ -11,6 +11,14 @@
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "content_scripts": [
     {
       "matches": [
