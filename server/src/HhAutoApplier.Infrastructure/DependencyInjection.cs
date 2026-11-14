@@ -71,7 +71,9 @@ public static class DependencyInjection
             using var scope = sp.CreateScope();
             var from = new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             var calls = scope.ServiceProvider.GetRequiredService<AppDbContext>().LlmCalls.Where(c => c.CreatedAt >= from && c.CreatedAt < from.AddDays(1));
-            return filter(calls).Count();
+            // Только запросы, дошедшие до модели: отказы до запроса («исчерпан лимит», сеть, пауза) лимит не тратят — иначе после
+            // перезапуска сотни таких записей за сбойный день считались бы расходом и сразу закрывали лимит
+            return filter(calls).Count(c => c.Model != null && c.Model != "");
         };
         services.AddSingleton(sp => new LlmBudget(sp.GetRequiredService<TimeProvider>(), UsedToday(sp, q => q.Where(c => !routedPurposes.Contains(c.Purpose)))));
 
