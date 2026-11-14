@@ -31,6 +31,11 @@ export function isPageOf(url: string, id: string): boolean {
   return vacancyId === id;
 }
 
+// Страница входа или регистрации hh.ru: так выглядит слетевший вход вместо формы отклика (#75, #95; проверено 2026-11-09)
+export function isSignInPage(url: string): boolean {
+  return /^\/account\/(signup|login)\b/.test(new URL(url).pathname);
+}
+
 // Пробный режим очереди — fail-closed: остановленная очередь не отправляет никогда (#49)
 export const isDryRun = (queueRunning: boolean, queueDryRun: boolean): boolean => !queueRunning || queueDryRun;
 
