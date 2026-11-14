@@ -31,7 +31,8 @@ public class EvaluatePendingVacanciesCommandHandler(
         var usage = await quota.LoadAsync(ct);
         var exhausted = usage.Exhausted;
         var pending = await db.ActiveApplications(await users.GetBlockedIdsAsync(ct)).Where(a => a.Status == VacancyStatus.Pending && !exhausted.Contains(a.UserId))
-            .OrderBy(a => a.Vacancy.CollectedAt).Take(command.Limit).ToListAsync(ct);
+            // Свежие первыми (#85): старые карточки чаще уже в архиве, а новые не должны ждать их разбора
+            .OrderByDescending(a => a.Vacancy.LastSeenAt).ThenByDescending(a => a.Vacancy.CollectedAt).Take(command.Limit).ToListAsync(ct);
         // Резюме — владельца отклика, правила — поиска, который нашёл вакансию
         var resumesByOwner = (await db.ResumesOf(pending).ToListAsync(ct)).ToLookup(r => r.UserId);
         // Профиль кандидата (#35) — владельца отклика

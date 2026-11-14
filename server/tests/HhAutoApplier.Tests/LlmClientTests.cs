@@ -87,6 +87,47 @@ public class LlmClientTests
         Assert.Equal([TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(2)], pauses);
     }
 
+    // #85: долгий Retry-After не ждём — проход останавливается, лимит не тратится, до срока запросов нет
+    [Fact]
+    public async Task LongRetryAfter_StopsWithoutWaiting_ReturnsBudget_AndBlocksUntilDeadline()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        var budget = new LlmBudget(clock);
+        var (client, http, pauses) = Create(new Script(
+            (HttpStatusCode.TooManyRequests, "rate limit", TimeSpan.FromSeconds(1294)),
+            (HttpStatusCode.OK, Ok, null)), budget: budget);
+
+        var e = await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        Assert.Contains("ограничил частоту", e.Message);
+        Assert.Contains("12:21", e.Message);
+        Assert.Empty(pauses);
+        Assert.Equal(0, budget.Used);
+
+        // До срока — без запроса к провайдеру
+        clock.Now = clock.Now.AddMinutes(10);
+        await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        Assert.Single(http.Requests);
+
+        // После срока — как обычно
+        clock.Now = clock.Now.AddMinutes(12);
+        Assert.Equal("ok", (await client.CompleteAsync(Ask, default)).Content);
+        Assert.Equal(2, http.Requests.Count);
+    }
+
+    // Короткий Retry-After (в пределах порога) по-прежнему ждём внутри прохода
+    [Fact]
+    public async Task ShortRetryAfter_StillWaitsAndRetries()
+    {
+        var budget = new LlmBudget(TimeProvider.System);
+        var (client, _, pauses) = Create(new Script(
+            (HttpStatusCode.TooManyRequests, "rate limit", TimeSpan.FromSeconds(60)),
+            (HttpStatusCode.OK, Ok, null)), budget: budget);
+
+        Assert.Equal("ok", (await client.CompleteAsync(Ask, default)).Content);
+        Assert.Equal([TimeSpan.FromSeconds(60)], pauses);
+        Assert.Null(budget.ThrottledUntil);
+    }
+
     [Fact]
     public async Task GivesUp_AfterRetries_AndOnClientErrors()
     {
