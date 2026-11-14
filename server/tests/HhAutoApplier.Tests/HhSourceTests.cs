@@ -215,6 +215,23 @@ public class HhSourceTests
     public async Task Source_BlockedOnArchivedPage_NotArchived(HttpStatusCode status, string? finalPath) =>
         await Assert.ThrowsAsync<SourceBlockedException>(() => Source(status, Page(ArchivedJson), finalPath).LoadDetailsAsync(Card("1", "x"), default));
 
+    // #94: карточка с immediateRedirectUrl ведёт с hh.ru на страницу работодателя — в выдачу сбора не попадает
+    [Fact]
+    public void ParseSearch_SkipsCardsRedirectingOffHh()
+    {
+        using var state = System.Text.Json.JsonDocument.Parse("""
+            {"vacancySearchResult":{"vacancies":[
+              {"vacancyId":201,"name":"Продавец","immediateRedirectUrl":"http://hh.ru/article/34504?utm_source=hh_lead_gen"},
+              {"vacancyId":202,"name":"C# разработчик","immediateRedirectUrl":""},
+              {"vacancyId":203,"name":"PHP разработчик"}
+            ]}}
+            """);
+
+        var found = HhPageParser.ParseSearch(state.RootElement, "x", DateTimeOffset.UtcNow)!;
+
+        Assert.Equal(["202", "203"], found.Select(v => v.Id));
+    }
+
     // Страница вакансии и главная отвечают по-разному: главная — контрольный запрос после 403 (#99)
     private sealed class RouteHandler(HttpStatusCode vacancy, HttpStatusCode home, string? homePath = null) : HttpMessageHandler
     {
