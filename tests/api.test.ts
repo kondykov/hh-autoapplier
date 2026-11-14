@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { BackendClient, type ApiSender } from "../src/api/client";
-import { executeApiRequest, isApiRequest, type ApiResponse } from "../src/api/transport";
+import { executeApiRequest, isApiRequest, serverOriginPattern, type ApiResponse } from "../src/api/transport";
 import { API_VERSION } from "../src/api/version";
 import { DEFAULT_SERVER, loadConfig } from "../src/core/config";
 import { MemoryStorage } from "../src/infra/storage";
@@ -61,6 +61,29 @@ describe("executeApiRequest", () => {
     const res = await executeApiRequest({ type: "hh-api", path: "/health" }, { url: "127.0.0.1:8080", apiKey: "" }, fetchFn as unknown as typeof fetch);
     expect(res.status).toBe(0);
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("адрес без разрешения — ответ noAccess без запроса (#101)", async () => {
+    const fetchFn = ok();
+    const hasAccess = vi.fn(async () => false);
+    const res = await executeApiRequest({ type: "hh-api", path: "/health" }, { url: "http://192.168.0.104:8080", apiKey: "k" }, fetchFn as unknown as typeof fetch, hasAccess);
+    expect(hasAccess).toHaveBeenCalledWith("http://192.168.0.104/*");
+    expect(res).toMatchObject({ status: 0, noAccess: true });
+    expect(res.error).toContain("192.168.0.104:8080");
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("адрес с разрешением — запрос как обычно", async () => {
+    const fetchFn = ok();
+    const res = await executeApiRequest({ type: "hh-api", path: "/health" }, { url: "http://192.168.0.104:8080", apiKey: "" }, fetchFn as unknown as typeof fetch, async () => true);
+    expect(res).toEqual({ status: 200, body: "{}" });
+  });
+
+  it("шаблон разрешения — схема и хост без порта", () => {
+    expect(serverOriginPattern("http://192.168.0.104:8080/")).toBe("http://192.168.0.104/*");
+    expect(serverOriginPattern(" https://hh.example.test ")).toBe("https://hh.example.test/*");
+    expect(serverOriginPattern("ftp://x")).toBeNull();
+    expect(serverOriginPattern("127.0.0.1:8080")).toBeNull();
   });
 
   it("принимает только свои сообщения с относительным путём", () => {
