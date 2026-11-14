@@ -19,7 +19,7 @@ export type QueueResult = { ok: true; items: QueueItem[] } | { ok: false; error:
 
 export type ReportResult = { ok: true } | { ok: false; error: string };
 
-export type ExtensionEvent = "Captcha" | "DailyLimit";
+export type ExtensionEvent = "Captcha" | "DailyLimit" | "SignedOut";
 
 // Ответ импорта: waiting — карточки ждут подтверждения сбором сервера
 export interface ImportCounts {

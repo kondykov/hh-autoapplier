@@ -49,6 +49,10 @@ public static partial class HhPageParser
 
         return items.EnumerateArray()
             .Where(i => i.TryGetProperty("vacancyId", out _))
+            // Карточка ведёт не на hh.ru, а на страницу работодателя (лидогенерация, «отклик на сайте»): в форме hh.ru откликнуться
+            // не выйдет, в очереди она только сломалась бы (#94; выдача 2026-11-14: «Продавец» → hh.ru/article/…?utm_source=hh_lead_gen)
+            .Where(i => !(i.TryGetProperty("immediateRedirectUrl", out var redirect) && redirect.ValueKind == JsonValueKind.String
+                          && !string.IsNullOrWhiteSpace(redirect.GetString())))
             .Select(i =>
             {
                 var id = i.GetProperty("vacancyId").ToString();

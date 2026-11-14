@@ -1,0 +1,52 @@
+# Сборка расширения в GitHub Release (#98): zip с dist для «Загрузить распакованное».
+# Срабатывает на публикацию релиза расширения (тег ext-v…), в том числе pre-release; вручную — для уже выпущенного тега
+name: Сборка расширения в релиз
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Тег релиза расширения (например, ext-v0.7.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    name: Собрать и приложить zip
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'ext-v')
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Проверить тег
+        run: |
+          [[ "$TAG" =~ ^ext-v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::не тег расширения: $TAG"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      # Без letter.local.txt — письмо по умолчанию: личное письмо в публичный релиз не попадает
+      - run: npm run build
+
+      - name: Упаковать и приложить
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="hh-autoapplier-${TAG#ext-v}.zip"
+          (cd dist && zip -qr "../$name" . -x '*.map')
+          gh release upload "$TAG" "$name" --clobber
