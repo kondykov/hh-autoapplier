@@ -23,6 +23,9 @@ public class LlmClientTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Requests.Add((request, await request.Content!.ReadAsStringAsync(ct)));
+            // Без ответов — сеть недоступна
+            if (responses.Length == 0)
+                throw new HttpRequestException("connection refused");
             var (status, body, retryAfter) = responses[Math.Min(_next++, responses.Length - 1)];
             var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
             if (retryAfter is not null)
@@ -112,6 +115,27 @@ public class LlmClientTests
         clock.Now = clock.Now.AddMinutes(12);
         Assert.Equal("ok", (await client.CompleteAsync(Ask, default)).Content);
         Assert.Equal(2, http.Requests.Count);
+    }
+
+    // #68: сеть недоступна и после повторов — лимит не тратится, пауза 5 минут для всех конвейеров
+    [Fact]
+    public async Task NetworkFailure_ReturnsBudget_AndPausesRequests()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        var budget = new LlmBudget(clock);
+        var (client, http, _) = Create(new Script(), budget: budget);
+
+        var e = await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        Assert.Contains("сеть", e.Message);
+        Assert.Contains("12:05", e.Message);
+        Assert.Equal(0, budget.Used);
+        var attempts = http.Requests.Count;
+
+        await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        Assert.Equal(attempts, http.Requests.Count);
+
+        clock.Now = clock.Now.AddMinutes(6);
+        Assert.Null(budget.Throttle);
     }
 
     // Короткий Retry-After (в пределах порога) по-прежнему ждём внутри прохода
