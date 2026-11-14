@@ -71,6 +71,11 @@ public static class LetterRequestExtraction
         try
         {
             using var json = JsonDocument.Parse(content[start..(end + 1)]);
+            // Пустой объект — так GigaChat-2-Max отвечает «просьб нет» (2026-11-15). Принимается, только если в вакансии нет
+            // признаков просьбы к письму: иначе модель, отвечающая {} на всё, тихо теряла бы кодовые слова и вопросы
+            if (json.RootElement.ValueKind == JsonValueKind.Object && !json.RootElement.EnumerateObject().Any())
+                return MayAskSomething(vacancy) ? null : [];
+
             if (json.RootElement.ValueKind != JsonValueKind.Object
                 || !json.RootElement.TryGetProperty("requests", out var requests)
                 || requests.ValueKind != JsonValueKind.Array
@@ -99,6 +104,13 @@ public static class LetterRequestExtraction
 
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ValueKind == JsonValueKind.Number ? value.GetRawText() : null;
     }
+
+    private static readonly Regex RequestHint = new(
+        @"сопроводительн|в\s+отклике|напиш\w*|укаж\w*|ответьте|ответ\w*\s+на\s+(вопрос|задани)|кодов\w*\s+слов|прочитал\w*\s+(данную\s+|эту\s+)?ваканси|пример\w*\s+\d|\d+\s*[*+×]\s*\d+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200));
+
+    // Признаки просьбы к письму в тексте вакансии: при них пустой ответ модели — не «просьб нет», а повод проверить
+    public static bool MayAskSomething(Vacancy vacancy) => RequestHint.IsMatch($"{vacancy.Title} {vacancy.Description}");
 
     private static bool IsKnownType(JsonElement item) =>
         item.ValueKind == JsonValueKind.String && (Type(item.GetString()) != LetterRequestType.Other || item.GetString() == "other");
