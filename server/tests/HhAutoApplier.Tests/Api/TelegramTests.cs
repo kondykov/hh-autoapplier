@@ -260,11 +260,15 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
         Assert.True((await Json(await key.PostAsJsonAsync("/api/events", captcha))).GetProperty("notified").GetBoolean());
         Assert.False((await Json(await key.PostAsJsonAsync("/api/events", captcha))).GetProperty("notified").GetBoolean());
         Assert.True((await Json(await key.PostAsJsonAsync("/api/events", new { kind = "DailyLimit" }))).GetProperty("notified").GetBoolean());
+        // #95: слетел вход — одно сообщение в час
+        Assert.True((await Json(await key.PostAsJsonAsync("/api/events", new { kind = "SignedOut" }))).GetProperty("notified").GetBoolean());
+        Assert.False((await Json(await key.PostAsJsonAsync("/api/events", new { kind = "SignedOut" }))).GetProperty("notified").GetBoolean());
         Assert.Equal(HttpStatusCode.BadRequest, (await key.PostAsJsonAsync("/api/events", new { kind = "Unknown" })).StatusCode);
 
         var sent = await Notifications();
-        Assert.Equal([NotificationKind.Captcha, NotificationKind.DailyLimit], sent.Select(n => n.Kind));
+        Assert.Equal([NotificationKind.Captcha, NotificationKind.DailyLimit, NotificationKind.SignedOut], sent.Select(n => n.Kind));
         Assert.Contains("vacancy 1", sent[0].Text);
+        Assert.Contains("Нет входа в hh.ru", sent[2].Text);
 
         factory.Telegram.Configured = false;
         Assert.False((await Json(await key.PostAsJsonAsync("/api/events", new { kind = "Captcha" }))).GetProperty("notified").GetBoolean());

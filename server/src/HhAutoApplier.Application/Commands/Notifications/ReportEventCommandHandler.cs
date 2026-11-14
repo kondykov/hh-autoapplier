@@ -17,6 +17,8 @@ public class ReportEventCommandHandler(ICurrentUser current, Notifier notifier, 
         {
             ExtensionEvent.Captcha => (NotificationKind.Captcha, $"captcha:{now:yyyy-MM-ddTHH}",
                 $"Капча на hh.ru: расширение на паузе. Решите капчу в браузере и снимите паузу в панели.{details}"),
+            ExtensionEvent.SignedOut => (NotificationKind.SignedOut, $"signed-out:{now:yyyy-MM-ddTHH}",
+                $"Нет входа в hh.ru: очередь остановлена, отклики остались в очереди. Войдите в hh.ru в браузере и запустите очередь снова.{details}"),
             _ => (NotificationKind.DailyLimit, $"daily-limit:{now:yyyy-MM-dd}",
                 $"Дневной лимит откликов исчерпан: расширение продолжит завтра.{details}"),
         };

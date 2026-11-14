@@ -5,7 +5,7 @@ import { pauseBetween, RANGES, wait } from "../core/delays";
 import type { AppState, Vacancy } from "../core/state";
 import type { PageType } from "../dom/page-type";
 import { toServerQuestions } from "../questions/fill";
-import { isPageOf, isQueueFailure, pickNext, QUEUE_FAIL_LIMIT, responseUrl, toStatusReport, type QueueItem } from "../queue/queue-mode";
+import { isPageOf, isQueueFailure, isSignInPage, pickNext, QUEUE_FAIL_LIMIT, responseUrl, toStatusReport, type QueueItem } from "../queue/queue-mode";
 import { extractVacancyInfo } from "./vacancy-info";
 import { reportDailyLimit, stopQueue, type PageStep, type StepContext } from "./step-context";
 
@@ -128,8 +128,15 @@ export class QueueStep implements PageStep {
       nav.go(responseUrl(current.id));
       return;
     }
+    if (isSignInPage(nav.url())) {
+      // Слетел вход: hh.ru ведёт на регистрацию (#75). Причина — явно, в панели и в Telegram (#95); отклик остаётся в очереди
+      stopQueue(this.ctx, `Нет входа в hh.ru: вместо формы отклика "${current.title}" открылась страница входа — очередь остановлена, статус не менялся. Войдите в hh.ru и запустите очередь снова`);
+      void this.ctx.backend.reportEvent("SignedOut", `Остановлено на "${current.title}"`);
+      await this.ctx.persist();
+      return;
+    }
     if (!isPageOf(nav.url(), current.id)) {
-      // Слетел вход (hh.ru ведёт на регистрацию), блокировка или другой сбой: о вакансии это ничего не говорит, а следующие
+      // Блокировка или другой сбой: о вакансии это ничего не говорит, а следующие
       // получили бы то же самое (#75). Статус не трогаем — отклик остаётся в очереди
       stopQueue(this.ctx, `Вместо формы отклика "${current.title}" открылась страница ${new URL(nav.url()).pathname} — очередь остановлена, статус не менялся. Проверьте вход на hh.ru`);
       await this.ctx.persist();

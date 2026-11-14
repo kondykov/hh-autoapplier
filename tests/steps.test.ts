@@ -441,8 +441,25 @@ describe("QueueStep", () => {
   // #75: без входа hh.ru ведёт сюда (проверено 2026-11-09)
   const SIGNUP = "https://hh.ru/account/signup?postponed=&backurl=%2Fsearch%2Fvacancy&hhtmFrom=vacancy_response";
 
+  it.each([SIGNUP, "https://hh.ru/account/login?backurl=%2F"])(
+    "слетел вход (%s): очередь остановлена с причиной «нет входа», событие SignedOut, статус не меняется (#75, #95)",
+    async (url) => {
+      const { ctx, visited, messages } = context({ url, queue: [item("1"), item("2")], config: { queueDryRun: false } });
+      Object.assign(ctx.state, { queueRunning: true, queueCurrent: item("1"), queueTried: ["1"], queueOpened: true });
+
+      await run(new QueueStep(ctx).resume());
+
+      expect(ctx.pipeline.applyOnPage).not.toHaveBeenCalled();
+      expect(ctx.backend.reportStatus).not.toHaveBeenCalled();
+      expect(ctx.backend.reportEvent).toHaveBeenCalledWith("SignedOut", expect.any(String));
+      expect(visited).toEqual([]);
+      expect(ctx.state.queueRunning).toBe(false);
+      expect(messages.at(-1)).toContain("Нет входа в hh.ru");
+      expect(messages.at(-1)).not.toContain("backurl");
+    },
+  );
+
   it.each([
-    ["регистрацию", SIGNUP, "/account/signup"],
     ["другую вакансию", "https://hh.ru/vacancy/999", "/vacancy/999"],
   ])("hh.ru увёл с формы на %s: очередь остановлена, статус не меняется (#75)", async (_name, url, path) => {
     const { ctx, visited, messages } = context({ url, queue: [item("1"), item("2")], config: { queueDryRun: false } });
