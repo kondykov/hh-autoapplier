@@ -75,11 +75,15 @@ public static class LetterRequestExtraction
                 || !json.RootElement.TryGetProperty("requests", out var requests)
                 || requests.ValueKind != JsonValueKind.Array
                 || requests.GetArrayLength() > MaxRequests
-                || requests.EnumerateArray().Any(r => r.ValueKind != JsonValueKind.Object))
+                || requests.EnumerateArray().Any(r => r.ValueKind != JsonValueKind.Object && !IsKnownType(r)))
                 return null;
 
+            // Модель иногда отвечает одними типами: {"requests": ["test_task"]} (GigaChat-2-Max, 2026-11-15) — это известный тип без
+            // цитаты и значения. Незнакомая строка по-прежнему делает ответ неразобранным
             return requests.EnumerateArray()
-                .Select(r => LetterRequest.Extracted(Type(Text(r, "type")), Text(r, "quote"), Text(r, "value"), vacancy.Description))
+                .Select(r => r.ValueKind == JsonValueKind.String
+                    ? LetterRequest.Extracted(Type(r.GetString()), null, null, vacancy.Description)
+                    : LetterRequest.Extracted(Type(Text(r, "type")), Text(r, "quote"), Text(r, "value"), vacancy.Description))
                 .ToList();
         }
         catch (JsonException)
@@ -95,6 +99,9 @@ public static class LetterRequestExtraction
 
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ValueKind == JsonValueKind.Number ? value.GetRawText() : null;
     }
+
+    private static bool IsKnownType(JsonElement item) =>
+        item.ValueKind == JsonValueKind.String && (Type(item.GetString()) != LetterRequestType.Other || item.GetString() == "other");
 
     // Неизвестный тип — прочее: сервер его не выполняет, решает человек
     private static LetterRequestType Type(string? type) => type switch
