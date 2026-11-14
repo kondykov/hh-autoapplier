@@ -56,6 +56,8 @@ public class OpenAiCompatibleClient : ILlmClient
     {
         if (!IsConfigured)
             throw new LlmUnavailableException("не задан ключ API (LLM_API_KEY) или модель");
+        if (_budget.ThrottledUntil is { } until)
+            throw new LlmUnavailableException(Throttled(until));
         if (!_budget.TryTake(_opt.DailyRequestLimit))
             throw new LlmUnavailableException($"исчерпан дневной лимит запросов ({_opt.DailyRequestLimit})");
 
@@ -101,7 +103,19 @@ public class OpenAiCompatibleClient : ILlmClient
                 if (!retryable || attempt >= _opt.MaxRetries)
                     throw new LlmUnavailableException($"провайдер ответил {(int)response.StatusCode}: {Trim(error)}");
 
-                await PauseAsync(attempt, response.Headers.RetryAfter?.Delta, $"ответ {(int)response.StatusCode}", ct);
+                var retryAfter = RetryAfter(response);
+                // Долгий срок провайдера не ждём внутри прохода (#85): он держал бы оценку, письма и анкеты до 20 минут.
+                // Проход останавливается, до срока запросы не идут, единица лимита возвращается — модель запрос не обработала
+                if (response.StatusCode == HttpStatusCode.TooManyRequests && retryAfter > TimeSpan.FromSeconds(_opt.MaxRetryAfterSeconds))
+                {
+                    _budget.ThrottleFor(retryAfter.Value);
+                    _budget.Return();
+                    var limitedUntil = _budget.ThrottledUntil ?? DateTimeOffset.UtcNow + retryAfter.Value;
+                    _logger.LogWarning("LLM: ответ 429, Retry-After {Pause} с — проход остановлен до {Until:HH:mm:ss} UTC", retryAfter.Value.TotalSeconds, limitedUntil);
+                    throw new LlmUnavailableException(Throttled(limitedUntil));
+                }
+
+                await PauseAsync(attempt, retryAfter, $"ответ {(int)response.StatusCode}", ct);
             }
         }
     }
@@ -158,6 +172,14 @@ public class OpenAiCompatibleClient : ILlmClient
     }
 
     private static string Trim(string s) => s.Length > 300 ? s[..300] : s;
+
+    private static string Throttled(DateTimeOffset until) => $"провайдер ограничил частоту запросов до {until:HH:mm} UTC";
+
+    // Retry-After — секунды или дата
+    private static TimeSpan? RetryAfter(HttpResponseMessage response) =>
+        response.Headers.RetryAfter is { } header
+            ? header.Delta ?? (header.Date is { } date ? date - DateTimeOffset.UtcNow : null)
+            : null;
 
     private record ChatRequest(
         [property: JsonPropertyName("model")] string Model,

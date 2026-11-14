@@ -28,6 +28,9 @@ public class LlmOptions
     // Повторы при 429 и 5xx; пауза — Retry-After или 1, 2, 4… с
     public int MaxRetries { get; set; } = 3;
 
+    // 429 с Retry-After дольше этого не ждём внутри прохода (#85): проход останавливается, запросы — после срока провайдера
+    public int MaxRetryAfterSeconds { get; set; } = 60;
+
     // Защита бесплатного тарифа и кошелька: запросов в сутки (UTC); 0 — без ограничения
     public int DailyRequestLimit { get; set; } = 300;
 

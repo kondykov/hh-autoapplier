@@ -9,6 +9,39 @@ public class LlmBudget(TimeProvider clock, Func<DateOnly, int>? usedToday = null
 
     private int _used;
 
+    // До этого момента провайдер ограничил частоту (429 с долгим Retry-After, #85): общий для всех конвейеров и ручных /api/llm/*
+    private DateTimeOffset _throttledUntil;
+
+    public DateTimeOffset? ThrottledUntil
+    {
+        get
+        {
+            lock (_lock)
+                return _throttledUntil > clock.GetUtcNow() ? _throttledUntil : null;
+        }
+    }
+
+    public void ThrottleFor(TimeSpan pause)
+    {
+        lock (_lock)
+        {
+            var until = clock.GetUtcNow() + pause;
+            if (until > _throttledUntil)
+                _throttledUntil = until;
+        }
+    }
+
+    // Запрос не дошёл до модели (провайдер ограничил частоту): единица лимита возвращается
+    public void Return()
+    {
+        lock (_lock)
+        {
+            Roll();
+            if (_used > 0)
+                _used--;
+        }
+    }
+
     public int Used
     {
         get
