@@ -72,7 +72,7 @@ public class AnswerQuestionnairesCommandHandler(
                 LlmResult result;
                 try
                 {
-                    result = await llm.CompleteAsync(request, ct);
+                    result = await llm.CompleteAsync(request with { Purpose = QuestionnaireAnswering.Purpose }, ct);
                 }
                 catch (LlmUnavailableException e)
                 {

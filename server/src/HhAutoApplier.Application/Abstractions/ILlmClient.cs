@@ -20,8 +20,8 @@ public record LlmMessage(string Role, string Content)
     public static LlmMessage Assistant(string content) => new("assistant", content);
 }
 
-// Json — попросить модель ответить JSON-объектом (response_format)
-public record LlmRequest(IReadOnlyList<LlmMessage> Messages, double Temperature = 0.2, int MaxTokens = 800, bool Json = false);
+// Json — попросить модель ответить JSON-объектом (response_format). Purpose — назначение запроса: по нему выбирается маршрут (#104)
+public record LlmRequest(IReadOnlyList<LlmMessage> Messages, double Temperature = 0.2, int MaxTokens = 800, bool Json = false, string? Purpose = null);
 
 // Модель — та, что ответила (провайдер может подставить версию), токены — для учёта расходов
 public record LlmResult(string Content, string Model, int PromptTokens, int CompletionTokens);
