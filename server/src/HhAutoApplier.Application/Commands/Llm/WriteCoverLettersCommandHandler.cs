@@ -76,7 +76,7 @@ public class WriteCoverLettersCommandHandler(
                 LlmResult result;
                 try
                 {
-                    result = await llm.CompleteAsync(request, ct);
+                    result = await llm.CompleteAsync(request with { Purpose = CoverLetterWriting.Purpose }, ct);
                 }
                 catch (LlmUnavailableException e)
                 {
