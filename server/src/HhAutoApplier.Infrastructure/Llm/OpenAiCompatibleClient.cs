@@ -56,8 +56,8 @@ public class OpenAiCompatibleClient : ILlmClient
     {
         if (!IsConfigured)
             throw new LlmUnavailableException("не задан ключ API (LLM_API_KEY) или модель");
-        if (_budget.ThrottledUntil is { } until)
-            throw new LlmUnavailableException(Throttled(until));
+        if (_budget.Throttle is { } throttle)
+            throw new LlmUnavailableException(Throttled(throttle.Reason, throttle.Until));
         if (!_budget.TryTake(_opt.DailyRequestLimit))
             throw new LlmUnavailableException($"исчерпан дневной лимит запросов ({_opt.DailyRequestLimit})");
 
@@ -87,7 +87,11 @@ public class OpenAiCompatibleClient : ILlmClient
             }
             catch (HttpRequestException e)
             {
-                throw new LlmUnavailableException($"сеть: {e.Message}");
+                // Запрос до провайдера не дошёл (#68): лимит возвращается, четыре конвейера не долбят мёртвую сеть каждую минуту
+                var reason = $"сеть: {e.Message}";
+                var until = _budget.ThrottleFor(NetworkPause, reason);
+                _budget.Return();
+                throw new LlmUnavailableException(Throttled(reason, until));
             }
 
             using (response)
@@ -108,11 +112,10 @@ public class OpenAiCompatibleClient : ILlmClient
                 // Проход останавливается, до срока запросы не идут, единица лимита возвращается — модель запрос не обработала
                 if (response.StatusCode == HttpStatusCode.TooManyRequests && retryAfter > TimeSpan.FromSeconds(_opt.MaxRetryAfterSeconds))
                 {
-                    _budget.ThrottleFor(retryAfter.Value);
+                    var limitedUntil = _budget.ThrottleFor(retryAfter.Value, RateLimited);
                     _budget.Return();
-                    var limitedUntil = _budget.ThrottledUntil ?? DateTimeOffset.UtcNow + retryAfter.Value;
                     _logger.LogWarning("LLM: ответ 429, Retry-After {Pause} с — проход остановлен до {Until:HH:mm:ss} UTC", retryAfter.Value.TotalSeconds, limitedUntil);
-                    throw new LlmUnavailableException(Throttled(limitedUntil));
+                    throw new LlmUnavailableException(Throttled(RateLimited, limitedUntil));
                 }
 
                 await PauseAsync(attempt, retryAfter, $"ответ {(int)response.StatusCode}", ct);
@@ -173,7 +176,12 @@ public class OpenAiCompatibleClient : ILlmClient
 
     private static string Trim(string s) => s.Length > 300 ? s[..300] : s;
 
-    private static string Throttled(DateTimeOffset until) => $"провайдер ограничил частоту запросов до {until:HH:mm} UTC";
+    private const string RateLimited = "провайдер ограничил частоту запросов";
+
+    // После сетевой ошибки (уже с повторами) — пауза перед следующей попыткой любого конвейера
+    private static readonly TimeSpan NetworkPause = TimeSpan.FromMinutes(5);
+
+    private static string Throttled(string reason, DateTimeOffset until) => $"{reason}; запросы к LLM приостановлены до {until:HH:mm} UTC";
 
     // Retry-After — секунды или дата
     private static TimeSpan? RetryAfter(HttpResponseMessage response) =>
