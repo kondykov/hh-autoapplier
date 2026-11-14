@@ -50,7 +50,8 @@ services:
       # Прокси на самом сервере: host.docker.internal — адрес хоста на docker0
       - "host.docker.internal:host-gateway"
     ports:
-      - "127.0.0.1:${API_PORT:-8080}:8080"
+      # API_BIND=0.0.0.0 — доступ из домашней сети (#100); ufw порты Docker не фильтрует, снаружи закрывает только роутер
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
     volumes:
       # Ключи подписи cookie: вне тома при каждом up --build слетают сессии входа
       - dpkeys:/root/.aspnet/DataProtection-Keys

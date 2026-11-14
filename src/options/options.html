@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>HH AutoApplier — настройки</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
+    h1 { font-size: 20px; }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; }
+    button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #0969da; background: #0969da; color: #fff; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
+    #status { margin-top: 12px; }
+    .ok { color: #1a7f37; } .warn { color: #9a6700; }
+  </style>
+</head>
+<body>
+  <h1>HH AutoApplier: доступ к серверу</h1>
+  <p>Адрес сервера из панели: <code id="server">…</code></p>
+  <p>Chrome пускает расширение только на адреса, которые вы разрешили. <code>127.0.0.1</code> и <code>localhost</code> разрешены сразу,
+     адрес в домашней сети (например, <code>http://192.168.0.104:8080</code>) — этой кнопкой.</p>
+  <button id="grant" disabled>Разрешить доступ</button>
+  <p id="status"></p>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -73,6 +73,8 @@ cd /opt/hh-autoapplier/server && GIT_COMMIT=$(git rev-parse --short HEAD) docker
 curl -s http://127.0.0.1:8080/health
 ```
 
+**Доступ из домашней сети** (#100): `API_BIND=0.0.0.0` в `server/.env`, затем `docker compose up -d`. Сайт и API — `http://<адрес сервера>:8080` (на home-server — `http://192.168.0.104:8080`), без SSH-туннеля. Правило ufw не нужно и не поможет: Docker публикует порты в обход цепочки INPUT, поэтому снаружи сервер закрыт только роутером — порт 8080 на нём не пробрасывать. Трафик — открытый HTTP: пароль и токены идут по домашней сети без шифрования; TLS — #6. Расширение к такому адресу пока не ходит: в `host_permissions` только `127.0.0.1` и `localhost`.
+
 Relay зависит от Happ: после перезагрузки Happ сам не подключается, пока не выполнен вход в KDE, и до этого Groq и Telegram недоступны. Как это решить — `docs/specs/sprint-15.md`, В3.
 
 ### Runner (сервер, root)
@@ -101,6 +103,7 @@ chown -R root:root /opt/actions-runner/hooks
 ```bash
 cd /opt/actions-runner
 runuser -u deploy -- ./config.sh --url https://github.com/kondykov/hh-autoapplier-extension --token ТОКЕН --name home-server --labels home-server --work _work --unattended
+chmod 600 /opt/actions-runner/.credentials /opt/actions-runner/.credentials_rsaparams   # config.sh создаёт их читаемыми всеми
 systemctl enable --now actions-runner.service
 systemctl status actions-runner --no-pager
 ```

@@ -24,7 +24,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse: (r
   if (!isApiRequest(message)) return false;
   void (async () => {
     const config = await loadConfig(new ChromeStorage());
-    sendResponse(await executeApiRequest(message, config.server));
+    const hasAccess = (pattern: string) => chrome.permissions.contains({ origins: [pattern] });
+    const response = await executeApiRequest(message, config.server, fetch, hasAccess);
+    // Разрешение на адрес в сети даёт только страница настроек: запросить его из content script на hh.ru нельзя (#101).
+    // Уже открытую страницу Chrome не дублирует, а выводит вперёд
+    if (response.noAccess) void chrome.runtime.openOptionsPage();
+    sendResponse(response);
   })();
   return true; // ответ асинхронный
 });
