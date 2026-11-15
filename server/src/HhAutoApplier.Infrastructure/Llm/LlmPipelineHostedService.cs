@@ -22,7 +22,6 @@ namespace HhAutoApplier.Infrastructure.Llm;
 // отвечала, не затирается (xmin, SaveOrDiscardAsync)
 public class LlmPipelineHostedService(
     IServiceScopeFactory scopes,
-    TimeProvider clock,
     ILogger<LlmPipelineHostedService> logger
 ) : BackgroundService
 {
@@ -69,9 +68,9 @@ public class LlmPipelineHostedService(
             if (await db.EmployerMessages.AnyAsync(m => m.Kind == null, stop))
                 results.Add((await services.GetRequiredService<AnalyzeDialogsCommandHandler>().Handle(new AnalyzeDialogsCommand { Limit = Batch }, stop)).Value);
 
-            if (results.Select(StoppedBy).FirstOrDefault(r => r is not null) is { } reason)
-                await services.GetRequiredService<Notifier>().NotifyAdminsAsync(NotificationKind.LlmUnavailable, $"llm:{clock.GetUtcNow():yyyy-MM-dd}",
-                    $"{reason}. Оценка, анкеты, письма и разбор ответов продолжатся позже.", stop);
+            var reason = results.Select(StoppedBy).FirstOrDefault(r => r is not null);
+            if (services.GetRequiredService<LlmOutage>().Observe(reason, results.Count > 0) is { } change)
+                await NotifyAsync(services.GetRequiredService<Notifier>(), change, stop);
 
             await services.GetRequiredService<LlmUserQuota>().NotifyExhaustedAsync(stop);
             await services.GetRequiredService<LlmQualityMonitor>().NotifyIfFrequentAsync(stop);
@@ -80,6 +79,16 @@ public class LlmPipelineHostedService(
         // После писем: в сообщении о проверке уже есть письмо
         await services.GetRequiredService<NotifyReviewsCommandHandler>().Handle(new NotifyReviewsCommand(), stop);
     }
+
+    // Сообщение на перерыв и на восстановление (#108); ключ — начало перерыва, повтор того же перерыва не пишется
+    private static Task NotifyAsync(Notifier notifier, LlmOutageChange change, CancellationToken stop) => change switch
+    {
+        LlmOutageChange.Started s => notifier.NotifyAdminsAsync(NotificationKind.LlmUnavailable, $"llm:{s.Since:yyyy-MM-ddTHH:mm}",
+            $"{s.Reason}. Оценка, анкеты, письма и разбор ответов продолжатся позже — сообщу, когда LLM снова ответит.", stop),
+        LlmOutageChange.Recovered r => notifier.NotifyAdminsAsync(NotificationKind.LlmUnavailable, $"llm-ok:{r.Since:yyyy-MM-ddTHH:mm}",
+            $"LLM снова отвечает: сбой с {MoscowTime.Format(r.Since)} до {MoscowTime.Format(r.At)}. Оценка, анкеты, письма и разбор ответов продолжаются.", stop),
+        _ => Task.CompletedTask,
+    };
 
     // Почему проход LLM остановился раньше (лимит, провайдер); null — прошёл всё
     private static string? StoppedBy(object? result) => result switch

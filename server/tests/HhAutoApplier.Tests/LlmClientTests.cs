@@ -102,7 +102,7 @@ public class LlmClientTests
 
         var e = await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
         Assert.Contains("ограничил частоту", e.Message);
-        Assert.Contains("12:21", e.Message);
+        Assert.Contains("15:21 МСК", e.Message); // 12:21 UTC — время для людей московское (#108)
         Assert.Empty(pauses);
         Assert.Equal(0, budget.Used);
 
@@ -127,7 +127,7 @@ public class LlmClientTests
 
         var e = await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
         Assert.Contains("сеть", e.Message);
-        Assert.Contains("12:05", e.Message);
+        Assert.Contains("15:05 МСК", e.Message);
         Assert.Equal(0, budget.Used);
         var attempts = http.Requests.Count;
 

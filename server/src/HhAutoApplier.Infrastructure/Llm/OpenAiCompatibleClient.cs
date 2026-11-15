@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HhAutoApplier.Application.Abstractions;
+using HhAutoApplier.Application.Notifications;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -181,7 +182,8 @@ public class OpenAiCompatibleClient : ILlmClient
     // После сетевой ошибки (уже с повторами) — пауза перед следующей попыткой любого конвейера
     private static readonly TimeSpan NetworkPause = TimeSpan.FromMinutes(5);
 
-    private static string Throttled(string reason, DateTimeOffset until) => $"{reason}; запросы к LLM приостановлены до {until:HH:mm} UTC";
+    // Пауза у своего маршрута (модели), остальные работают; время — московское (#108)
+    private string Throttled(string reason, DateTimeOffset until) => $"{reason}; запросы к {_opt.Model} приостановлены до {MoscowTime.Format(until)}";
 
     // Retry-After — секунды или дата
     private static TimeSpan? RetryAfter(HttpResponseMessage response) =>
