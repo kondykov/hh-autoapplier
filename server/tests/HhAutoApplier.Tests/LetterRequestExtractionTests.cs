@@ -118,6 +118,28 @@ public class LetterRequestExtractionTests
     public void Unparsed_answer_is_unknown_not_empty(string content) =>
         Assert.Null(LetterRequestExtraction.Parse(content, VacancyWith(Ending)));
 
+    // GigaChat-2-Max отвечает {} вместо {"requests": []} (2026-11-15): «просьб нет» — только если вакансия ничего не просит
+    [Fact]
+    public void Empty_object_is_no_requests_only_without_hints()
+    {
+        var plain = LetterRequestExtraction.Parse("{}", VacancyWith("Разработка API на ASP.NET Core, PostgreSQL, удалёнка."));
+        Assert.NotNull(plain);
+        Assert.Empty(plain);
+
+        Assert.Null(LetterRequestExtraction.Parse("{}", VacancyWith(Ending)));
+        Assert.Null(LetterRequestExtraction.Parse(" {} ", VacancyWith("В сопроводительном письме расскажите о себе.")));
+        Assert.Null(LetterRequestExtraction.Parse("{}", VacancyWith("Чтобы мы поняли, что вы человек, укажите кодовое слово «тигр».")));
+    }
+
+    // GigaChat-2-Max отвечает одними типами (2026-11-15): известный тип принимается без цитаты и значения
+    [Fact]
+    public void Known_type_strings_are_requests_without_quote()
+    {
+        var requests = LetterRequestExtraction.Parse("""{"requests": ["test_task", "salary"]}""", VacancyWith(Ending))!;
+
+        Assert.Equal([LetterRequestType.TestTask, LetterRequestType.Salary], requests.Select(r => r.Type));
+    }
+
     [Fact]
     public void Empty_array_means_no_requests()
     {
