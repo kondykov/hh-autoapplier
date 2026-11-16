@@ -1,0 +1,42 @@
+# Библиотека почты libs/mail (#109): сборка, тесты на GreenMail в Docker, пакет как артефакт (без публикации)
+name: Mail library
+
+on:
+  push:
+    paths:
+      - "libs/mail/**"
+      - ".github/workflows/mail-lib.yml"
+  pull_request:
+    paths:
+      - "libs/mail/**"
+      - ".github/workflows/mail-lib.yml"
+
+concurrency:
+  group: mail-lib-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Почта (build, test, pack)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/mail
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - run: dotnet restore Postbox.slnx
+      - run: dotnet build Postbox.slnx --no-restore -c Release
+      - run: dotnet test Postbox.slnx --no-build -c Release
+      - run: dotnet pack src/Postbox --no-build -c Release -o artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: postbox-nupkg
+          path: libs/mail/artifacts/*.nupkg

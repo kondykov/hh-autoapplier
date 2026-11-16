@@ -44,6 +44,7 @@ cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:808
 - `src/api` — клиент backend и транспорт; `src/background/main.ts` — service worker, через который идут все запросы к backend (со страницы hh.ru Chrome блокирует запросы в локальную сеть)
 - `server/src/HhAutoApplier.{Domain,Application,Infrastructure,Api}` — DDD + CQRS: агрегаты, команды/запросы, EF и источники, контроллеры (`docs/adr/0001-backend-ddd-cqrs.md`)
 - `deploy/` — деплой backend на сервер по кнопке через self-hosted runner (`docs/DEPLOY.md`); метку `home-server` в других workflow не использовать
+- `libs/mail/` — библиотека почты (SMTP-отправка, IMAP-чтение; #109): своё решение `Postbox.slnx`, версия и CI (`mail-lib.yml`), без ссылок на hh-autoapplier — готовится к выносу в отдельный NuGet-пакет. Подробно — `libs/mail/README.md`
 - `docs/` — для людей; план доработок — `docs/ROADMAP.md`
 
 ## Code Style

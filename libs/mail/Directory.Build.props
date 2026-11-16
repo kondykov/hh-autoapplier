@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- Библиотека почты (#109). Решение не зависит от hh-autoapplier: свои версия, пакеты и nuget.config -->
+  <PropertyGroup>
+    <!-- Версия пакета, SemVer, своя: не связана с версиями расширения и backend -->
+    <Version>0.1.0</Version>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
