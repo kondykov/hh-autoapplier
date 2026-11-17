@@ -30,7 +30,14 @@ public static class BotTexts
         Резюме, профиль, правила поисков, пароль и пользователи — в веб-интерфейсе. /stop — отвязать чат.
         """;
 
-    public const string NotLinked = "Чат не привязан. Получите код на backend (POST /api/telegram/link после входа по паролю) и отправьте сюда: /start <код>";
+    // Ответ незнакомому чату (#118): без адресов API — человеку нужно знать, где взять код
+    public const string NotLinked = "Этот бот — для пользователей hh-autoapplier. Чтобы привязать чат, получите код в веб-интерфейсе (раздел «Профиль») и отправьте сюда: /start <код>";
+
+    // Меню команд незнакомого чата (#118): полный список — только привязанным чатам
+    public static readonly IReadOnlyList<(string Command, string Description)> StrangerCommands =
+    [
+        ("start", "Привязать чат: /start <код из веб-интерфейса>"),
+    ];
 
     // Подписи клавиатуры-меню прежних версий: у кого она осталась, кнопки продолжают работать, пока /menu её не уберёт
     public const string OldStatusButton = "📊 Статус";
