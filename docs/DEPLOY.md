@@ -16,7 +16,7 @@ Workflow — [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), 
 - проверяет CI именно этого коммита: нет прогона, идёт, красный — отказ, сервер не меняется;
 - проверяет, что файлы из `COMPOSE_FILE` в `server/.env` есть в выкатываемом коммите, иначе отказ до бэкапа;
 - делает `pg_dump` в `/var/backups/hh-autoapplier/hhapplier-deploy-<дата>-<коммит>.dump`;
-- выполняет checkout в `/opt/hh-autoapplier`, `docker compose up -d --build` с `GIT_COMMIT` выкатываемого коммита (его показывает `GET /api/version`) и ждёт `/health` (до 3 минут);
+- выполняет checkout в `/opt/hh-autoapplier`, `docker compose up -d --build` с `GIT_COMMIT` выкатываемого коммита (его показывает `GET /api/version`) и ждёт `/health` (до 3 минут); затем сверяет `commit` из `GET /api/version` с выкатываемым коммитом (#116): другой коммит — сбой и откат, 401 — сборка до #116, версия в Summary «нет»;
 - при сбое сохраняет логи API в `/var/backups/hh-autoapplier/deploy-failed-*.log`, возвращает предыдущий коммит, задача становится красной. GitHub присылает письмо о сбое; уведомление в Telegram — после #28.
 
 Одновременно идёт только один деплой. Логи Actions в публичном репозитории видны всем, поэтому логи приложения в них не выводятся.

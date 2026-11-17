@@ -11,6 +11,7 @@ APP_DIR="${APP_DIR:-/opt/hh-autoapplier}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/hh-autoapplier}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"
+VERSION_URL="${VERSION_URL:-http://127.0.0.1:8080/api/version}"
 DEPLOY_REF="${DEPLOY_REF:-master}"
 DEPLOY_BACKUP="${DEPLOY_BACKUP:-true}"
 CI_WORKFLOW=".github/workflows/ci.yml"
@@ -21,6 +22,7 @@ before=""
 target=""
 after=""
 health="не проверялось"
+version="не проверялось"
 backup_file="нет"
 
 git_app() { git -C "$APP_DIR" "$@"; }
@@ -39,6 +41,7 @@ write_summary() {
     echo "| Выкатывался | \`${target:-?}\` |"
     echo "| Стало | \`${after:-${before:-?}}\` |"
     echo "| /health | \`$health\` |"
+    echo "| Версия | \`$version\` |"
     echo "| Бэкап БД | \`$backup_file\` |"
   } >>"$GITHUB_STEP_SUMMARY"
 }
@@ -140,6 +143,28 @@ wait_health() {
   return 1
 }
 
+# Поднялась ли именно выкатываемая сборка (#116): /health отвечает и у старого контейнера, если новый не собрался.
+# 401 — сборка до #116, где версия только со входом (например, откат на старый коммит): не сбой, версия «нет».
+# Сравниваются первые 7 знаков: API отдаёт короткий SHA не длиннее 7, а git может удлинить его при совпадении префиксов
+check_version() {
+  local expected=${1:0:7} response code body number commit
+  response=$(curl -sS -m 5 -w '\n%{http_code}' "$VERSION_URL" 2>/dev/null) || response=$'\n000'
+  code=${response##*$'\n'}
+  body=${response%$'\n'*}
+  if [[ "$code" == 401 ]]; then
+    version="нет: сборка до #116 отдаёт версию только со входом"
+    return 0
+  fi
+  [[ "$code" == 200 ]] || { version="нет ответа ($code)"; return 1; }
+  number=$(sed -nE 's/.*"version" *: *"([^"]*)".*/\1/p' <<<"$body")
+  commit=$(sed -nE 's/.*"commit" *: *"([^"]*)".*/\1/p' <<<"$body")
+  version="${number:-?} (${commit:-?})"
+  if [[ "${commit:0:7}" != "$expected" ]]; then
+    version="$version, а выкатывался $expected"
+    return 1
+  fi
+}
+
 roll_out() {
   local sha=$1
   git_app checkout --quiet --detach "$sha" || return 1
@@ -148,7 +173,8 @@ roll_out() {
   GIT_COMMIT=$(git_app rev-parse --short "$sha") || return 1
   export GIT_COMMIT
   compose up -d --build || return 1
-  wait_health
+  wait_health || return 1
+  check_version "$sha"
 }
 
 # Контейнер при откате пересоздаётся и его логи пропадают, а в Actions их выводить нельзя
@@ -178,7 +204,7 @@ if roll_out "$target"; then
 fi
 
 failure_log=$(save_failure_logs)
-echo "::error::Выкат $target не прошёл (/health: $health)" >&2
+echo "::error::Выкат $target не прошёл (/health: $health; версия: $version)" >&2
 
 if [[ "$target" == "$before" ]]; then
   outcome="Сбой: откатывать некуда"
@@ -187,9 +213,10 @@ if [[ "$target" == "$before" ]]; then
 fi
 
 failed_health=$health
+failed_version=$version
 if roll_out "$before"; then
   outcome="Сбой: выполнен откат"
-  reason="Коммит не поднялся (/health: $failed_health), вернули предыдущий. Логи на сервере: $failure_log"
+  reason="Коммит не поднялся (/health: $failed_health; версия: $failed_version), вернули предыдущий. Логи на сервере: $failure_log"
 else
   outcome="Сбой: откат НЕ удался, нужна ручная починка"
   reason="См. docs/DEPLOY.md. Логи на сервере: $failure_log"
