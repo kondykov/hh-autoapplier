@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--line:#263040;--grid:#1a222d;--text:#e6edf3;--muted:#7d8a99;--accent:#f0a3a8;--ok:#7ee2a8;--warn:#f2c66d;--mono:"Cascadia Mono",Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#e9ecf1;font:14px/1.45 var(--sans);color:var(--text);width:1600px}
+.row{display:flex;gap:28px;padding:28px;align-items:flex-start}
+.cap{font:600 15px var(--sans);color:#1d2330;margin:0 0 10px}
+.cap small{display:block;font-weight:400;color:#5b6576;font-size:13px;margin-top:2px}
+.hh{position:relative;width:740px;height:600px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #d6dbe3}
+.hh .bar{height:52px;background:#0f0f0f;display:flex;align-items:center;gap:18px;padding:0 18px;color:#fff;font-weight:600}
+.hh .logo{width:30px;height:30px;border-radius:50%;background:#d6001c;display:grid;place-items:center;font-size:13px}
+.ph{background:#eef1f5;border-radius:8px}
+.hh .search{margin:18px;height:44px}
+.hh .chips{display:flex;gap:8px;margin:0 18px 16px}.hh .chips div{height:30px;width:96px}
+.hh .card{margin:0 18px 12px;height:118px;padding:14px}
+.hh .card i{display:block;height:14px;margin-bottom:9px;border-radius:4px;background:#dfe4ea}
+.panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(13,17,23,.35);background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:18px 18px}
+.head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.mark{font:700 13px var(--mono);color:var(--text);background:#0d1117;border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+.mark b{color:var(--accent)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.muted{color:var(--muted)}.mono{font-family:var(--mono)}
+.sec{padding:12px}
+.sec h4{margin:0 0 8px;font:600 11px var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:38px;border-radius:8px;border:1px solid var(--line);background:#161b22;color:var(--text);font-weight:600;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#2a0f12}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px}
+.stat b{display:block;font:700 18px var(--mono)}.stat span{font-size:11px;color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px}
+.box{width:14px;height:14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent)}
+.log{font:12px/1.6 var(--mono);color:var(--muted);background:#0a0e14;border-top:1px solid var(--line);padding:8px 12px;border-radius:0 0 12px 12px}
+.log em{color:var(--accent);font-style:normal}
+.pill{position:absolute;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--text);font:600 13px var(--mono);box-shadow:0 8px 20px rgba(13,17,23,.35)}
+.pill .n{background:var(--accent);color:#2a0f12;border-radius:999px;padding:1px 7px}
+.tag{font:600 11px var(--mono);color:var(--accent);border:1px solid #5a3a3e;border-radius:6px;padding:1px 6px}
+.side{width:360px;height:600px;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.split{display:flex;gap:0;border-radius:12px;overflow:hidden;border:1px solid #d6dbe3}
+.split .hh{border:0;border-radius:0;width:520px}
+.opts{width:620px;height:600px;border-radius:12px;padding:0;overflow:hidden}
+.field{display:grid;grid-template-columns:170px 1fr;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.field label{color:var(--muted);font-size:13px}
+.input{height:32px;border-radius:8px;border:1px solid var(--line);background:#0a0e14;padding:6px 10px;font:13px var(--mono);color:var(--text)}
+.nav{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.nav span{padding:6px 10px;border-radius:8px;font-size:13px;color:var(--muted)}.nav span.on{background:#161b22;color:var(--text);border:1px solid var(--line)}
+</style>
+<body>
+<div class="row">
+  <div>
+    <p class="cap">A. Плавающая панель — по странице<small>Выдача hh.ru: только уместные действия, настройки ушли в «Настройки». Свёрнута — плашка справа внизу</small></p>
+    <div class="hh">
+      <div class="bar"><div class="logo">hh</div>Резюме и профиль · Отклики · Сервисы</div>
+      <div class="search ph"></div>
+      <div class="chips"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+      <div class="card ph"><i style="width:55%"></i><i style="width:30%"></i><i style="width:80%"></i><i style="width:70%"></i></div>
+      <div class="card ph"><i style="width:45%"></i><i style="width:25%"></i><i style="width:85%"></i><i style="width:60%"></i></div>
+      <div class="card ph"><i style="width:60%"></i><i style="width:35%"></i><i style="width:75%"></i></div>
+      <div class="panel" style="position:absolute;right:18px;top:70px;width:330px">
+        <div class="head"><span class="mark">hh<b>=#</b></span><span style="font-weight:600">Выдача</span><span style="margin-left:auto" class="muted mono" title="сервер"><span class="dot"></span> 0.4.1</span></div>
+        <div class="sec">
+          <h4>Эта страница</h4>
+          <div class="muted" style="font-size:13px;margin-bottom:10px">20 вакансий · новых для сервера <b style="color:var(--text)">7</b></div>
+          <div class="btn primary">Отправить в поиск «dotnet-remote»</div>
+          <div class="muted" style="font-size:12px;margin-top:6px">Сервер отберёт и оценит, отклик — из очереди</div>
+        </div>
+        <div class="sec" style="border-top:1px solid var(--line)">
+          <h4>Очередь на сервере</h4>
+          <div class="stats"><div class="stat"><b>2</b><span>в очереди</span></div><div class="stat"><b>7</b><span>проверка</span></div><div class="stat"><b>0/148</b><span>за день</span></div></div>
+          <div class="btn" style="margin-top:10px">Запустить очередь</div>
+          <div class="check"><span class="box"></span>Пробный режим — не нажимать «Отправить»</div>
+        </div>
+        <div class="log">[21:47] <em>синхр. чатов</em>: 12 чатов, 1 приглашение</div>
+      </div>
+      <div class="pill" style="bottom:18px;right:370px;opacity:.0"></div>
+    </div>
+  </div>
+  <div>
+    <p class="cap">A. Свёрнуто и на странице «Чаты»<small>Плашка не закрывает hh.ru; «Синхронизировать чаты» открывает «Чаты» сама</small></p>
+    <div class="hh" style="width:780px">
+      <div class="bar"><div class="logo">hh</div>Резюме и профиль · Отклики 5 · Сервисы</div>
+      <div class="search ph" style="width:60%"></div>
+      <div class="chips"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+      <div class="card ph"><i style="width:40%"></i><i style="width:25%"></i><i style="width:55%"></i></div>
+      <div class="card ph"><i style="width:50%"></i><i style="width:20%"></i><i style="width:65%"></i></div>
+      <div class="panel" style="position:absolute;left:18px;top:300px;width:300px">
+        <div class="head"><span class="mark">hh<b>=#</b></span><span style="font-weight:600">Чаты</span><span style="margin-left:auto" class="tag">3 новых</span></div>
+        <div class="sec">
+          <div class="btn primary">Синхронизировать чаты с сервером</div>
+          <div class="muted" style="font-size:12px;margin:8px 0 0">Статусы, приглашения и отказы — на сервер, разбор ответов — в Telegram. Последний раз: 2 ч назад</div>
+          <div class="check"><span class="box"></span>Отвечать «спасибо» на новые отказы</div>
+        </div>
+      </div>
+      <div class="pill"><span class="mark" style="padding:1px 5px">hh<b>=#</b></span>очередь 2 · проверка <span class="n">7</span></div>
+    </div>
+  </div>
+</div>
+<div class="row" style="padding-top:0">
+  <div>
+    <p class="cap">B. Боковая панель Chrome<small>Не перекрывает hh.ru, живёт между переходами; разделы — по сценариям</small></p>
+    <div class="split">
+      <div class="hh">
+        <div class="bar"><div class="logo">hh</div>Резюме · Отклики</div>
+        <div class="search ph"></div>
+        <div class="card ph" style="height:240px"><i style="width:60%"></i><i style="width:30%"></i><i style="width:85%"></i><i style="width:75%"></i><i style="width:80%"></i><i style="width:50%"></i></div>
+        <div class="card ph" style="height:56px;width:140px;background:#0a6cff"></div>
+      </div>
+      <div class="panel side" style="border-radius:0;border:0;border-left:1px solid var(--line)">
+        <div class="head"><span class="mark">hh<b>=#</b></span><span style="font-weight:600">hh-autoapplier</span><span style="margin-left:auto" class="muted mono"><span class="dot"></span> сервер</span></div>
+        <div class="nav"><span class="on">Очередь</span><span>Выдача</span><span>Чаты</span><span>Журнал</span></div>
+        <div class="sec">
+          <h4>Вакансия на странице</h4>
+          <div style="font-weight:600">Backend-разработчик C#/.NET</div>
+          <div class="muted" style="font-size:12px">балл 95 · резюме «Backend .NET» · письмо готово</div>
+          <div class="stats" style="margin-top:12px"><div class="stat"><b>3/10</b><span>за запуск</span></div><div class="stat"><b>2</b><span>в очереди</span></div><div class="stat"><b>0/148</b><span>за день</span></div></div>
+          <div class="btn primary" style="margin-top:12px">Пауза</div>
+          <div class="check"><span class="box"></span>Пробный режим</div>
+        </div>
+        <div class="log" style="margin-top:auto;border-radius:0">[21:48] форма отклика: письмо вставлено<br>[21:48] <em>пробный режим</em>: «Отправить» не нажато</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <p class="cap">Настройки — отдельной страницей расширения<small>Сервер, токен, лимиты, тексты; разрешение на адрес в сети (#101) — там же</small></p>
+    <div class="panel opts">
+      <div class="head" style="padding:14px 18px"><span class="mark">hh<b>=#</b></span><span style="font-weight:600;font-size:16px">Настройки</span><span style="margin-left:auto" class="muted mono">расширение 0.8.0 · контракт API 1</span></div>
+      <div style="padding:6px 18px">
+        <div class="field"><label>Адрес сервера</label><div class="input">http://192.168.0.104:8080 <span style="color:var(--ok)">· на связи, 0.4.1</span></div></div>
+        <div class="field"><label>Токен</label><div class="input">hh_••••••••••••3f9a</div></div>
+        <div class="field"><label>Поиск для выдачи</label><div class="input">dotnet-remote ▾</div></div>
+        <div class="field"><label>Дневной лимит</label><div class="input" style="width:120px">148</div></div>
+        <div class="field"><label>Откликов за запуск</label><div class="input" style="width:120px">10</div></div>
+        <div class="field"><label>Ответ на отказ</label><div class="input">Спасибо за ответ! Удачи в поиске.</div></div>
+        <div class="field" style="border:0"><label>Письмо, если сервер не прислал своё</label><div class="input" style="height:64px">Здравствуйте! Меня заинтересовала вакансия…</div></div>
+        <div style="display:flex;gap:10px;margin-top:12px"><div class="btn primary" style="width:160px">Сохранить</div><div class="btn" style="width:180px">Проверить связь</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

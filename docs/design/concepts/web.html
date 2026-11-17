@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--line:#263040;--grid:#1a222d;--text:#e6edf3;--muted:#7d8a99;--accent:#f0a3a8;--ok:#7ee2a8;--bad:#ff8b8b;--warn:#f2c66d;--mono:"Cascadia Mono",Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#e9ecf1;font:14px/1.45 var(--sans);color:var(--text);width:1600px}
+.row{display:flex;gap:28px;padding:28px;align-items:flex-start}
+.cap{font:600 15px var(--sans);color:#1d2330;margin:0 0 10px}.cap small{display:block;font-weight:400;color:#5b6576;font-size:13px;margin-top:2px}
+.app{background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line)}
+.mark{font:700 14px var(--mono);border:1px solid var(--line);border-radius:6px;padding:3px 7px;background:#0d1117}.mark b{color:var(--accent)}
+.nav{display:flex;gap:4px}.nav span{padding:6px 10px;border-radius:8px;color:var(--muted);font-size:13px}.nav span.on{color:var(--text);background:var(--card);border:1px solid var(--line)}
+.muted{color:var(--muted)}.mono{font-family:var(--mono)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{margin:0 0 4px;font-size:20px}h3{margin:0 0 12px;font:600 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi b{display:block;font:700 26px var(--mono)}.kpi span{font-size:12px;color:var(--muted)}.kpi i{font-style:normal;font:12px var(--mono);color:var(--ok)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font:12px var(--mono)}.seg span{padding:5px 10px;color:var(--muted)}.seg span.on{background:var(--accent);color:#2a0f12}
+.funnel .f{display:grid;grid-template-columns:128px minmax(0,1fr) 52px 44px;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+.funnel em{font-style:normal;color:var(--muted)}
+.funnel .track{height:16px;border-radius:4px;background:#1f2631;overflow:hidden}
+.funnel s{display:block;height:100%;border-radius:4px;background:var(--accent);text-decoration:none}
+.funnel b{font:600 12px var(--mono);text-align:right}
+.funnel small{font:11px var(--mono);color:var(--muted);text-align:right}
+.src{display:flex;gap:6px}.src span{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);font:600 12px var(--mono);color:var(--muted)}
+.src span.on{color:var(--text);background:var(--card);border-color:#5a3a3e}.src span.off{opacity:.45;border-style:dashed}
+.src i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.bars{display:flex;align-items:flex-end;gap:6px;height:130px;padding-top:8px;border-bottom:1px solid var(--line)}
+.bars div{flex:1;background:#3a2a2e;border-radius:3px 3px 0 0;position:relative}
+.bars div u{position:absolute;bottom:0;left:0;right:0;background:var(--accent);border-radius:3px 3px 0 0}
+.bars div u.inv{background:var(--ok);border-radius:3px 3px 0 0}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500;font-size:12px}td.n{font-family:var(--mono);text-align:right}
+.pill{font:600 11px var(--mono);border-radius:6px;padding:1px 6px;border:1px solid}
+.phone{width:390px;height:844px;border-radius:44px;border:10px solid #1b1f26;background:var(--bg);overflow:hidden;position:relative;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.phone .status{height:34px;display:flex;justify-content:space-between;padding:8px 22px;font:600 12px var(--sans)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:64px;border-top:1px solid var(--line);background:#0b0f14;display:grid;grid-template-columns:repeat(5,1fr);font-size:10px;color:var(--muted);text-align:center;padding-top:9px}
+.tabbar b{display:block;font:700 15px var(--mono);color:var(--muted)}.tabbar .on,.tabbar .on b{color:var(--accent)}
+.btn{display:flex;align-items:center;justify-content:center;height:44px;border-radius:10px;border:1px solid var(--line);background:#161b22;font-weight:600;font-size:14px;color:var(--text)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#2a0f12}
+.letter{font:12.5px/1.55 var(--sans);background:#0a0e14;border:1px solid var(--line);border-radius:10px;padding:10px;color:#cdd6df}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;font-size:12px}.kv span:nth-child(odd){color:var(--muted)}
+</style>
+<body>
+<div class="row">
+  <div>
+    <p class="cap">Веб: дашборд профиля (#121) в новой теме (#120)<small>Период, ключевые числа, воронка, отклики по дням, разрез по поискам; данные ответов — на момент последней синхронизации чатов</small></p>
+    <div class="app" style="width:1080px">
+      <div class="top"><span class="mark">hh<b>=#</b></span><div class="nav"><span class="on">Дашборд</span><span>Вакансии</span><span>Проверка 7</span><span>Ответы 3</span><span>Поиски</span><span>Резюме</span><span>Система</span></div><span style="margin-left:auto" class="muted mono">tester ▾ · ◐</span></div>
+      <div style="padding:20px;display:grid;gap:16px">
+        <div style="display:flex;align-items:flex-end;gap:12px"><div><h2>Дашборд</h2><div class="muted" style="font-size:13px">Чаты hh.ru синхронизированы 2 ч назад · сбор 20:47 · LLM в норме</div></div><div class="seg" style="margin-left:auto"><span>7 дн</span><span class="on">30 дн</span><span>90 дн</span></div></div>
+        <div style="display:flex;align-items:center;gap:12px"><span class="muted" style="font-size:12px">Агрегатор</span><div class="src"><span>Все</span><span class="on"><i style="background:#ff6b78"></i>hh.ru</span><span class="off"><i style="background:#8fb4ff"></i>hirify</span><span class="off"><i style="background:#b9a3ff"></i>getmatch</span></div><span class="muted" style="font-size:12px;margin-left:auto">hirify, getmatch — после подключения (#32)</span></div>
+        <div class="kpis">
+          <div class="card kpi"><b>214</b><span>собрано вакансий</span> <i>+18%</i></div>
+          <div class="card kpi"><b>63</b><span>откликов отправлено</span> <i>+9</i></div>
+          <div class="card kpi"><b>11<span class="muted" style="font-size:16px">%</span></b><span>в приглашение</span> <i>7 из 63</i></div>
+          <div class="card kpi"><b>2</b><span>собеседования</span> <i style="color:var(--accent)">новое</i></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:16px">
+          <div class="card funnel"><h3>Воронка за 30 дней · hh.ru</h3>
+            <div class="f"><em>Собрано</em><div class="track"><s style="width:100%"></s></div><b>214</b><small>100%</small></div>
+            <div class="f"><em>Прошло правила</em><div class="track"><s style="width:62%"></s></div><b>133</b><small>62%</small></div>
+            <div class="f"><em>Оценено LLM</em><div class="track"><s style="width:58%"></s></div><b>124</b><small>93%</small></div>
+            <div class="f"><em>В очередь</em><div class="track"><s style="width:36%"></s></div><b>77</b><small>62%</small></div>
+            <div class="f"><em>Отправлено</em><div class="track"><s style="width:30%"></s></div><b>63</b><small>82%</small></div>
+            <div class="f"><em>Приглашение</em><div class="track"><s style="width:4%;background:var(--ok)"></s></div><b>7</b><small>11%</small></div>
+            <div class="f"><em>Собеседование</em><div class="track"><s style="width:1.5%;background:var(--ok)"></s></div><b>2</b><small>29%</small></div>
+            <div class="f"><em>Отказ</em><div class="track"><s style="width:12%;background:#6b3b40"></s></div><b>26</b><small>41%</small></div>
+            <div class="muted" style="font-size:11px;margin-top:8px">% — от предыдущего шага; отказ — от отправленных</div>
+          </div>
+          <div class="card"><h3>Отклики по дням</h3>
+            <div class="bars">
+              <div style="height:40%"><u style="height:30%"></u><u class="inv" style="height:10%"></u></div><div style="height:65%"><u style="height:25%"></u></div><div style="height:30%"><u style="height:0"></u></div><div style="height:80%"><u style="height:35%"></u><u class="inv" style="height:12%"></u></div><div style="height:55%"><u style="height:20%"></u></div><div style="height:20%"><u style="height:0"></u></div><div style="height:15%"><u style="height:0"></u></div><div style="height:70%"><u style="height:40%"></u><u class="inv" style="height:14%"></u></div><div style="height:90%"><u style="height:30%"></u><u class="inv" style="height:8%"></u></div><div style="height:60%"><u style="height:22%"></u></div><div style="height:45%"><u style="height:15%"></u><u class="inv" style="height:6%"></u></div><div style="height:75%"><u style="height:28%"></u></div><div style="height:35%"><u style="height:10%"></u></div><div style="height:50%"><u style="height:18%"></u><u class="inv" style="height:9%"></u></div>
+            </div>
+            <div class="legend"><span><i style="background:#3a2a2e"></i>отправлено</span><span><i style="background:var(--accent)"></i>ответили</span><span><i style="background:var(--ok)"></i>приглашение / собеседование</span><span class="mono" style="margin-left:auto">последние 14 дней</span></div>
+          </div>
+        </div>
+        <div class="card"><h3>По поискам · hh.ru</h3>
+          <table><tr><th>Поиск</th><th style="text-align:right">Собрано</th><th style="text-align:right">Отправлено</th><th style="text-align:right">Ответили</th><th style="text-align:right">Приглашения / собеседования</th><th style="text-align:right">Конверсия</th></tr>
+          <tr><td>dotnet-remote</td><td class="n">168</td><td class="n">51</td><td class="n">24</td><td class="n">6 / 2</td><td class="n" style="color:var(--ok)">12%</td></tr>
+          <tr><td>backend-msk</td><td class="n">46</td><td class="n">12</td><td class="n">5</td><td class="n">1 / 0</td><td class="n">8%</td></tr></table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <p class="cap">Веб на телефоне: «Проверка»<small>Карточка вместо таблиц, кнопки во всю ширину, нижняя навигация</small></p>
+    <div class="phone">
+      <div class="status"><span>21:58</span><span>◔ ▮▮▮</span></div>
+      <div style="padding:6px 16px 0;display:flex;align-items:center;gap:10px"><span class="mark">hh<b>=#</b></span><b style="font-size:17px">Проверка</b><span class="muted mono" style="margin-left:auto;font-size:12px">1 из 7</span></div>
+      <div style="padding:12px 16px;display:grid;gap:10px">
+        <div class="card" style="padding:14px">
+          <div style="font-weight:600;font-size:15px">Middle .NET разработчик</div>
+          <div class="muted" style="font-size:12px">Стартап «Облако-9» · СПб · 160–230 тыс ₽ · балл <b class="mono" style="color:var(--text)">95</b></div>
+          <div style="margin:10px 0 8px;font-size:12px;color:var(--warn)">Просьба к письму: кодовое слово «пельмень» ждёт подтверждения</div>
+          <div class="btn" style="height:38px;font-size:13px">Вставить слово «пельмень»</div>
+        </div>
+        <div class="card" style="padding:14px"><h3 style="margin-bottom:8px">Анкета · 3</h3>
+          <div class="kv"><span>Опыт C#</span><span>4 года</span><span>Офис 2 дня</span><span><span class="pill" style="color:var(--accent);border-color:#5a3a3e">Нет ▾</span></span><span>Технологии</span><span>☑ PostgreSQL ☑ RabbitMQ ☐ Kafka</span></div>
+        </div>
+        <div class="card" style="padding:14px"><h3 style="margin-bottom:8px">Письмо · gpt-oss-120b</h3>
+          <div class="letter">Приветствую! Меня привлекла возможность работать над внутренними сервисами для логистики. Имею 4 года коммерческого опыта в backend на C# и ASP.NET Core…</div>
+        </div>
+        <div class="btn primary">Одобрить</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="btn">Отклонить</div><div class="btn">Дальше →</div></div>
+      </div>
+      <div class="tabbar"><div class="on"><b>◫</b>Дашборд</div><div class="on" style="color:var(--accent)"><b style="color:var(--accent)">✎</b>Проверка</div><div><b>✉</b>Ответы</div><div><b>☰</b>Вакансии</div><div><b>⋯</b>Ещё</div></div>
+    </div>
+  </div>
+</div>
+</body></html>
