@@ -54,12 +54,16 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(HhAutoApplier.Application.ApiContract.Version, version.GetProperty("apiVersion").GetInt32());
     }
 
+    // Без входа (#116): по ответу deploy.sh сверяет выкатанный коммит
     [Fact]
-    public async Task Version_WithoutLogin_Unauthorized()
+    public async Task Version_WithoutLogin_ReturnsVersion()
     {
         var response = await factory.CreateClient().GetAsync("/api/version");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var version = await Json(response);
+        Assert.Matches(@"^\d+\.\d+\.\d+(-rc\.\d+)?$", version.GetProperty("version").GetString()!);
+        Assert.Equal(HhAutoApplier.Application.ApiContract.Version, version.GetProperty("apiVersion").GetInt32());
     }
 
     // CORS выключен по умолчанию (#20): чужой сайт не получает разрешения ни на preflight, ни на обычный запрос
