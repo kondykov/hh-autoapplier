@@ -54,8 +54,27 @@ public class ReviewSection(
     public IReadOnlyCollection<string> Actions =>
     [
         BotTexts.Approve, BotTexts.Decline, BotTexts.ShowReview, BotTexts.ReviewCard, Card, ApproveOnScreen, DeclineOnScreen, EditLetter, EditAnswer,
-        ApproveDraft, CancelDraft, DeclineWithReason, ConfirmCodeWord, FromProfile,
+        ApproveDraft, CancelDraft, DeclineWithReason, ConfirmCodeWord, FromProfile, Questionnaire, PickOption, ToggleOption,
     ];
+
+    // Подменю анкеты: список вопросов, когда их больше MaxAnswerButtons (решение владельца 2026-11-17 — клавиатура не разрастается)
+    public const string Questionnaire = "rq";
+
+    // Вариант ответа с выбором: qo — один (Radio), qt — галочка (Checkbox); «rq|ra:id:номер вопроса:номер варианта»
+    public const string PickOption = "qo";
+
+    public const string ToggleOption = "qt";
+
+    // Сколько вопросов анкеты получают свои кнопки в карточке; больше — одна «✏️ Анкета (N)»
+    public const int MaxAnswerButtons = 3;
+
+    // Номер правимого вопроса из callback_data (с 1); чужой или лишний — null
+    private static int? Number(BotPress press, VacancyDto v) =>
+        int.TryParse(press.Arg(1), out var n) && n >= 1 && n <= Editable(v).Count ? n : null;
+
+    // Куда вернуться после правки ответа: в подменю анкеты, если вопросов много, иначе в карточку
+    private static string AnswerBack(VacancyDto v) =>
+        Editable(v).Count > MaxAnswerButtons ? $"{Questionnaire}:{v.Id}" : $"{BotTexts.ReviewCard}:{v.Id}";
 
     public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
     {
@@ -90,8 +109,16 @@ public class ReviewSection(
                 return await ApproveDraftAsync(v, ct);
             case EditLetter:
                 return await EditAsync(v, 0, ct);
-            case EditAnswer when int.TryParse(press.Arg(1), out var number) && number >= 1 && number <= Editable(v).Count:
-                return await EditAsync(v, number, ct);
+            case EditAnswer when Number(press, v) is { } number:
+                return Editable(v)[number - 1].Question.Type == QuestionType.Text
+                    ? await EditAsync(v, number, ct)
+                    : BotResults.Show(ChoiceScreen(v, number, Blocks(v)));
+            case Questionnaire:
+                return BotResults.Show(QuestionnaireScreen(v, Blocks(v)));
+            case PickOption or ToggleOption when Number(press, v) is { } number:
+                return await ChooseAsync(v, number, press.Arg(2), press.Action == ToggleOption, ct);
+            case EditAnswer or PickOption or ToggleOption:
+                return BotResults.Notice("Такого вопроса нет");
             case DeclineWithReason:
                 await chat.AwaitInputAsync(BotInput.DeclineReason, v.Id, null, $"{BotTexts.ReviewCard}:{v.Id}", ct);
                 return BotResults.Show(BotInput.Screen($"❌ {B("Причина отказа")}\n{B(v.Title)}\n\nНапишите причину обычным сообщением — она попадёт в отчёт."));
@@ -133,8 +160,11 @@ public class ReviewSection(
                 ? [new BotButton("✅ Одобрить", $"{ApproveOnScreen}:{v.Id}"), new BotButton("❌ Отклонить", $"{DeclineOnScreen}:{v.Id}")]
                 : [new BotButton("✅ Одобрить с этим письмом", $"{ApproveDraft}:{v.Id}"), new BotButton("✖️ Отменить правку", $"{CancelDraft}:{v.Id}")],
         };
+        var editable = Editable(v);
         rows.AddRange(Rows(new[] { new BotButton("✏️ Письмо", $"{EditLetter}:{v.Id}") }
-            .Concat(Editable(v).Select((_, k) => new BotButton($"✏️ Ответ {k + 1}", $"{EditAnswer}:{v.Id}:{k + 1}"))), 3));
+            .Concat(editable.Count > MaxAnswerButtons
+                ? [new BotButton($"✏️ Анкета ({editable.Count})", $"{Questionnaire}:{v.Id}")]
+                : editable.Select((_, k) => new BotButton($"✏️ Ответ {k + 1}", $"{EditAnswer}:{v.Id}:{k + 1}"))), 3));
 
         // Кодовое слово вставляется только по подтверждению, значения из профиля — по кнопке. Ссылки и контакты не выполняются
         foreach (var (r, i) in v.LetterRequests.Select((r, i) => (r, i)))
@@ -176,7 +206,8 @@ public class ReviewSection(
             {
                 var number = editable.IndexOf(i);
                 var label = number >= 0 ? $" (ответ {number + 1}{(draft is not null && draft[number + 1] != AnswerText(q) ? ", ✏️ поправлен" : "")})" : "";
-                var answer = number >= 0 && draft is not null ? draft[number + 1] : q.Answer.Count > 0 ? string.Join("; ", q.Answer) : "ответа нет";
+                var shown = number >= 0 && draft is not null ? AnswerOf(draft[number + 1], q.Type) : q.Answer.ToList();
+                var answer = shown.Count > 0 ? string.Join("; ", shown) : "ответа нет";
                 text.Append($"\n{i + 1}. {B(Cut(q.Question, 200))}{E(label)}\n{E(Cut(answer, 500))}");
             }
         }
@@ -220,13 +251,83 @@ public class ReviewSection(
         _ => "Прочее",
     };
 
-    // Текстовые ответы анкеты, которые можно поправить, — как поля в вебе: только если LLM ответила хоть на один вопрос
+    // Ответы анкеты, которые можно поправить: все распознанные вопросы — текст, один вариант, несколько вариантов (#115).
+    // Только если LLM ответила хоть на один: без ответов «Одобрить» вернёт отклик в очередь, и расширение пришлёт анкету заново
     private static List<(VacancyQuestionDto Question, int Index)> Editable(VacancyDto v) =>
         v.Questions.Any(q => q.Answer.Count > 0)
-            ? v.Questions.Select((q, i) => (q, i)).Where(x => x.q.Type == QuestionType.Text).ToList()
+            ? v.Questions.Select((q, i) => (q, i)).Where(x => x.q.Type != QuestionType.Unknown).ToList()
             : [];
 
+    // Ответ блоком черновика: варианты Checkbox — по строке (варианты однострочные)
     private static string AnswerText(VacancyQuestionDto q) => q.Answer.Count > 0 ? string.Join("\n", q.Answer) : NoAnswer;
+
+    private static List<string> AnswerOf(string block, QuestionType type) =>
+        block == NoAnswer ? []
+        : type == QuestionType.Checkbox ? [.. block.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]
+        : [block];
+
+    // Экран вопроса с выбором: варианты кнопками. Radio — нажатие ставит вариант и возвращает назад; Checkbox — галочки и «Готово»
+    private static BotMessage ChoiceScreen(VacancyDto v, int number, IReadOnlyList<string> blocks)
+    {
+        var q = Editable(v)[number - 1].Question;
+        var chosen = AnswerOf(blocks[number], q.Type);
+        var multiple = q.Type == QuestionType.Checkbox;
+        var text = $"✏️ {B($"Ответ {number}.")} {E(Cut(q.Question, 300))}\n{B(v.Title)}\n\n"
+            + (multiple ? "Отметьте варианты и нажмите «Готово»." : "Выберите вариант.")
+            + $"\nСейчас: {E(chosen.Count > 0 ? string.Join("; ", chosen) : "ответа нет")}";
+        var rows = q.Options.Select((o, k) =>
+        {
+            var on = chosen.Contains(o);
+            var label = multiple ? $"{(on ? "☑" : "☐")} {Cut(o, 40)}" : $"{(on ? "● " : "")}{Cut(o, 40)}";
+            return (IReadOnlyList<BotButton>)[new BotButton(label, $"{(multiple ? ToggleOption : PickOption)}:{v.Id}:{number}:{k}")];
+        }).ToList();
+        rows.Add([new BotButton(multiple ? "✅ Готово" : "← Назад", AnswerBack(v))]);
+        return new BotMessage(text) { Html = true, Rows = rows };
+    }
+
+    // Подменю анкеты: вопросы с текущими ответами (с правками черновика) и кнопка на каждый
+    private static BotMessage QuestionnaireScreen(VacancyDto v, IReadOnlyList<string> blocks)
+    {
+        var editable = Editable(v);
+        var text = new StringBuilder($"✏️ {B($"Анкета ({editable.Count})")}\n{B(v.Title)}\n");
+        foreach (var ((q, _), k) in editable.Select((e, k) => (e, k)))
+        {
+            var answer = AnswerOf(blocks[k + 1], q.Type);
+            text.Append($"\n{k + 1}. {B(Cut(q.Question, 150))}\n{E(Cut(answer.Count > 0 ? string.Join("; ", answer) : "ответа нет", 200))}");
+        }
+
+        var rows = Rows(editable.Select((e, k) => new BotButton($"✏️ {k + 1}. {Cut(e.Question.Question, 30)}", $"{EditAnswer}:{v.Id}:{k + 1}")), 1).ToList();
+        rows.Add([new BotButton("← К карточке", $"{BotTexts.ReviewCard}:{v.Id}")]);
+        return new BotMessage(text.ToString()) { Html = true, Rows = rows };
+    }
+
+    // Выбор варианта: в черновик. Вариант — по номеру из списка вопроса, чужой номер не пройдёт
+    private async Task<BotResult> ChooseAsync(VacancyDto v, int number, string option, bool toggle, CancellationToken ct)
+    {
+        var q = Editable(v)[number - 1].Question;
+        if (q.Type is not (QuestionType.Radio or QuestionType.Checkbox) || toggle != (q.Type == QuestionType.Checkbox)
+            || !int.TryParse(option, out var k) || k < 0 || k >= q.Options.Count)
+            return BotResults.Notice("Такого варианта нет");
+
+        var blocks = Blocks(v);
+        var value = q.Options[k];
+        if (toggle)
+        {
+            var chosen = AnswerOf(blocks[number], q.Type);
+            if (!chosen.Remove(value))
+                chosen.Add(value);
+            // Порядок — как в анкете
+            var ordered = q.Options.Where(chosen.Contains).ToList();
+            blocks[number] = ordered.Count > 0 ? string.Join("\n", ordered) : NoAnswer;
+            await chat.SaveDraftAsync(v.Id, blocks, ct);
+            return BotResults.Show(ChoiceScreen(v, number, blocks));
+        }
+
+        blocks[number] = value;
+        await chat.SaveDraftAsync(v.Id, blocks, ct);
+        return BotResults.Show(Editable(v).Count > MaxAnswerButtons ? QuestionnaireScreen(v, blocks) : await CardAsync(v.Id, 0, ct),
+            $"Ответ {number}: {Cut(value, 150)}");
+    }
 
     // Блоки правки: письмо и правимые ответы по порядку — из черновика чата или из отклика
     private List<string> Blocks(VacancyDto v)
@@ -241,7 +342,7 @@ public class ReviewSection(
     private async Task<BotResult> EditAsync(VacancyDto v, int block, CancellationToken ct)
     {
         var current = Blocks(v)[block];
-        await chat.AwaitInputAsync(block == 0 ? BotInput.Letter : BotInput.Answer, v.Id, block == 0 ? null : block, $"{BotTexts.ReviewCard}:{v.Id}", ct);
+        await chat.AwaitInputAsync(block == 0 ? BotInput.Letter : BotInput.Answer, v.Id, block == 0 ? null : block, block == 0 ? $"{BotTexts.ReviewCard}:{v.Id}" : AnswerBack(v), ct);
         var what = block == 0 ? "Письмо" : $"Ответ {block}. {Cut(Editable(v)[block - 1].Question.Question, 200)}";
         var text = $"✏️ {B(what)}\n{B(v.Title)}\n\nТекущий текст — нажмите, чтобы скопировать:\n{Pre(Cut(current, 3000))}\n\nНапишите новый текст обычным сообщением: бот заберёт его в правку и уберёт из чата.";
         return BotResults.Show(BotInput.Screen(text));
@@ -269,7 +370,8 @@ public class ReviewSection(
 
         blocks[block] = value;
         await chat.SaveDraftAsync(v.Id, blocks, ct);
-        return BotResults.Show(await CardAsync(v.Id, 0, ct), "Правка в черновике — одобрите с этим письмом");
+        return BotResults.Show(block > 0 && Editable(v).Count > MaxAnswerButtons ? QuestionnaireScreen(v, blocks) : await CardAsync(v.Id, 0, ct),
+            "Правка в черновике — одобрите с этим письмом");
     }
 
     private async Task<BotResult> ApproveDraftAsync(VacancyDto v, CancellationToken ct)
@@ -286,7 +388,7 @@ public class ReviewSection(
         var answerOf = editable.Select((e, k) => (e.Index, Text: blocks[k + 1])).ToDictionary(x => x.Index, x => x.Text);
         var edited = editable.Any(e => answerOf[e.Index] != AnswerText(e.Question).Trim());
         var answers = edited
-            ? v.Questions.Select((q, i) => answerOf.TryGetValue(i, out var a) ? (a == NoAnswer ? [] : [a]) : q.Answer.ToList()).ToList()
+            ? v.Questions.Select((q, i) => answerOf.TryGetValue(i, out var a) ? AnswerOf(a, q.Type) : q.Answer.ToList()).ToList()
             : null;
         return await DecideAsync(v, true, coverLetter, answers, null, ct);
     }

@@ -277,37 +277,65 @@ public class TelegramSectionsTests(ApiFactory factory) : IAsyncLifetime
         Assert.Null(await factory.WithDbAsync(db => db.TelegramChats.Where(c => c.ChatId == OwnerChat).Select(c => c.DraftVacancyId).SingleAsync()));
     }
 
+    // Отклик 1 на проверке с анкетой: вопросы и ответы LLM по порядку
+    private async Task Questionnaire(object[] questions, string answers)
+    {
+        // Анкету расширение присылает для отклика в очереди
+        await Json(await _admin.PostAsJsonAsync("/api/vacancies/1/review", new { approve = true }));
+        await Json(await _admin.PostAsJsonAsync("/api/vacancies/1/questionnaire", new { questions }));
+        factory.Llm.Answers.Enqueue(answers);
+        await Json(await _admin.PostAsJsonAsync("/api/llm/answers", new { limit = 10 }));
+        Assert.Equal(VacancyStatus.Review, (await Application("1")).Status);
+    }
+
+    private static readonly object Solid = new { question = "Какой принцип SOLID про абстракции?", type = "Radio", options = new[] { "SRP", "DIP" } };
+
+    private static readonly object Formats = new { question = "Какие форматы подходят?", type = "Checkbox", options = new[] { "Офис", "Гибрид", "Удалёнка" } };
+
     [Fact]
-    public async Task Review_EditQuestionnaireAnswer_DeclineWithReason()
+    public async Task Review_EditEveryAnswer_RadioCheckboxText_DeclineWithReason()
     {
         await CreateReviews();
         await Link(_admin, OwnerChat);
-        object Questions = new
-        {
-            questions = new object[]
-            {
-                new { question = "Какой принцип SOLID про абстракции?", type = "Radio", options = new[] { "SRP", "DIP" } },
-                new { question = "Почему мы?", type = "Text" },
-            },
-        };
-        // Анкету расширение присылает для отклика в очереди
-        await Json(await _admin.PostAsJsonAsync("/api/vacancies/1/review", new { approve = true }));
-        await Json(await _admin.PostAsJsonAsync("/api/vacancies/1/questionnaire", Questions));
-        factory.Llm.Answers.Enqueue("""{"answers": ["DIP", "интересный продукт"]}""");
-        await Json(await _admin.PostAsJsonAsync("/api/llm/answers", new { limit = 10 }));
-        Assert.Equal(VacancyStatus.Review, (await Application("1")).Status);
+        await Questionnaire([Solid, new { question = "Почему мы?", type = "Text" }, Formats],
+            """{"answers": ["DIP", "интересный продукт", ["Удалёнка"]]}""");
 
+        // Кнопка на каждый вопрос, в том числе с выбором
         var card = (await Press(OwnerChat, "rk:1")).Screen!;
-        Assert.Contains("интересный продукт", card.Text);
-        var answer = Assert.Single(card.Buttons, b => b.Text == "✏️ Ответ 1");
-        Assert.Contains("<pre>интересный продукт</pre>", (await Press(OwnerChat, answer.Data)).Screen!.Text);
+        Assert.Equal(["ra:1:1", "ra:1:2", "ra:1:3"], card.Buttons.Where(b => b.Data.StartsWith("ra:")).Select(b => b.Data));
 
+        // Radio: варианты кнопками, выбор — в черновик и обратно в карточку
+        var radio = (await Press(OwnerChat, "ra:1:1")).Screen!;
+        Assert.Equal(["SRP", "● DIP"], radio.Buttons.Where(b => b.Data.StartsWith("qo:")).Select(b => b.Text));
+        Assert.Equal("Такого варианта нет", (await Press(OwnerChat, "qo:1:1:9")).Notice);
+        Assert.Equal("Такого варианта нет", (await Press(OwnerChat, "qt:1:1:0")).Notice);
+        Assert.Equal("Такого вопроса нет", (await Press(OwnerChat, "ra:1:9")).Notice);
+        var picked = await Press(OwnerChat, "qo:1:1:0");
+        Assert.Equal("Ответ 1: SRP", picked.Notice);
+        Assert.Contains("ответ 1, ✏️ поправлен", picked.Screen!.Text);
+
+        // Checkbox: галочки, «Готово» — к карточке
+        var boxes = (await Press(OwnerChat, "ra:1:3")).Screen!;
+        Assert.Equal(["☐ Офис", "☐ Гибрид", "☑ Удалёнка"], boxes.Buttons.Where(b => b.Data.StartsWith("qt:")).Select(b => b.Text));
+        await Press(OwnerChat, "qt:1:3:0");
+        var toggled = (await Press(OwnerChat, "qt:1:3:2")).Screen!;
+        Assert.Equal(["☑ Офис", "☐ Гибрид", "☐ Удалёнка"], toggled.Buttons.Where(b => b.Data.StartsWith("qt:")).Select(b => b.Text));
+        Assert.Equal("rk:1", Assert.Single(toggled.Buttons, b => b.Text == "✅ Готово").Data);
+
+        // Text — режимом ввода
+        Assert.Contains("<pre>интересный продукт</pre>", (await Press(OwnerChat, "ra:1:2")).Screen!.Text);
         var typed = (await Send(OwnerChat, "команда и стек")).Screen!;
-        Assert.Contains("ответ 1, ✏️ поправлен", typed.Text);
+        Assert.Contains("ответ 2, ✏️ поправлен", typed.Text);
+
+        // Чужой чат: ни вопроса, ни варианта
+        await Link(await CreateUser("user@test.local"), UserChat);
+        Assert.Equal("Вакансия не найдена", (await Press(UserChat, "qo:1:1:1")).Notice);
+        Assert.Equal("Вакансия не найдена", (await Press(UserChat, "ra:1:1")).Notice);
+
         await Press(OwnerChat, Assert.Single(typed.Buttons, b => b.Data.StartsWith("rd:")).Data);
         var saved = await Application("1");
         Assert.Equal(VacancyStatus.Queued, saved.Status);
-        Assert.Equal(["DIP", "команда и стек"], saved.Questions.Select(q => string.Join("|", q.Answer)));
+        Assert.Equal(["SRP", "команда и стек", "Офис"], saved.Questions.Select(q => string.Join("|", q.Answer)));
 
         // Отклонить с причиной — режимом ввода
         await Press(OwnerChat, "rr:2");
@@ -315,6 +343,35 @@ public class TelegramSectionsTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal("❌ Отклонено · проверка пуста", declined.Notice);
         Assert.Equal((VacancyStatus.Skipped, "отклонено вручную: не мой стек"), ((await Application("2")).Status, (await Application("2")).StatusReason));
         Assert.StartsWith("Уже решено", (await Press(OwnerChat, "rr:2")).Notice);
+    }
+
+    [Fact]
+    public async Task Review_ManyQuestions_Submenu()
+    {
+        await CreateReviews(1);
+        await Link(_admin, OwnerChat);
+        await Questionnaire([Solid, new { question = "Почему мы?", type = "Text" }, Formats, new { question = "Город?", type = "Text" }],
+            """{"answers": ["DIP", "интересный продукт", ["Удалёнка"], "Москва"]}""");
+
+        // Больше трёх вопросов — одна кнопка «Анкета» вместо четырёх
+        var card = (await Press(OwnerChat, "rk:1")).Screen!;
+        Assert.DoesNotContain(card.Buttons, b => b.Data.StartsWith("ra:"));
+        var menu = (await Press(OwnerChat, Assert.Single(card.Buttons, b => b.Text == "✏️ Анкета (4)").Data)).Screen!;
+        Assert.Equal(["ra:1:1", "ra:1:2", "ra:1:3", "ra:1:4"], menu.Buttons.Where(b => b.Data.StartsWith("ra:")).Select(b => b.Data));
+        Assert.Contains("Москва", menu.Text);
+        Assert.Equal("rk:1", Assert.Single(menu.Buttons, b => b.Text == "← К карточке").Data);
+
+        // После правки — обратно в подменю
+        Assert.Equal("rq:1", Assert.Single((await Press(OwnerChat, "ra:1:1")).Screen!.Buttons, b => b.Text == "← Назад").Data);
+        Assert.Contains("Анкета (4)", (await Press(OwnerChat, "qo:1:1:0")).Screen!.Text);
+        await Press(OwnerChat, "ra:1:4");
+        var typed = (await Send(OwnerChat, "Казань")).Screen!;
+        Assert.Contains("Казань", typed.Text);
+        Assert.Contains("Анкета (4)", typed.Text);
+
+        var approved = await Press(OwnerChat, "rd:1");
+        Assert.StartsWith("✅ Одобрено с вашими правками", approved.Notice);
+        Assert.Equal(["SRP", "интересный продукт", "Удалёнка", "Казань"], (await Application("1")).Questions.Select(q => string.Join("|", q.Answer)));
     }
 
     [Fact]
