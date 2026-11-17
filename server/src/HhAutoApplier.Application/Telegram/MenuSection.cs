@@ -29,7 +29,8 @@ public class MenuSection(GetStatsQueryHandler stats, BotDigest digest, BotChat c
             case BotTexts.Unlink:
                 chat.Current!.Unlink();
                 await chat.SaveAsync(ct);
-                return BotResults.Show(new BotMessage("Чат отвязан: уведомлений больше не будет. Привязать снова — новым кодом: /start <код>"), "Чат отвязан");
+                return BotResults.Show(new BotMessage("Чат отвязан: уведомлений больше не будет. Привязать снова — новым кодом: /start <код>"), "Чат отвязан")
+                    with { CommandsMenu = BotCommandsMenu.Stranger };
             default:
                 return BotResults.Show(await ScreenAsync(ct), press.Action == BotTexts.Cancel ? "Отменено" : "");
         }

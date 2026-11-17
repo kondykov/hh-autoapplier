@@ -22,6 +22,7 @@ public class HandleTelegramMessageCommandHandler(
     DialogsSection dialogs,
     SearchesSection searches,
     CollectionSection collection,
+    BotStrangerThrottle strangers,
     TimeProvider clock
 ) : ICommandHandler<HandleTelegramMessageCommand, BotResult>
 {
@@ -51,7 +52,8 @@ public class HandleTelegramMessageCommandHandler(
         switch (await bot.EnterAsync(command.ChatId, ct))
         {
             case BotEntryState.NotLinked:
-                return new BotResult { Messages = [new BotMessage(BotTexts.NotLinked)] };
+                // Незнакомцу — не чаще раза в минуту (#118); /start <код> сюда не попадает и не ограничивается
+                return strangers.TryAnswer(command.ChatId) ? new BotResult { Messages = [new BotMessage(BotTexts.NotLinked)] } : new BotResult();
             case BotEntryState.Blocked:
                 return new BotResult { Messages = [new BotMessage("Учётная запись заблокирована")] };
         }
@@ -144,6 +146,7 @@ public class HandleTelegramMessageCommandHandler(
 
         chat.Link(command.ChatId, command.Username, clock.GetUtcNow());
         await db.SaveChangesAsync(ct);
+        strangers.Forget(command.ChatId);
         var user = await users.FindAsync(chat.UserId, ct);
 
         // Сразу и экран: дальше всё — на нём
@@ -153,6 +156,7 @@ public class HandleTelegramMessageCommandHandler(
             Messages = [new BotMessage($"Чат привязан к {user?.Email ?? "учётной записи"}.") { RemoveKeyboard = true }],
             Screen = await menu.ScreenAsync(ct),
             MoveScreen = true,
+            CommandsMenu = BotCommandsMenu.Full,
         };
     }
 }
