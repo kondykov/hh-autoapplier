@@ -70,6 +70,15 @@ public record BotResult
 
     // Отдельные сообщения: файл, ответ на привязку, служебное снятие клавиатуры
     public IReadOnlyList<BotMessage> Messages { get; init; } = [];
+
+    // Меню команд этого чата (#118): Full — после привязки, Stranger — после отвязки; null — не трогать
+    public BotCommandsMenu? CommandsMenu { get; init; }
+}
+
+public enum BotCommandsMenu
+{
+    Stranger,
+    Full,
 }
 
 public record ReportEventResultDto(bool Notified);

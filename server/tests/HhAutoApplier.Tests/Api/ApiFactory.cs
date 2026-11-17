@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using HhAutoApplier.Application.Abstractions;
+using HhAutoApplier.Application.Telegram;
 using HhAutoApplier.Domain.Applications;
 using HhAutoApplier.Domain.Searches;
 using HhAutoApplier.Domain.Vacancies;
@@ -92,6 +93,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Source.Reset();
         Llm.Reset();
         Telegram.Configured = false;
+        // Ограничение ответов незнакомцам (#118) живёт в памяти: тесты переиспользуют одни и те же чаты
+        Services.GetRequiredService<BotStrangerThrottle>().Clear();
     }
 
     // Импорт ждёт подтверждения карточки (#55). Для тестов оценки, писем и очереди источник подтверждает ждущие карточки
