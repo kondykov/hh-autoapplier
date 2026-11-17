@@ -1,0 +1,436 @@
+using System.Text;
+using HhAutoApplier.Application.Commands.Vacancies;
+using HhAutoApplier.Application.Dtos;
+using HhAutoApplier.Application.Errors;
+using HhAutoApplier.Application.Notifications;
+using HhAutoApplier.Application.Queries.Vacancies;
+using HhAutoApplier.Domain.Applications;
+using HhAutoApplier.Domain.Vacancies;
+using static HhAutoApplier.Application.Telegram.BotHtml;
+
+namespace HhAutoApplier.Application.Telegram;
+
+// «Проверка», как reviewCard в вебе, на одном экране (#115): карточка с листанием, одобрить и отклонить — экран сам переходит
+// к следующей; отклонить с причиной; просьбы к письму (#72); правка письма и текстовых ответов анкеты. Правка — режимом ввода:
+// экран показывает текущий текст и ждёт новый обычным сообщением; правки копятся в черновике TelegramChat до «Одобрить с этим письмом»
+public class ReviewSection(
+    GetVacanciesQueryHandler vacancies,
+    GetVacancyQueryHandler vacancy,
+    ReviewVacancyCommandHandler review,
+    ResolveLetterRequestsCommandHandler resolve,
+    BotChat chat
+) : IBotSection
+{
+    public const string Card = "rv";
+
+    public const string ApproveOnScreen = "ry";
+
+    public const string DeclineOnScreen = "rn";
+
+    public const string EditLetter = "rl";
+
+    public const string EditAnswer = "ra";
+
+    public const string ApproveDraft = "rd";
+
+    public const string CancelDraft = "rx";
+
+    public const string DeclineWithReason = "rr";
+
+    public const string ConfirmCodeWord = "rc";
+
+    public const string FromProfile = "rp";
+
+    // Пустой текст Telegram не покажет — вместо пустоты пометка
+    public const string NoLetter = "(письма нет)";
+
+    public const string NoAnswer = "(нет ответа)";
+
+    // Ограничение письма в домене и ReviewVacancyCommand
+    public const int MaxLetter = 4000;
+
+    private const int MaxAnswer = 2000;
+
+    public IReadOnlyCollection<string> Actions =>
+    [
+        BotTexts.Approve, BotTexts.Decline, BotTexts.ShowReview, BotTexts.ReviewCard, Card, ApproveOnScreen, DeclineOnScreen, EditLetter, EditAnswer,
+        ApproveDraft, CancelDraft, DeclineWithReason, ConfirmCodeWord, FromProfile, Questionnaire, PickOption, ToggleOption,
+    ];
+
+    // Подменю анкеты: список вопросов, когда их больше MaxAnswerButtons (решение владельца 2026-11-17 — клавиатура не разрастается)
+    public const string Questionnaire = "rq";
+
+    // Вариант ответа с выбором: qo — один (Radio), qt — галочка (Checkbox); «rq|ra:id:номер вопроса:номер варианта»
+    public const string PickOption = "qo";
+
+    public const string ToggleOption = "qt";
+
+    // Сколько вопросов анкеты получают свои кнопки в карточке; больше — одна «✏️ Анкета (N)»
+    public const int MaxAnswerButtons = 3;
+
+    // Номер правимого вопроса из callback_data (с 1); чужой или лишний — null
+    private static int? Number(BotPress press, VacancyDto v) =>
+        int.TryParse(press.Arg(1), out var n) && n >= 1 && n <= Editable(v).Count ? n : null;
+
+    // Куда вернуться после правки ответа: в подменю анкеты, если вопросов много, иначе в карточку
+    private static string AnswerBack(VacancyDto v) =>
+        Editable(v).Count > MaxAnswerButtons ? $"{Questionnaire}:{v.Id}" : $"{BotTexts.ReviewCard}:{v.Id}";
+
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
+    {
+        var id = press.Arg(0);
+        switch (press.Action)
+        {
+            case BotTexts.Approve or BotTexts.Decline:
+                return await DecideFromNotificationAsync(id, press.Action == BotTexts.Approve, ct);
+            case BotTexts.ShowReview:
+                return BotResults.Show(await CardAsync(null, 0, ct));
+            case BotTexts.ReviewCard:
+                return BotResults.Show(await CardAsync(id, 0, ct));
+            case Card:
+                return BotResults.Show(await CardAsync(null, int.TryParse(id, out var skip) ? Math.Max(skip, 0) : 0, ct));
+            case CancelDraft:
+                await chat.ClearDraftAsync(ct);
+                return BotResults.Show(await CardAsync(id, 0, ct), "Правка отменена");
+            case ConfirmCodeWord or FromProfile:
+                return await ResolveAsync(id, press.Action == ConfirmCodeWord && int.TryParse(press.Arg(1), out var n) ? [n] : [], ct);
+        }
+
+        if ((await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is not VacancyDto v)
+            return BotResults.Notice("Вакансия не найдена");
+        if (v.Status != VacancyStatus.Review)
+            return BotResults.Show(await CardAsync(id, 0, ct), $"Уже решено: {Status(v.Status)}");
+
+        switch (press.Action)
+        {
+            case ApproveOnScreen or DeclineOnScreen:
+                return await DecideAsync(v, press.Action == ApproveOnScreen, null, null, null, ct);
+            case ApproveDraft:
+                return await ApproveDraftAsync(v, ct);
+            case EditLetter:
+                return await EditAsync(v, 0, ct);
+            case EditAnswer when Number(press, v) is { } number:
+                return Editable(v)[number - 1].Question.Type == QuestionType.Text
+                    ? await EditAsync(v, number, ct)
+                    : BotResults.Show(ChoiceScreen(v, number, Blocks(v)));
+            case Questionnaire:
+                return BotResults.Show(QuestionnaireScreen(v, Blocks(v)));
+            case PickOption or ToggleOption when Number(press, v) is { } number:
+                return await ChooseAsync(v, number, press.Arg(2), press.Action == ToggleOption, ct);
+            case EditAnswer or PickOption or ToggleOption:
+                return BotResults.Notice("Такого вопроса нет");
+            case DeclineWithReason:
+                await chat.AwaitInputAsync(BotInput.DeclineReason, v.Id, null, $"{BotTexts.ReviewCard}:{v.Id}", ct);
+                return BotResults.Show(BotInput.Screen($"❌ {B("Причина отказа")}\n{B(v.Title)}\n\nНапишите причину обычным сообщением — она попадёт в отчёт."));
+            default:
+                return BotResults.Notice("Неизвестная кнопка");
+        }
+    }
+
+    // Отклики на проверке — как в вебе: по баллу, сначала лучшие
+    private async Task<List<VacancyDto>> WaitingAsync(CancellationToken ct)
+    {
+        var list = (await vacancies.Handle(new GetVacanciesQuery { Status = VacancyStatus.Review, Take = 200 }, ct)).Value is List<VacancyDto> l ? l : [];
+        return list.OrderByDescending(v => v.Score).ThenBy(v => v.Id, StringComparer.Ordinal).ToList();
+    }
+
+    // Карточка отклика: по id или по номеру в очереди проверки (после последнего — снова первый)
+    public async Task<BotMessage> CardAsync(string? id, int skip, CancellationToken ct)
+    {
+        var waiting = await WaitingAsync(ct);
+        var index = id is null ? (waiting.Count == 0 ? -1 : skip % waiting.Count) : waiting.FindIndex(v => v.Id == id);
+        var menu = new BotButton("☰ Меню", $"{MenuSection.Show}:");
+        if (index < 0)
+        {
+            if (id is not null && (await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is VacancyDto decided)
+                return new BotMessage($"Уже не на проверке.\n\n{VacanciesSection.CardText(decided)}")
+                {
+                    Html = true,
+                    Rows = waiting.Count > 0 ? [[new BotButton($"📝 Проверка ({waiting.Count})", $"{Card}:0"), menu]] : [[menu]],
+                };
+
+            return new BotMessage(id is null ? "Откликов на проверке нет ✨" : "Вакансия не найдена") { Rows = [[menu]] };
+        }
+
+        var v = waiting[index];
+        var draft = chat.Draft(v.Id, Editable(v).Count + 1);
+        var rows = new List<IReadOnlyList<BotButton>>
+        {
+            draft is null
+                ? [new BotButton("✅ Одобрить", $"{ApproveOnScreen}:{v.Id}"), new BotButton("❌ Отклонить", $"{DeclineOnScreen}:{v.Id}")]
+                : [new BotButton("✅ Одобрить с этим письмом", $"{ApproveDraft}:{v.Id}"), new BotButton("✖️ Отменить правку", $"{CancelDraft}:{v.Id}")],
+        };
+        var editable = Editable(v);
+        rows.AddRange(Rows(new[] { new BotButton("✏️ Письмо", $"{EditLetter}:{v.Id}") }
+            .Concat(editable.Count > MaxAnswerButtons
+                ? [new BotButton($"✏️ Анкета ({editable.Count})", $"{Questionnaire}:{v.Id}")]
+                : editable.Select((_, k) => new BotButton($"✏️ Ответ {k + 1}", $"{EditAnswer}:{v.Id}:{k + 1}"))), 3));
+
+        // Кодовое слово вставляется только по подтверждению, значения из профиля — по кнопке. Ссылки и контакты не выполняются
+        foreach (var (r, i) in v.LetterRequests.Select((r, i) => (r, i)))
+            if (!r.Closed && r.Type == LetterRequestType.CodeWord && r.Value is { } word)
+                rows.Add([new BotButton($"🔑 Вставить слово «{Cut(word, 30)}»", $"{ConfirmCodeWord}:{v.Id}:{i}")]);
+        if (v.LetterRequestsState == LetterRequestsState.Found
+            && v.LetterRequests.Any(r => !r.Closed && r.Type is LetterRequestType.Salary or LetterRequestType.TestTask))
+            rows.Add([new BotButton("👤 Подставить из профиля", $"{FromProfile}:{v.Id}")]);
+
+        var links = new List<BotButton> { new("❌ С причиной", $"{DeclineWithReason}:{v.Id}"), new("📄 Описание", $"{VacanciesSection.Description}:{v.Id}:r") };
+        if (SafeUrl(v.Url) is { } url)
+            links.Add(BotButton.Link("🔗 hh.ru", url));
+        rows.Add(links);
+        rows.Add(waiting.Count > 1 ? [new BotButton("Следующая →", $"{Card}:{index + 1}"), menu] : [menu]);
+
+        var header = $"📝 {B("Проверка")} · {index + 1} из {waiting.Count}{(draft is null ? "" : " · ✏️ есть правка")}";
+        return new BotMessage($"{header}\n{CardText(v, draft)}") { Html = true, Rows = rows };
+    }
+
+    private static string CardText(VacancyDto v, IReadOnlyList<string>? draft)
+    {
+        var meta = new[]
+        {
+            v.Company, v.Area, Salary(v) is { Length: > 0 } s ? s : "зарплата не указана", v.WorkFormat, v.WorkExperience is { } exp ? $"опыт: {exp}" : "",
+            $"балл {v.Score}", v.ResumeProfile is { } r ? $"резюме {r}" : "", v.HasTest ? "есть тест" : "",
+        };
+        var text = new StringBuilder()
+            .Append($"<b>{Link(v.Title, v.Url)}</b>\n")
+            .Append(E(string.Join(" · ", meta.Where(m => !string.IsNullOrWhiteSpace(m))))).Append('\n')
+            .Append(I(Cut(v.StatusReason ?? v.LlmReason ?? "LLM сомневается", 500)));
+        if (v.Stack.Length > 0)
+            text.Append('\n').Append(E($"Стек: {string.Join(", ", v.Stack)}"));
+
+        var editable = Editable(v).Select(e => e.Index).ToList();
+        if (v.Questions.Count > 0)
+        {
+            text.Append($"\n\n{B($"Анкета ({v.Questions.Count})")}");
+            foreach (var (q, i) in v.Questions.Select((q, i) => (q, i)))
+            {
+                var number = editable.IndexOf(i);
+                var label = number >= 0 ? $" (ответ {number + 1}{(draft is not null && draft[number + 1] != AnswerText(q) ? ", ✏️ поправлен" : "")})" : "";
+                var shown = number >= 0 && draft is not null ? AnswerOf(draft[number + 1], q.Type) : q.Answer.ToList();
+                var answer = shown.Count > 0 ? string.Join("; ", shown) : "ответа нет";
+                text.Append($"\n{i + 1}. {B(Cut(q.Question, 200))}{E(label)}\n{E(Cut(answer, 500))}");
+            }
+        }
+
+        text.Append(RequestsText(v));
+        var letter = draft is not null ? draft[0] == NoLetter ? null : draft[0] : v.CoverLetter;
+        var model = draft is not null && letter != v.CoverLetter ? " (✏️ ваша правка)"
+            : v.CoverLetterModel is null ? "" : $" ({(v.CoverLetterModel == JobApplication.ManualLetter ? "ваше" : v.CoverLetterModel)})";
+        text.Append(string.IsNullOrWhiteSpace(letter)
+            ? v.LetterRequestsState is LetterRequestsState.Found or LetterRequestsState.Failed
+                ? $"\n\n{B("Письма нет")}: без него одобрить нельзя — шаблон расширения не ответит на просьбы работодателя. «✏️ Письмо» — написать своё."
+                : $"\n\n{B("Письма нет")}: расширение возьмёт шаблон. «✏️ Письмо» — написать своё."
+            : $"\n\n{B($"Письмо{model}")}\n{Quote(Cut(letter, 2500))}");
+        return text.ToString();
+    }
+
+    // Просьбы работодателя к письму (#72) — в карточке проверки и вакансии
+    public static string RequestsText(VacancyDto v)
+    {
+        if (v.LetterRequestsState == LetterRequestsState.Failed)
+            return $"\n\n{I("Просьбы работодателя к письму разобрать не удалось: прочитайте вакансию и напишите письмо сами.")}";
+        if (v.LetterRequests.Count == 0)
+            return "";
+
+        var text = new StringBuilder($"\n\n{B($"Просьбы к письму ({v.LetterRequests.Count})")}");
+        foreach (var r in v.LetterRequests)
+        {
+            var state = r.Closed ? r.Answer is { } a ? $"закрыта: {a}" : "решено человеком" : r.Problem ?? $"ответ: {r.Answer} — допишется к письму";
+            text.Append($"\n— {B(RequestType(r.Type))}{(string.IsNullOrWhiteSpace(r.Text) ? "" : E($" — {Cut(r.Text, 300)}"))}\n  {E(state)}");
+        }
+
+        return text.ToString();
+    }
+
+    private static string RequestType(LetterRequestType type) => type switch
+    {
+        LetterRequestType.Arithmetic => "Пример",
+        LetterRequestType.Salary => "Зарплата",
+        LetterRequestType.TestTask => "Тестовое",
+        LetterRequestType.CodeWord => "Кодовое слово",
+        _ => "Прочее",
+    };
+
+    // Ответы анкеты, которые можно поправить: все распознанные вопросы — текст, один вариант, несколько вариантов (#115).
+    // Только если LLM ответила хоть на один: без ответов «Одобрить» вернёт отклик в очередь, и расширение пришлёт анкету заново
+    private static List<(VacancyQuestionDto Question, int Index)> Editable(VacancyDto v) =>
+        v.Questions.Any(q => q.Answer.Count > 0)
+            ? v.Questions.Select((q, i) => (q, i)).Where(x => x.q.Type != QuestionType.Unknown).ToList()
+            : [];
+
+    // Ответ блоком черновика: варианты Checkbox — по строке (варианты однострочные)
+    private static string AnswerText(VacancyQuestionDto q) => q.Answer.Count > 0 ? string.Join("\n", q.Answer) : NoAnswer;
+
+    private static List<string> AnswerOf(string block, QuestionType type) =>
+        block == NoAnswer ? []
+        : type == QuestionType.Checkbox ? [.. block.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]
+        : [block];
+
+    // Экран вопроса с выбором: варианты кнопками. Radio — нажатие ставит вариант и возвращает назад; Checkbox — галочки и «Готово»
+    private static BotMessage ChoiceScreen(VacancyDto v, int number, IReadOnlyList<string> blocks)
+    {
+        var q = Editable(v)[number - 1].Question;
+        var chosen = AnswerOf(blocks[number], q.Type);
+        var multiple = q.Type == QuestionType.Checkbox;
+        var text = $"✏️ {B($"Ответ {number}.")} {E(Cut(q.Question, 300))}\n{B(v.Title)}\n\n"
+            + (multiple ? "Отметьте варианты и нажмите «Готово»." : "Выберите вариант.")
+            + $"\nСейчас: {E(chosen.Count > 0 ? string.Join("; ", chosen) : "ответа нет")}";
+        var rows = q.Options.Select((o, k) =>
+        {
+            var on = chosen.Contains(o);
+            var label = multiple ? $"{(on ? "☑" : "☐")} {Cut(o, 40)}" : $"{(on ? "● " : "")}{Cut(o, 40)}";
+            return (IReadOnlyList<BotButton>)[new BotButton(label, $"{(multiple ? ToggleOption : PickOption)}:{v.Id}:{number}:{k}")];
+        }).ToList();
+        rows.Add([new BotButton(multiple ? "✅ Готово" : "← Назад", AnswerBack(v))]);
+        return new BotMessage(text) { Html = true, Rows = rows };
+    }
+
+    // Подменю анкеты: вопросы с текущими ответами (с правками черновика) и кнопка на каждый
+    private static BotMessage QuestionnaireScreen(VacancyDto v, IReadOnlyList<string> blocks)
+    {
+        var editable = Editable(v);
+        var text = new StringBuilder($"✏️ {B($"Анкета ({editable.Count})")}\n{B(v.Title)}\n");
+        foreach (var ((q, _), k) in editable.Select((e, k) => (e, k)))
+        {
+            var answer = AnswerOf(blocks[k + 1], q.Type);
+            text.Append($"\n{k + 1}. {B(Cut(q.Question, 150))}\n{E(Cut(answer.Count > 0 ? string.Join("; ", answer) : "ответа нет", 200))}");
+        }
+
+        var rows = Rows(editable.Select((e, k) => new BotButton($"✏️ {k + 1}. {Cut(e.Question.Question, 30)}", $"{EditAnswer}:{v.Id}:{k + 1}")), 1).ToList();
+        rows.Add([new BotButton("← К карточке", $"{BotTexts.ReviewCard}:{v.Id}")]);
+        return new BotMessage(text.ToString()) { Html = true, Rows = rows };
+    }
+
+    // Выбор варианта: в черновик. Вариант — по номеру из списка вопроса, чужой номер не пройдёт
+    private async Task<BotResult> ChooseAsync(VacancyDto v, int number, string option, bool toggle, CancellationToken ct)
+    {
+        var q = Editable(v)[number - 1].Question;
+        if (q.Type is not (QuestionType.Radio or QuestionType.Checkbox) || toggle != (q.Type == QuestionType.Checkbox)
+            || !int.TryParse(option, out var k) || k < 0 || k >= q.Options.Count)
+            return BotResults.Notice("Такого варианта нет");
+
+        var blocks = Blocks(v);
+        var value = q.Options[k];
+        if (toggle)
+        {
+            var chosen = AnswerOf(blocks[number], q.Type);
+            if (!chosen.Remove(value))
+                chosen.Add(value);
+            // Порядок — как в анкете
+            var ordered = q.Options.Where(chosen.Contains).ToList();
+            blocks[number] = ordered.Count > 0 ? string.Join("\n", ordered) : NoAnswer;
+            await chat.SaveDraftAsync(v.Id, blocks, ct);
+            return BotResults.Show(ChoiceScreen(v, number, blocks));
+        }
+
+        blocks[number] = value;
+        await chat.SaveDraftAsync(v.Id, blocks, ct);
+        return BotResults.Show(Editable(v).Count > MaxAnswerButtons ? QuestionnaireScreen(v, blocks) : await CardAsync(v.Id, 0, ct),
+            $"Ответ {number}: {Cut(value, 150)}");
+    }
+
+    // Блоки правки: письмо и правимые ответы по порядку — из черновика чата или из отклика
+    private List<string> Blocks(VacancyDto v)
+    {
+        var editable = Editable(v);
+        return chat.Draft(v.Id, editable.Count + 1) is { } draft
+            ? [.. draft]
+            : [string.IsNullOrWhiteSpace(v.CoverLetter) ? NoLetter : v.CoverLetter, .. editable.Select(e => AnswerText(e.Question))];
+    }
+
+    // Режим ввода письма (block = 0) или ответа анкеты: экран показывает текущий текст — нажатие копирует его
+    private async Task<BotResult> EditAsync(VacancyDto v, int block, CancellationToken ct)
+    {
+        var current = Blocks(v)[block];
+        await chat.AwaitInputAsync(block == 0 ? BotInput.Letter : BotInput.Answer, v.Id, block == 0 ? null : block, block == 0 ? $"{BotTexts.ReviewCard}:{v.Id}" : AnswerBack(v), ct);
+        var what = block == 0 ? "Письмо" : $"Ответ {block}. {Cut(Editable(v)[block - 1].Question.Question, 200)}";
+        var text = $"✏️ {B(what)}\n{B(v.Title)}\n\nТекущий текст — нажмите, чтобы скопировать:\n{Pre(Cut(current, 3000))}\n\nНапишите новый текст обычным сообщением: бот заберёт его в правку и уберёт из чата.";
+        return BotResults.Show(BotInput.Screen(text));
+    }
+
+    // Текст для режима ввода экрана: правка — в черновик и снова карточка; причина отказа — отклонить и к следующей
+    public async Task<BotResult> InputAsync(string kind, string vacancyId, int? number, string text, CancellationToken ct)
+    {
+        if ((await vacancy.Handle(new GetVacancyQuery(vacancyId), ct)).Value is not VacancyDto v)
+            return BotResults.Show(await CardAsync(null, 0, ct), "Вакансия не найдена");
+        if (v.Status != VacancyStatus.Review)
+            return BotResults.Show(await CardAsync(vacancyId, 0, ct), $"Уже решено: {Status(v.Status)}");
+
+        var value = text.Trim();
+        if (kind == BotInput.DeclineReason)
+            return await DecideAsync(v, false, null, null, Cut(value, 490), ct);
+
+        var blocks = Blocks(v);
+        var block = kind == BotInput.Letter ? 0 : number ?? -1;
+        var max = block == 0 ? MaxLetter : MaxAnswer;
+        if (block < 0 || block >= blocks.Count)
+            return BotResults.Show(await CardAsync(v.Id, 0, ct), "Не понял, что поправить");
+        if (value.Length > max)
+            return BotResults.Show(await CardAsync(v.Id, 0, ct), $"Длиннее {max} знаков ({value.Length}) — сократите и попробуйте снова");
+
+        blocks[block] = value;
+        await chat.SaveDraftAsync(v.Id, blocks, ct);
+        return BotResults.Show(block > 0 && Editable(v).Count > MaxAnswerButtons ? QuestionnaireScreen(v, blocks) : await CardAsync(v.Id, 0, ct),
+            "Правка в черновике — одобрите с этим письмом");
+    }
+
+    private async Task<BotResult> ApproveDraftAsync(VacancyDto v, CancellationToken ct)
+    {
+        var editable = Editable(v);
+        if (chat.Draft(v.Id, editable.Count + 1) is not { } draft)
+            return BotResults.Show(await CardAsync(v.Id, 0, ct), "Правки нет — карточка обновлена");
+
+        var blocks = draft.Select(b => b.Trim()).ToList();
+        // Как в вебе: письмо уходит, только если его поправили, иначе остаётся письмо LLM с её моделью;
+        // ответы анкеты — все по порядку вопросов, если поправлен хоть один текстовый
+        var letter = blocks[0] == NoLetter ? null : blocks[0];
+        var coverLetter = letter is not null && letter != (v.CoverLetter ?? "").Trim() ? letter : null;
+        var answerOf = editable.Select((e, k) => (e.Index, Text: blocks[k + 1])).ToDictionary(x => x.Index, x => x.Text);
+        var edited = editable.Any(e => answerOf[e.Index] != AnswerText(e.Question).Trim());
+        var answers = edited
+            ? v.Questions.Select((q, i) => answerOf.TryGetValue(i, out var a) ? AnswerOf(a, q.Type) : q.Answer.ToList()).ToList()
+            : null;
+        return await DecideAsync(v, true, coverLetter, answers, null, ct);
+    }
+
+    // Решение на экране — как «Проверка» в вебе (ReviewVacancyCommand); экран переходит к следующей карточке, итог — всплывашкой
+    private async Task<BotResult> DecideAsync(VacancyDto v, bool approve, string? letter, List<List<string>>? answers, string? reason, CancellationToken ct)
+    {
+        var command = new ReviewVacancyCommand { VacancyId = v.Id, Approve = approve, CoverLetter = letter, Answers = answers, Reason = reason };
+        var result = (await review.Handle(command, ct)).Value;
+        if (result is not VacancyDto)
+            return BotResults.Show(await CardAsync(v.Id, 0, ct), Cut(result is Error e ? e.Message : "Не удалось", 190));
+
+        await chat.ClearDraftAsync(ct);
+        var left = (await WaitingAsync(ct)).Count;
+        var done = approve ? letter is null && answers is null ? "✅ Одобрено" : "✅ Одобрено с вашими правками" : "❌ Отклонено";
+        return BotResults.Show(await CardAsync(null, 0, ct), left > 0 ? $"{done} · осталось {left}" : $"{done} · проверка пуста");
+    }
+
+    // Кнопки под уведомлением прежних версий: уведомление сворачивается до итога
+    private async Task<BotResult> DecideFromNotificationAsync(string id, bool approve, CancellationToken ct)
+    {
+        var result = (await review.Handle(new ReviewVacancyCommand { VacancyId = id, Approve = approve }, ct)).Value;
+        switch (result)
+        {
+            case VacancyDto:
+                return new BotResult { Notice = approve ? "Одобрено" : "Отклонено", Status = approve ? "✅ Одобрено — в очереди" : "❌ Отклонено" };
+            case NotFoundError:
+                return new BotResult { Notice = "Вакансия не найдена", Status = "Вакансия не найдена" };
+            default:
+                // Уже решено на странице проверки или другим нажатием — показать, что сейчас; иначе — почему нельзя (нет письма при просьбах)
+                if ((await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is VacancyDto now && now.Status != VacancyStatus.Review)
+                    return new BotResult { Notice = "Уже решено", Status = $"Уже решено, статус: {Status(now.Status)}" };
+                return BotResults.Notice(Cut(result is Error e ? e.Message : "Не удалось", 190));
+        }
+    }
+
+    // Вставить кодовое слово или подставить значения из профиля — как кнопки просьб в вебе; карточка обновляется на месте
+    private async Task<BotResult> ResolveAsync(string id, List<int> confirm, CancellationToken ct)
+    {
+        var result = (await resolve.Handle(new ResolveLetterRequestsCommand { VacancyId = id, ConfirmCodeWords = confirm }, ct)).Value;
+        return result is VacancyDto
+            ? BotResults.Show(await CardAsync(id, 0, ct), "Письмо обновлено")
+            : BotResults.Notice(Cut(result is Error e ? e.Message : "Не удалось", 190));
+    }
+}

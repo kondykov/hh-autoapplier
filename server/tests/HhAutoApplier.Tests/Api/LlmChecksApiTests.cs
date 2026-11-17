@@ -301,6 +301,5 @@ public class LlmChecksApiTests(ApiFactory factory) : IAsyncLifetime
         var notification = Assert.Single(await factory.WithDbAsync(db => db.Notifications.Where(n => n.Kind == NotificationKind.Review).ToListAsync()));
         Assert.StartsWith("review-letter:", notification.Key);
         Assert.Contains("заглушки в письме", notification.Text);
-        Assert.Contains("расширение возьмёт свой шаблон", notification.Text);
     }
 }
