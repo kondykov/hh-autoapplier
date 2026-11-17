@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<LlmQualityMonitor>();
         services.AddSingleton<LlmPipelineGate>();
         services.AddSingleton<LlmOutage>();
+        services.AddSingleton<BotStrangerThrottle>();
         services.AddSingleton(VacancyEvaluator.Default);
         services.AddSingleton(TimeProvider.System);
         return services;

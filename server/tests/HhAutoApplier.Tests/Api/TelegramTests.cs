@@ -126,6 +126,26 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(BotTexts.NotLinked, Assert.Single(await Send(OwnerChat, "/status")).Text);
     }
 
+    // #118: незнакомцу — понятный текст не чаще раза в минуту; /start <код> не ограничивается; меню команд — по привязке
+    [Fact]
+    public async Task Stranger_ThrottledReply_StartNotThrottled_MenuByLink()
+    {
+        var first = Assert.Single(await Send(UserChat, "/menu"));
+        Assert.Equal(BotTexts.NotLinked, first.Text);
+        Assert.DoesNotContain("/api/", first.Text);
+        Assert.Empty(await Send(UserChat, "привет"));
+        Assert.Empty(await Send(UserChat, "/start"));
+        Assert.Contains("не найден", Assert.Single(await Send(UserChat, "/start not-a-code")).Text);
+
+        var linked = await Raw(UserChat, $"/start {await Code(_admin)}");
+        Assert.Equal(BotCommandsMenu.Full, linked.CommandsMenu);
+
+        var unlinked = await Press(UserChat, "unlink:");
+        Assert.Equal(BotCommandsMenu.Stranger, unlinked.CommandsMenu);
+        // После привязки окно сброшено: отвязанный чат сразу получает ответ
+        Assert.Equal(BotTexts.NotLinked, Assert.Single(await Send(UserChat, "/menu")).Text);
+    }
+
     [Fact]
     public async Task Chat_LinkedToOneUser_RelinkMovesIt()
     {

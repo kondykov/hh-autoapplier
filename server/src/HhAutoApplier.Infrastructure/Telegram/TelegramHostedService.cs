@@ -1,4 +1,5 @@
 using System.Net;
+using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Telegram;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Notifications;
@@ -161,6 +162,9 @@ public class TelegramHostedService(
 
         foreach (var id in result.Delete)
             await TryDeleteAsync(client, chatId, id, ct);
+
+        if (result.CommandsMenu is { } menu)
+            await SetChatCommandsAsync(client, chatId, menu, ct);
     }
 
     // Правка или удаление, которым Telegram может отказать: сообщение удалено, старше 48 часов, не изменилось.
@@ -200,16 +204,41 @@ public class TelegramHostedService(
         return await client.SendMessage(chatId, reply.Text, mode, replyMarkup: markup, linkPreviewOptions: NoPreview, cancellationToken: ct);
     }
 
-    // Меню команд («/» в поле ввода); не вышло — бот работает и без него
+    // Меню команд («/» в поле ввода, #118): по умолчанию — только /start, полный список — каждому привязанному чату.
+    // Не вышло — бот работает и без него
     private async Task SetCommandsAsync(ITelegramBotClient client, CancellationToken ct)
     {
         try
         {
-            await client.SetMyCommands(BotTexts.Commands.Select(c => new BotCommand(c.Command, c.Description)), cancellationToken: ct);
+            await client.SetMyCommands(Commands(BotTexts.StrangerCommands), BotCommandScope.Default(), cancellationToken: ct);
+            await using var scope = scopes.CreateAsyncScope();
+            var linked = await scope.ServiceProvider.GetRequiredService<IAppDbContext>().TelegramChats
+                .Where(c => c.ChatId != null).Select(c => c.ChatId!.Value).ToListAsync(ct);
+            foreach (var chatId in linked)
+                await SetChatCommandsAsync(client, chatId, BotCommandsMenu.Full, ct);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogWarning("Telegram: меню команд не установлено — {Message}", e.Message);
+        }
+    }
+
+    private static IEnumerable<BotCommand> Commands(IEnumerable<(string Command, string Description)> list) =>
+        list.Select(c => new BotCommand(c.Command, c.Description));
+
+    // Меню одного чата: Full — свой полный список, Stranger — снять свой, останется меню по умолчанию
+    private async Task SetChatCommandsAsync(ITelegramBotClient client, long chatId, BotCommandsMenu menu, CancellationToken ct)
+    {
+        try
+        {
+            if (menu == BotCommandsMenu.Full)
+                await client.SetMyCommands(Commands(BotTexts.Commands), BotCommandScope.Chat(chatId), cancellationToken: ct);
+            else
+                await client.DeleteMyCommands(BotCommandScope.Chat(chatId), cancellationToken: ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning("Telegram: меню команд чата не обновлено — {Message}", e.Message);
         }
     }
 
