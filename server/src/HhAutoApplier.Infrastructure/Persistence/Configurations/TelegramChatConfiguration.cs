@@ -12,6 +12,14 @@ public class TelegramChatConfiguration : IEntityTypeConfiguration<TelegramChat>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Username).HasMaxLength(64);
         builder.Property(x => x.CodeHash).HasMaxLength(64);
+        // «Один экран» (#115): режим ввода и черновик правки письма, сводка уведомлений
+        builder.Property(x => x.InputKind).HasMaxLength(TelegramChat.MaxKey);
+        builder.Property(x => x.InputTarget).HasMaxLength(TelegramChat.MaxKey);
+        builder.Property(x => x.InputBack).HasMaxLength(TelegramChat.MaxKey);
+        builder.Property(x => x.DraftVacancyId).HasMaxLength(TelegramChat.MaxKey);
+        builder.Property(x => x.DigestText).HasMaxLength(TelegramChat.MaxDigest);
+        // Чаты, привязанные до миграции, — без черновика
+        builder.Property(x => x.DraftBlocks).HasDefaultValueSql("'{}'");
         // У пользователя один чат, чат — у одного пользователя
         builder.HasIndex(x => x.UserId).IsUnique();
         builder.HasIndex(x => x.ChatId).IsUnique();

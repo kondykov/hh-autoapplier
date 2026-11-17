@@ -47,12 +47,23 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
         return await action(scope.ServiceProvider);
     }
 
-    private Task<IReadOnlyList<BotMessage>> Send(long chat, string text, bool isPrivate = true) =>
+    private Task<BotResult> Raw(long chat, string text, bool isPrivate = true, int messageId = 0) =>
         InScope(sp => sp.GetRequiredService<HandleTelegramMessageCommandHandler>()
-            .Handle(new HandleTelegramMessageCommand { ChatId = chat, IsPrivate = isPrivate, Text = text, Username = "owner" }));
+            .Handle(new HandleTelegramMessageCommand { ChatId = chat, IsPrivate = isPrivate, Text = text, Username = "owner", MessageId = messageId }));
 
-    private Task<BotCallbackResult> Press(long chat, string data) =>
-        InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>().Handle(new HandleTelegramCallbackCommand { ChatId = chat, Data = data }));
+    // Что увидит пользователь: сообщения (кроме служебных) и экран
+    private async Task<IReadOnlyList<BotMessage>> Send(long chat, string text, bool isPrivate = true)
+    {
+        var result = await Raw(chat, text, isPrivate);
+        return [.. result.Messages.Where(m => !m.DeleteAfterSend), .. result.Screen is { } s ? [s] : Array.Empty<BotMessage>()];
+    }
+
+    private Task<BotResult> Press(long chat, string data, int messageId = 0) =>
+        InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>()
+            .Handle(new HandleTelegramCallbackCommand { ChatId = chat, Data = data, MessageId = messageId }));
+
+    private Task<bool> Remember(long chat, int messageId) =>
+        InScope(sp => sp.GetRequiredService<RememberTelegramScreenCommandHandler>().Handle(new RememberTelegramScreenCommand(chat, messageId)));
 
     private Task<int> NotifyReviews() => InScope(sp => sp.GetRequiredService<NotifyReviewsCommandHandler>().Handle(new NotifyReviewsCommand()));
 
@@ -100,7 +111,7 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal($"https://t.me/test_bot?start={code}", link.GetProperty("link").GetString());
         Assert.False((await Json(await _admin.GetAsync("/api/telegram"))).GetProperty("linked").GetBoolean());
 
-        var reply = Assert.Single(await Send(OwnerChat, $"/start {code}"));
+        var reply = (await Send(OwnerChat, $"/start {code}"))[0];
         Assert.Contains(ApiFactory.AdminEmail, reply.Text);
         var state = await Json(await _admin.GetAsync("/api/telegram"));
         Assert.True(state.GetProperty("linked").GetBoolean());
@@ -135,55 +146,101 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
 
         await Link(_admin, OwnerChat);
         Assert.Empty(await Send(OwnerChat, "/status", isPrivate: false));
-        Assert.Contains("На проверке: 2", Assert.Single(await Send(OwnerChat, "/status@test_bot")).Text);
-        Assert.Contains("/review", Assert.Single(await Send(OwnerChat, "привет")).Text);
+        Assert.Contains("на проверке: 2", Assert.Single(await Send(OwnerChat, "/status@test_bot")).Text);
+        // Просто текст без режима ввода — экран-меню с подсказкой, сообщение убирается
+        var text = await Raw(OwnerChat, "привет", messageId: 77);
+        Assert.Contains("/menu", text.Screen!.Text);
+        Assert.Equal([77], text.Delete);
+        Assert.True(text.MoveScreen);
 
         // Отвязка — только подтверждением
         var confirm = Assert.Single(await Send(OwnerChat, "/stop"));
         Assert.Equal(["unlink:", "cancel:"], confirm.Buttons.Select(b => b.Data));
-        Assert.Equal("Отменено", (await Press(OwnerChat, "cancel:")).Status);
-        Assert.Contains("На проверке: 2", Assert.Single(await Send(OwnerChat, "/status")).Text);
+        Assert.Equal("Отменено", (await Press(OwnerChat, "cancel:")).Notice);
+        Assert.Contains("на проверке: 2", Assert.Single(await Send(OwnerChat, "/status")).Text);
 
         var unlinked = await Press(OwnerChat, "unlink:");
-        Assert.Contains("отвязан", unlinked.Status);
-        Assert.Equal(BotMenu.Remove, Assert.Single(unlinked.Replies).Menu);
+        Assert.Contains("отвязан", unlinked.Screen!.Text);
         Assert.Equal(BotTexts.NotLinked, Assert.Single(await Send(OwnerChat, "/status")).Text);
     }
 
     [Fact]
-    public async Task Buttons_MenuStatusAndReview()
+    public async Task Screen_MenuMovesDown_ButtonsEditInPlace()
     {
         await Link(_admin, OwnerChat);
-        Assert.Equal(BotMenu.Show, Assert.Single(await Send(OwnerChat, BotTexts.HelpButton)).Menu);
-        // Проверять нечего — у статуса меню, без кнопки
-        var empty = Assert.Single(await Send(OwnerChat, BotTexts.StatusButton));
-        Assert.Empty(empty.Buttons);
-        Assert.Equal(BotMenu.Show, empty.Menu);
+        var menu = await Raw(OwnerChat, "/menu", messageId: 10);
+        // Экран — заново внизу чата, команда убирается, клавиатура прежних версий снимается служебным сообщением
+        Assert.True(menu.MoveScreen);
+        Assert.Equal([10], menu.Delete);
+        Assert.True(Assert.Single(menu.Messages).RemoveKeyboard);
+        Assert.Contains(menu.Screen!.Buttons, b => b.Data == "rv:0");
+
+        // Транспорт запомнил экран; нажатие на нём перерисовывает его же
+        await Remember(OwnerChat, 500);
+        Assert.Equal(500, (await Raw(OwnerChat, "/menu", messageId: 11)).ScreenMessageId);
+        var pressed = await Press(OwnerChat, "ov:", messageId: 500);
+        Assert.Equal(500, pressed.ScreenMessageId);
+        Assert.False(pressed.MoveScreen);
+        Assert.Contains("Обзор", pressed.Screen!.Text);
+
+        // Нажатие на старом экране — экраном становится он
+        Assert.Equal(400, (await Press(OwnerChat, "menu:", messageId: 400)).ScreenMessageId);
+        Assert.Equal(400, await factory.WithDbAsync(db => db.TelegramChats.Where(c => c.ChatId == OwnerChat).Select(c => c.ScreenMessageId).SingleAsync()));
+
+        // «Открыть» под уведомлением — экран заново внизу, уведомление не трогается
+        var opened = await Press(OwnerChat, "o:rv:0", messageId: 600);
+        Assert.True(opened.MoveScreen);
+        Assert.Equal(400, opened.ScreenMessageId);
+        Assert.Null(opened.Status);
+        Assert.True((await Press(OwnerChat, "ok:", messageId: 600)).DeletePressed);
+    }
+
+    [Fact]
+    public async Task Buttons_MenuOverviewAndReview()
+    {
+        await Link(_admin, OwnerChat);
+        Assert.Contains("/menu", Assert.Single(await Send(OwnerChat, BotTexts.OldHelpButton)).Text);
+        // Проверять нечего — кнопки «Решить проверку» нет
+        var empty = Assert.Single(await Send(OwnerChat, "/overview"));
+        Assert.DoesNotContain(empty.Buttons, b => b.Data.StartsWith("rv:"));
 
         await CreateReviews();
-        var status = Assert.Single(await Send(OwnerChat, BotTexts.StatusButton));
-        Assert.Contains("На проверке: 2", status.Text);
-        var show = Assert.Single(status.Buttons);
+        // Прежняя подпись кнопки меню («📊 Статус») работает
+        var overview = Assert.Single(await Send(OwnerChat, BotTexts.OldStatusButton));
+        Assert.True(overview.Html);
+        Assert.Contains("на проверке: 2", overview.Text);
+        var show = Assert.Single(overview.Buttons, b => b.Data == "rv:0");
         Assert.Contains("(2)", show.Text);
 
-        // Кнопка «На проверке» — как /review: сообщения с кнопками решения, исходное не меняется
+        // Карточка листается на месте: одна, с номером в очереди
         var pressed = await Press(OwnerChat, show.Data);
-        Assert.Null(pressed.Status);
-        Assert.Equal(2, pressed.Replies.Count);
-        Assert.All(pressed.Replies, r => Assert.Equal(2, r.Buttons.Count));
-        Assert.Equal(2, (await Send(OwnerChat, BotTexts.ReviewButton)).Count);
+        Assert.Contains("1 из 2", pressed.Screen!.Text);
+        Assert.Contains(pressed.Screen.Buttons, b => b.Data == "rv:1");
+        Assert.Contains("2 из 2", (await Press(OwnerChat, "rv:1")).Screen!.Text);
+        Assert.Contains("1 из 2", (await Press(OwnerChat, "rv:2")).Screen!.Text);
+
+        // Кнопка сводки прежних версий — карточка экраном заново внизу чата
+        var review = await Press(OwnerChat, "review:", messageId: 900);
+        Assert.True(review.MoveScreen);
+        Assert.Contains("1 из 2", review.Screen!.Text);
+        Assert.Contains("1 из 2", Assert.Single(await Send(OwnerChat, BotTexts.OldReviewButton)).Text);
 
         Assert.Equal("Неизвестная кнопка", (await Press(OwnerChat, "nonsense")).Notice);
+        Assert.Equal("Неизвестная кнопка", (await Press(OwnerChat, "zz:1")).Notice);
         Assert.Equal("Чат не привязан", (await Press(UserChat, show.Data)).Notice);
     }
 
     [Fact]
-    public void NotificationButtons_ByKind()
+    public void NotificationButtons_ByKind_AndDelivery()
     {
-        Assert.Equal(["approve:7", "decline:7"], BotTexts.NotificationButtons(NotificationKind.Review, "review:1", "7").Select(b => b.Data));
-        Assert.Equal(["review:"], BotTexts.NotificationButtons(NotificationKind.Review, "review-digest:5", null).Select(b => b.Data));
-        Assert.Equal(["handled:21"], BotTexts.NotificationButtons(NotificationKind.EmployerReply, "dialog:21:201", null).Select(b => b.Data));
-        Assert.Empty(BotTexts.NotificationButtons(NotificationKind.Captcha, "captcha:1", null));
+        static IEnumerable<string> Data(IReadOnlyList<IReadOnlyList<BotButton>> rows) => rows.SelectMany(r => r).Select(b => b.Url ?? b.Data);
+        Assert.Equal(["https://hh.ru/chat/21", "handled:21", "o:dc:21:0:o"], Data(BotTexts.NotificationButtons(NotificationKind.EmployerReply, "dialog:21:201", null)));
+        Assert.Equal(["ok:"], Data(BotTexts.NotificationButtons(NotificationKind.Captcha, "captcha:1", null)));
+        Assert.Equal(["o:cs:", "ok:"], Data(BotTexts.NotificationButtons(NotificationKind.SourceBlocked, "source-blocked:1", null)));
+        Assert.Empty(BotTexts.NotificationButtons(NotificationKind.Review, "review:1", "7"));
+        // Обычные — в сводку, остальные — отдельным сообщением
+        Assert.Equal([NotificationKind.Review, NotificationKind.Questionnaire],
+            Enum.GetValues<NotificationKind>().Where(k => BotTexts.Delivery(k) == NotificationDelivery.Digest));
     }
 
     [Fact]
@@ -192,24 +249,35 @@ public class TelegramTests(ApiFactory factory) : IAsyncLifetime
         await CreateReviews();
         await Link(_admin, OwnerChat);
 
-        var messages = await Send(OwnerChat, "/review");
-        Assert.Equal(2, messages.Count);
-        Assert.All(messages, m => Assert.Equal(["approve", "decline"], m.Buttons.Select(b => b.Data.Split(':')[0])));
-        Assert.Contains("мало опыта", messages[0].Text);
+        var card = Assert.Single(await Send(OwnerChat, "/review"));
+        Assert.Equal(["ry", "rn"], card.Rows[0].Select(b => b.Data.Split(':')[0]));
+        Assert.Contains("мало опыта", card.Text);
 
-        // Чужой чат не решает за владельца
+        // Чужой чат не решает за владельца — ни кнопкой экрана, ни кнопкой уведомления
         await Link(await CreateUser("user@test.local"), UserChat);
         Assert.Equal("Вакансия не найдена", (await Press(UserChat, "approve:1")).Notice);
+        Assert.Equal("Вакансия не найдена", (await Press(UserChat, "ry:1")).Notice);
+        Assert.Equal("Вакансия не найдена", (await Press(UserChat, "rn:1")).Notice);
         Assert.Equal(VacancyStatus.Review, await StatusOf("1"));
+        Assert.StartsWith("Откликов на проверке нет", Assert.Single(await Send(UserChat, "/review")).Text);
 
-        Assert.Equal("Одобрено", (await Press(OwnerChat, "approve:1")).Notice);
-        Assert.Equal(VacancyStatus.Queued, await StatusOf("1"));
-        Assert.Equal("Уже решено", (await Press(OwnerChat, "decline:1")).Notice);
+        // На экране: решение — всплывашкой, экран сам переходит к следующей карточке
+        var first = card.Rows[0][0].Data.Split(':')[1];
+        var approved = await Press(OwnerChat, $"ry:{first}");
+        Assert.Equal("✅ Одобрено · осталось 1", approved.Notice);
+        Assert.Contains("1 из 1", approved.Screen!.Text);
+        Assert.Equal(VacancyStatus.Queued, await StatusOf(first));
+        Assert.StartsWith("Уже решено", (await Press(OwnerChat, $"rn:{first}")).Notice);
 
-        Assert.Equal("❌ Отклонено", (await Press(OwnerChat, "decline:2")).Status);
-        Assert.Equal(VacancyStatus.Skipped, await StatusOf("2"));
+        // Кнопки уведомления прежних версий — уведомление сворачивается до итога
+        var other = first == "1" ? "2" : "1";
+        var declined = await Press(OwnerChat, $"decline:{other}");
+        Assert.Equal("❌ Отклонено", declined.Status);
+        Assert.Null(declined.Screen);
+        Assert.Equal(VacancyStatus.Skipped, await StatusOf(other));
+        Assert.Equal("Уже решено", (await Press(OwnerChat, $"approve:{other}")).Notice);
         Assert.Equal("Неизвестная кнопка", (await Press(OwnerChat, "delete:2")).Notice);
-        Assert.Equal("Откликов на проверке нет", Assert.Single(await Send(OwnerChat, "/review")).Text);
+        Assert.StartsWith("Откликов на проверке нет", Assert.Single(await Send(OwnerChat, "/review")).Text);
     }
 
     [Fact]

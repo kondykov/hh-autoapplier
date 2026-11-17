@@ -35,8 +35,8 @@ public class NotifyReviewsCommandHandler(IAppDbContext db, ITelegramBot bot, Not
             {
                 foreach (var application in fresh)
                 {
-                    var message = BotTexts.Review(application);
-                    if (await notifier.NotifyAsync(application.UserId, NotificationKind.Review, ReviewKey(application), message.Text, application.VacancyId, ct))
+                    var line = BotTexts.ReviewLine(application);
+                    if (await notifier.NotifyAsync(application.UserId, NotificationKind.Review, ReviewKey(application), line, application.VacancyId, ct))
                         written++;
                 }
 

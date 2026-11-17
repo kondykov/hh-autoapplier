@@ -54,12 +54,16 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(HhAutoApplier.Application.ApiContract.Version, version.GetProperty("apiVersion").GetInt32());
     }
 
+    // Без входа (#116): по ответу deploy.sh сверяет выкатанный коммит
     [Fact]
-    public async Task Version_WithoutLogin_Unauthorized()
+    public async Task Version_WithoutLogin_ReturnsVersion()
     {
         var response = await factory.CreateClient().GetAsync("/api/version");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var version = await Json(response);
+        Assert.Matches(@"^\d+\.\d+\.\d+(-rc\.\d+)?$", version.GetProperty("version").GetString()!);
+        Assert.Equal(HhAutoApplier.Application.ApiContract.Version, version.GetProperty("apiVersion").GetInt32());
     }
 
     // CORS выключен по умолчанию (#20): чужой сайт не получает разрешения ни на preflight, ни на обычный запрос
@@ -423,11 +427,20 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         var id = review.GetProperty("id").GetString();
         Assert.Equal(HttpStatusCode.Conflict, (await _api.PostAsJsonAsync($"/api/vacancies/{id}/review",
             new { approve = true, answers = new[] { new[] { "DIP" } } })).StatusCode);
+        // #115: выбор — только из вариантов вопроса, у Radio — ровно один
+        Assert.Equal(HttpStatusCode.Conflict, (await _api.PostAsJsonAsync($"/api/vacancies/{id}/review",
+            new { approve = true, answers = new[] { new[] { "OCP" }, new[] { "от 250 000 ₽" } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await _api.PostAsJsonAsync($"/api/vacancies/{id}/review",
+            new { approve = true, answers = new[] { Array.Empty<string>(), new[] { "от 250 000 ₽" } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await _api.PostAsJsonAsync($"/api/vacancies/{id}/review",
+            new { approve = true, answers = new[] { new[] { "SRP", "DIP" }, new[] { "от 250 000 ₽" } } })).StatusCode);
         var approved = await Json(await _api.PostAsJsonAsync($"/api/vacancies/{id}/review",
-            new { approve = true, answers = new[] { new[] { "DIP" }, new[] { "от 250 000 ₽" } } }));
+            new { approve = true, answers = new[] { new[] { "srp" }, new[] { "от 250 000 ₽" } } }));
         Assert.Equal("Queued", approved.GetProperty("status").GetString());
         var queued = Assert.Single((await Json(await _api.GetAsync("/api/queue"))).EnumerateArray());
         Assert.Equal("от 250 000 ₽", queued.GetProperty("questions")[1].GetProperty("answer")[0].GetString());
+        // Вариант сохраняется так, как написан в анкете
+        Assert.Equal("SRP", queued.GetProperty("questions")[0].GetProperty("answer")[0].GetString());
     }
 
     // #58: цифры текстовых ответов — только из резюме и профиля, зарплата — только в ответе о ней и только из пожеланий;
