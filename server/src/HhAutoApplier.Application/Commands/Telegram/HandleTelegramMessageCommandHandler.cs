@@ -2,19 +2,27 @@ using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Notifications;
+using HhAutoApplier.Application.Telegram;
 using HhAutoApplier.Domain.Telegram;
-using HhAutoApplier.Domain.Vacancies;
 using Microsoft.EntityFrameworkCore;
 
 namespace HhAutoApplier.Application.Commands.Telegram;
 
-// Команды бота: /start <код> привязывает чат, остальные работают только в привязанном чате незаблокированного пользователя
-public class HandleTelegramMessageCommandHandler(IAppDbContext db, IUserService users, TimeProvider clock)
-    : ICommandHandler<HandleTelegramMessageCommand, IReadOnlyList<BotMessage>>
+// Команды бота: /start <код> привязывает чат, остальные работают только в привязанном чате незаблокированного пользователя.
+// Ответ на просьбу бота (правка письма, причина) — по первой строке сообщения бота, на которое ответили (BotPrompt)
+public class HandleTelegramMessageCommandHandler(
+    IAppDbContext db,
+    IUserService users,
+    BotChat bot,
+    OverviewSection overview,
+    ReviewSection review,
+    VacanciesSection vacancies,
+    DialogsSection dialogs,
+    SearchesSection searches,
+    CollectionSection collection,
+    TimeProvider clock
+) : ICommandHandler<HandleTelegramMessageCommand, IReadOnlyList<BotMessage>>
 {
-    // Сколько откликов на проверке показать за раз — по сообщению на каждый
-    private const int ReviewBatch = 10;
-
     public async Task<IReadOnlyList<BotMessage>> Handle(HandleTelegramMessageCommand command, CancellationToken ct = default)
     {
         if (!command.IsPrivate)
@@ -24,8 +32,11 @@ public class HandleTelegramMessageCommandHandler(IAppDbContext db, IUserService 
         // В группах Telegram дописывает имя бота: /status@my_bot. Кнопка меню присылает свою подпись
         var name = command.Text.Trim() switch
         {
-            BotTexts.StatusButton => "/status",
-            BotTexts.ReviewButton => "/review",
+            BotTexts.OverviewButton or BotTexts.OldStatusButton => "/overview",
+            BotTexts.ReviewButton or BotTexts.OldReviewButton => "/review",
+            BotTexts.DialogsButton => "/dialogs",
+            BotTexts.VacanciesButton => "/vacancies",
+            BotTexts.SearchesButton => "/searches",
             BotTexts.HelpButton => "/help",
             _ => parts.Length > 0 ? parts[0].Split('@')[0].ToLowerInvariant() : "",
         };
@@ -34,19 +45,32 @@ public class HandleTelegramMessageCommandHandler(IAppDbContext db, IUserService 
         if (name == "/start" && argument != "")
             return [await LinkAsync(command, argument, ct)];
 
-        var chat = await db.TelegramChats.FirstOrDefaultAsync(c => c.ChatId == command.ChatId, ct);
-        if (chat is null)
+        var (state, _) = await bot.EnterAsync(command.ChatId, ct);
+        if (state == BotEntryState.NotLinked)
             return [new BotMessage(BotTexts.NotLinked)];
-
-        if ((await users.GetBlockedIdsAsync(ct)).Contains(chat.UserId))
+        if (state == BotEntryState.Blocked)
             return [new BotMessage("Учётная запись заблокирована")];
+
+        // Ответ текстом на просьбу бота; команда в ответе — всё равно команда
+        if (!name.StartsWith('/') && BotPrompt.Parse(command.ReplyTo) is { } prompt)
+            return [await ReplyAsync(prompt.Kind, prompt.VacancyId, command.Text, command.ReplyTo!, ct)];
 
         switch (name)
         {
-            case "/status":
-                return [await StatusAsync(chat.UserId, ct)];
+            case "/overview" or "/status":
+                return [await overview.ScreenAsync(ct)];
             case "/review":
-                return await ReviewAsync(chat.UserId, ct);
+                return [await review.CardAsync(null, 0, ct)];
+            case "/dialogs":
+                return [await dialogs.ListAsync(0, false, ct)];
+            case "/vacancies":
+                return [await vacancies.MenuAsync(ct)];
+            case "/searches":
+                return [await searches.ScreenAsync(ct)];
+            case "/collect":
+                return [await collection.ScreenAsync(ct)];
+            case "/report":
+                return [await overview.ReportAsync(ct)];
             case "/stop":
                 // Отвязка — кнопкой подтверждения (HandleTelegramCallbackCommandHandler): привязать обратно можно только новым кодом
                 return [BotTexts.UnlinkConfirm()];
@@ -54,6 +78,11 @@ public class HandleTelegramMessageCommandHandler(IAppDbContext db, IUserService 
                 return [new BotMessage(BotTexts.Help) { Menu = BotMenu.Show }];
         }
     }
+
+    private Task<BotMessage> ReplyAsync(string kind, string vacancyId, string text, BotSource source, CancellationToken ct) =>
+        kind == BotPrompt.SkipReason
+            ? vacancies.SkipAsync(vacancyId, text.Trim(), ct)
+            : review.ReplyAsync(kind, vacancyId, text, source, ct);
 
     private async Task<BotMessage> LinkAsync(HandleTelegramMessageCommand command, string code, CancellationToken ct)
     {
@@ -78,36 +107,5 @@ public class HandleTelegramMessageCommandHandler(IAppDbContext db, IUserService 
         await db.SaveChangesAsync(ct);
         var user = await users.FindAsync(chat.UserId, ct);
         return new BotMessage($"Чат привязан к {user?.Email ?? "учётной записи"}.\n\n{BotTexts.Help}") { Menu = BotMenu.Show };
-    }
-
-    private async Task<BotMessage> StatusAsync(Guid userId, CancellationToken ct)
-    {
-        var counts = await db.JobApplications.Where(a => a.UserId == userId).GroupBy(a => a.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Status, g => g.Count, ct);
-        var since = clock.GetUtcNow().AddDays(-1);
-        var applied = await db.JobApplications.CountAsync(a => a.UserId == userId && a.AppliedAt >= since, ct);
-
-        int Count(VacancyStatus status) => counts.GetValueOrDefault(status);
-        return BotTexts.Status($"""
-            В очереди: {Count(VacancyStatus.Queued)}
-            На проверке: {Count(VacancyStatus.Review)}
-            Анкеты ждут LLM: {Count(VacancyStatus.Questionnaire)}
-            Ждут оценки LLM: {Count(VacancyStatus.Pending)}
-            Откликов за сутки: {applied}, всего: {Count(VacancyStatus.Applied) + Count(VacancyStatus.Rejected)}
-            """, Count(VacancyStatus.Review));
-    }
-
-    private async Task<IReadOnlyList<BotMessage>> ReviewAsync(Guid userId, CancellationToken ct)
-    {
-        var waiting = db.Applications(userId).Where(a => a.Status == VacancyStatus.Review);
-        var total = await waiting.CountAsync(ct);
-        if (total == 0)
-            return [new BotMessage("Откликов на проверке нет")];
-
-        var batch = await waiting.OrderByDescending(a => a.Score).Take(ReviewBatch).AsNoTracking().ToListAsync(ct);
-        var messages = batch.Select(BotTexts.Review).ToList();
-        if (total > batch.Count)
-            messages.Add(new BotMessage($"Показано {batch.Count} из {total}: решите эти и отправьте /review ещё раз"));
-        return messages;
     }
 }

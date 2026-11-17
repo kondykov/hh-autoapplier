@@ -2,6 +2,7 @@ using System.Net;
 using HhAutoApplier.Application.Commands.Telegram;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Notifications;
+using HhAutoApplier.Application.Telegram;
 using HhAutoApplier.Domain.Notifications;
 using HhAutoApplier.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -98,6 +99,7 @@ public class TelegramHostedService(
                 IsPrivate = message.Chat.Type == ChatType.Private,
                 Text = text,
                 Username = message.From?.Username,
+                ReplyTo = message.ReplyToMessage is { } replied ? Source(client, replied) : null,
             }, ct);
             await SendRepliesAsync(client, message.Chat.Id, replies, ct);
         }
@@ -111,32 +113,76 @@ public class TelegramHostedService(
             }
 
             var handler = scope.ServiceProvider.GetRequiredService<HandleTelegramCallbackCommandHandler>();
-            var result = await handler.Handle(new HandleTelegramCallbackCommand { ChatId = source.Chat.Id, Data = data }, ct);
+            var result = await handler.Handle(new HandleTelegramCallbackCommand { ChatId = source.Chat.Id, Data = data, Source = Source(client, source) }, ct);
             await client.AnswerCallbackQuery(callback.Id, result.Notice == "" ? null : result.Notice, cancellationToken: ct);
-            if (result.Status is not null)
+            if (result.Edit is { } screen)
+                await EditAsync(client, source, screen, ct);
+            else if (result.Status is not null)
             {
                 var edited = $"{source.Text}\n\n{result.Status}";
-                // Длинное сообщение (письмо, ответ работодателя) не дописать сверх лимита — только убрать кнопки
-                if (edited.Length <= MaxText)
-                    await client.EditMessageText(source.Chat.Id, source.MessageId, edited, linkPreviewOptions: NoPreview, cancellationToken: ct);
+                // Длинное сообщение (письмо, ответ работодателя) не дописать сверх лимита — только поменять кнопки.
+                // Разметка исходного текста сохраняется: дописанное идёт в конец, смещения не меняются
+                if (source.Text is not null && edited.Length <= MaxText)
+                    await IgnoreUnchanged(client.EditMessageText(source.Chat.Id, source.MessageId, edited, entities: source.Entities,
+                        replyMarkup: Keyboard(result.StatusRows), linkPreviewOptions: NoPreview, cancellationToken: ct));
                 else
-                    await client.EditMessageReplyMarkup(source.Chat.Id, source.MessageId, cancellationToken: ct);
+                    await IgnoreUnchanged(client.EditMessageReplyMarkup(source.Chat.Id, source.MessageId, Keyboard(result.StatusRows), cancellationToken: ct));
             }
 
             await SendRepliesAsync(client, source.Chat.Id, result.Replies, ct);
         }
     }
 
-    private static async Task SendRepliesAsync(ITelegramBotClient client, long chatId, IReadOnlyList<BotMessage> replies, CancellationToken ct)
+    // Сообщение бота, на которое ответили или под которым нажали: текст и блоки <pre> (черновик письма, #115).
+    // Смещения сущностей Telegram — в UTF-16, как у строк .NET
+    private static BotSource Source(ITelegramBotClient client, Message message)
     {
-        foreach (var reply in replies)
-            await client.SendMessage(chatId, reply.Text, replyMarkup: Markup(reply), linkPreviewOptions: NoPreview, cancellationToken: ct);
+        var text = message.Text ?? message.Caption ?? "";
+        var blocks = (message.Entities ?? []).Where(e => e.Type == MessageEntityType.Pre && e.Offset + e.Length <= text.Length)
+            .Select(e => text.Substring(e.Offset, e.Length)).ToList();
+        return new BotSource(text, blocks, message.From?.Id == client.BotId);
     }
 
-    // Кнопки под сообщением или меню внизу чата: у сообщения Telegram одна разметка
+    // Листание на месте: текст и кнопки сообщения заменяются новым экраном
+    private static async Task EditAsync(ITelegramBotClient client, Message source, BotMessage screen, CancellationToken ct)
+    {
+        var fitted = BotHtml.Fit(screen);
+        await IgnoreUnchanged(client.EditMessageText(source.Chat.Id, source.MessageId, fitted.Text, fitted.Html ? ParseMode.Html : ParseMode.None,
+            replyMarkup: Keyboard(fitted.Rows), linkPreviewOptions: NoPreview, cancellationToken: ct));
+    }
+
+    // Повторное нажатие «Обновить» без изменений: Telegram отвечает ошибкой «message is not modified» — это не сбой
+    private static async Task IgnoreUnchanged(Task edit)
+    {
+        try
+        {
+            await edit;
+        }
+        catch (ApiRequestException e) when (e.Message.Contains("message is not modified", StringComparison.OrdinalIgnoreCase))
+        {
+        }
+    }
+
+    private static async Task SendRepliesAsync(ITelegramBotClient client, long chatId, IReadOnlyList<BotMessage> replies, CancellationToken ct)
+    {
+        foreach (var reply in replies.Select(BotHtml.Fit))
+        {
+            var mode = reply.Html ? ParseMode.Html : ParseMode.None;
+            if (reply.File is { } file)
+            {
+                await using var stream = new MemoryStream(file.Content);
+                await client.SendDocument(chatId, InputFile.FromStream(stream, file.Name), reply.Text, mode, replyMarkup: Markup(reply), cancellationToken: ct);
+            }
+            else
+                await client.SendMessage(chatId, reply.Text, mode, replyMarkup: Markup(reply), linkPreviewOptions: NoPreview, cancellationToken: ct);
+        }
+    }
+
+    // Кнопки под сообщением, просьба ответить или меню внизу чата: у сообщения Telegram одна разметка
     private static ReplyMarkup? Markup(BotMessage message) => message switch
     {
-        { Buttons.Count: > 0 } => Keyboard(message.Buttons),
+        { AskReply: { } placeholder } => new ForceReplyMarkup { InputFieldPlaceholder = placeholder.Length > 64 ? placeholder[..64] : placeholder },
+        { Rows.Count: > 0 } => Keyboard(message.Rows),
         { Menu: BotMenu.Show } => new ReplyKeyboardMarkup(BotTexts.MenuRows.Select(row => row.Select(text => new KeyboardButton(text))))
         {
             ResizeKeyboard = true,
@@ -206,7 +252,7 @@ public class TelegramHostedService(
             var buttons = BotTexts.NotificationButtons(notification.Kind, notification.Key, notification.VacancyId);
             try
             {
-                await client.SendMessage(chatId, notification.Text, replyMarkup: Keyboard(buttons), linkPreviewOptions: NoPreview, cancellationToken: ct);
+                await client.SendMessage(chatId, BotHtml.Fit(new BotMessage(notification.Text)).Text, replyMarkup: Keyboard(buttons), linkPreviewOptions: NoPreview, cancellationToken: ct);
                 notification.MarkSent(clock.GetUtcNow());
             }
             catch (ApiRequestException e) when (e.ErrorCode == (int)HttpStatusCode.Forbidden)
@@ -225,7 +271,9 @@ public class TelegramHostedService(
 
         await db.SaveChangesAsync(ct);
     }
-
-    private static InlineKeyboardMarkup? Keyboard(IReadOnlyList<BotButton> buttons) =>
-        buttons.Count == 0 ? null : new InlineKeyboardMarkup(buttons.Select(b => InlineKeyboardButton.WithCallbackData(b.Text, b.Data)));
+    // Ряды кнопок: кнопка-ссылка открывает адрес, остальные возвращают Data боту
+    private static InlineKeyboardMarkup? Keyboard(IReadOnlyList<IReadOnlyList<BotButton>> rows) =>
+        rows.All(r => r.Count == 0) ? null
+            : new InlineKeyboardMarkup(rows.Where(r => r.Count > 0).Select(r => r.Select(b =>
+                b.Url is { } url ? InlineKeyboardButton.WithUrl(b.Text, url) : InlineKeyboardButton.WithCallbackData(b.Text, b.Data))));
 }

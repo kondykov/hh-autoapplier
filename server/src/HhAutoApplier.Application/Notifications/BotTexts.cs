@@ -11,10 +11,17 @@ public static class BotTexts
 {
     public const string Help = """
         Кнопки меню внизу чата или команды:
-        /status — очередь, проверка и отклики за сутки
-        /review — отклики на проверке с кнопками «Одобрить» и «Отклонить»
+        /overview — обзор: счётчики по статусам, что дальше, отчёт CSV
+        /review — проверка по одной карточке: одобрить, отклонить, поправить письмо и ответы анкеты
+        /dialogs — ответы работодателей с черновиком ответа
+        /vacancies — вакансии по статусу и поиску: в очередь, пропустить, оценить заново
+        /searches — поиски: включить и выключить
+        /collect — сбор вакансий (администратор)
         /help — эта справка
         /stop — отвязать чат
+
+        Правка письма: «✏️ Письмо» под карточкой — бот пришлёт текущий текст, ответьте на его сообщение новым.
+        Резюме, профиль, правила поисков, пароль и пользователи — в веб-интерфейсе.
 
         Уведомления: отклик на проверке, приглашения и вопросы работодателей с черновиком ответа, капча и дневной лимит в расширении, анкета без ответа LLM; администратору — сбои сбора и LLM.
         """;
@@ -22,24 +29,40 @@ public static class BotTexts
     public const string NotLinked = "Чат не привязан. Получите код на backend (POST /api/telegram/link после входа по паролю) и отправьте сюда: /start <код>";
 
     // Кнопки меню присылают свой текст как обычное сообщение — бот понимает его как команду
-    public const string StatusButton = "📊 Статус";
+    public const string OverviewButton = "📊 Обзор";
 
-    public const string ReviewButton = "📝 На проверке";
+    public const string ReviewButton = "📝 Проверка";
+
+    public const string DialogsButton = "💬 Ответы";
+
+    public const string VacanciesButton = "📋 Вакансии";
+
+    public const string SearchesButton = "🔎 Поиски";
 
     public const string HelpButton = "❓ Помощь";
 
-    public static readonly IReadOnlyList<IReadOnlyList<string>> MenuRows = [[StatusButton, ReviewButton], [HelpButton]];
+    // Подписи меню до #115: у кого клавиатура не обновилась, кнопки продолжают работать
+    public const string OldStatusButton = "📊 Статус";
+
+    public const string OldReviewButton = "📝 На проверке";
+
+    public static readonly IReadOnlyList<IReadOnlyList<string>> MenuRows =
+        [[OverviewButton, ReviewButton, DialogsButton], [VacanciesButton, SearchesButton, HelpButton]];
 
     // Меню команд бота («/» в поле ввода)
     public static readonly IReadOnlyList<(string Command, string Description)> Commands =
     [
-        ("status", "Очередь, проверка и отклики за сутки"),
-        ("review", "Отклики на проверке"),
+        ("overview", "Обзор: счётчики, что дальше, отчёт"),
+        ("review", "Проверка откликов"),
+        ("dialogs", "Ответы работодателей"),
+        ("vacancies", "Вакансии по статусу и поиску"),
+        ("searches", "Поиски: включить и выключить"),
+        ("collect", "Сбор вакансий (администратор)"),
         ("help", "Справка"),
         ("stop", "Отвязать чат"),
     ];
 
-    // Data кнопок: «действие:аргумент»
+    // Data кнопок: «действие:аргумент»; эти — с первой версии бота и остаются в уже отправленных сообщениях
     public const string Approve = "approve";
 
     public const string Decline = "decline";
@@ -52,20 +75,21 @@ public static class BotTexts
 
     public const string Handled = "handled";
 
+    // Карточка отклика на проверке (#115) — из уведомления и списка вакансий
+    public const string ReviewCard = "rk";
+
     public static BotMessage UnlinkConfirm() =>
         new("Отвязать чат? Уведомления перестанут приходить, привязать снова можно только новым кодом.",
             [new BotButton("Отвязать", $"{Unlink}:"), new BotButton("Отмена", $"{Cancel}:")]);
 
-    // Счётчики с кнопкой перехода к проверке, если есть что проверять
-    public static BotMessage Status(string text, int review) =>
-        review > 0 ? new BotMessage(text, [new BotButton($"{ReviewButton} ({review})", $"{ShowReview}:")]) : new BotMessage(text) { Menu = BotMenu.Show };
-
-    // Кнопки уведомления по его виду: отклик — решить, сводка — показать по одному, ответ работодателя — отметить обработанным
-    public static IReadOnlyList<BotButton> NotificationButtons(NotificationKind kind, string key, string? vacancyId) => kind switch
+    // Кнопки уведомления по его виду: отклик — решить или открыть карточку (правка письма), сводка — по одному,
+    // ответ работодателя — открыть чат и отметить обработанным
+    public static IReadOnlyList<IReadOnlyList<BotButton>> NotificationButtons(NotificationKind kind, string key, string? vacancyId) => kind switch
     {
-        NotificationKind.Review when vacancyId is not null => ReviewButtons(vacancyId),
-        NotificationKind.Review when key.StartsWith("review-digest:") => [new BotButton("📝 Решить по одному", $"{ShowReview}:")],
-        NotificationKind.EmployerReply when key.Split(':') is ["dialog", var chatId, ..] => [new BotButton("✔ Обработано", $"{Handled}:{chatId}")],
+        NotificationKind.Review when vacancyId is not null => [ReviewButtons(vacancyId), [new BotButton("📝 Карточка: письмо, анкета", $"{ReviewCard}:{vacancyId}")]],
+        NotificationKind.Review when key.StartsWith("review-digest:") => [[new BotButton("📝 Решить по одному", $"{ShowReview}:")]],
+        NotificationKind.EmployerReply when key.Split(':') is ["dialog", var chatId, ..] =>
+            [[BotButton.Link("💬 Открыть чат", $"https://hh.ru/chat/{chatId}"), new BotButton("✔ Обработано", $"{Handled}:{chatId}")]],
         _ => [],
     };
 
@@ -85,7 +109,7 @@ public static class BotTexts
 
         if (answered.Count > 0)
         {
-            text.AppendLine().AppendLine("Анкета (поправить ответы — в веб-интерфейсе, «Проверка»):");
+            text.AppendLine().AppendLine("Анкета (поправить ответы — «📝 Карточка»):");
             foreach (var q in answered)
                 text.AppendLine($"— {q.Text}").AppendLine($"  {string.Join("; ", q.Answer)}");
         }
@@ -95,19 +119,19 @@ public static class BotTexts
         }
 
         if (application.LetterRequestsState == LetterRequestsState.Failed)
-            text.AppendLine().AppendLine("Просьбы работодателя к письму разобрать не удалось: прочитайте вакансию и решите в веб-интерфейсе, «Проверка».");
+            text.AppendLine().AppendLine("Просьбы работодателя к письму разобрать не удалось: прочитайте вакансию и напишите письмо сами — «📝 Карточка».");
         else if (application.LetterRequests.Count > 0)
         {
             text.AppendLine().AppendLine("Просьбы работодателя к письму:");
             foreach (var r in application.LetterRequests)
                 text.AppendLine($"— {r.Text}").AppendLine(r.Closed ? $"  ответ: {r.Answer ?? "решено человеком"}" : $"  не закрыта: {r.Problem ?? $"ждёт письма, значение {r.Answer}"}");
             if (application.AwaitsClosingLetter)
-                text.AppendLine("Незакрытые просьбы решаются в веб-интерфейсе, «Проверка».");
+                text.AppendLine("Незакрытые просьбы — в «📝 Карточке»: вставить кодовое слово, подставить из профиля, поправить письмо.");
         }
 
         text.AppendLine().AppendLine(string.IsNullOrWhiteSpace(application.CoverLetter)
-            ? "Письма пока нет — расширение возьмёт свой шаблон. Поправить письмо — в веб-интерфейсе, раздел «Проверка»."
-            : $"Письмо (поправить — в веб-интерфейсе, «Проверка»):\n{application.CoverLetter}");
+            ? "Письма пока нет — расширение возьмёт свой шаблон. Написать своё — «📝 Карточка» → «✏️ Письмо»."
+            : $"Письмо (поправить — «📝 Карточка» → «✏️ Письмо»):\n{application.CoverLetter}");
 
         return new BotMessage(text.ToString().TrimEnd(), ReviewButtons(application.VacancyId));
     }
@@ -132,10 +156,10 @@ public static class BotTexts
         if (!string.IsNullOrWhiteSpace(message.SuggestedReply))
             text.AppendLine().AppendLine("Черновик ответа (отправьте сами в чате, поправив [заглушки]):").AppendLine(message.SuggestedReply);
 
-        return text.AppendLine().Append("Все ответы — в веб-интерфейсе, раздел «Ответы работодателей»").ToString();
+        return text.AppendLine().Append("Все ответы — /dialogs или «💬 Ответы» в меню").ToString();
     }
 
-    // Сводка вместо пачки сообщений: решать по одному — /review (с кнопками) или в веб-интерфейсе
+    // Сводка вместо пачки сообщений: решать по одной карточке — /review или в веб-интерфейсе
     public static string ReviewDigest(IReadOnlyCollection<JobApplication> fresh, int total)
     {
         const int shown = 10;
@@ -145,7 +169,7 @@ public static class BotTexts
         if (fresh.Count > shown)
             text.AppendLine($"…и ещё {fresh.Count - shown}");
 
-        return text.AppendLine().Append("Решить: /review — по одному с кнопками, или в веб-интерфейсе, раздел «Проверка»").ToString();
+        return text.AppendLine().Append("Решить: /review — по одной карточке, или в веб-интерфейсе, раздел «Проверка»").ToString();
     }
 
     public static IReadOnlyList<BotButton> ReviewButtons(string vacancyId) =>

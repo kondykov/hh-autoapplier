@@ -1,4 +1,6 @@
+using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
+using HhAutoApplier.Application.Telegram;
 using HhAutoApplier.Application.Llm;
 using HhAutoApplier.Application.Notifications;
 using HhAutoApplier.Domain.Services;
@@ -16,6 +18,15 @@ public static class DependencyInjection
             .AddClasses(classes => classes.AssignableToAny(typeof(ICommandHandler<,>), typeof(IQueryHandler<,>), typeof(IExtractor<,>)))
             .AsImplementedInterfaces()
             .AsSelf()
+            .WithScopedLifetime());
+
+        // Бот Telegram (#115): пользователь чата для сценариев и разделы бота — новый раздел регистрируется сам
+        services.AddScoped<ActingUser>();
+        services.AddScoped<BotChat>();
+        services.Scan(scan => scan
+            .FromAssemblyOf<ApplicationAssembly>()
+            .AddClasses(classes => classes.AssignableTo<IBotSection>())
+            .AsSelfWithInterfaces()
             .WithScopedLifetime());
 
         services.AddScoped<Notifier>();
