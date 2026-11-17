@@ -290,10 +290,10 @@ public class LetterRequestsApiTests(ApiFactory factory) : IAsyncLifetime
         const long chat = 100;
         await InScope(sp => sp.GetRequiredService<HandleTelegramMessageCommandHandler>()
             .Handle(new HandleTelegramMessageCommand { ChatId = chat, IsPrivate = true, Text = $"/start {link.GetProperty("code").GetString()}", Username = "owner" }));
-        Task<BotCallbackResult> Press(string data) => InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>()
+        Task<BotResult> Press(string data) => InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>()
             .Handle(new HandleTelegramCallbackCommand { ChatId = chat, Data = data }));
 
-        var card = (await Press($"{BotTexts.ReviewCard}:1")).Edit!;
+        var card = (await Press($"{BotTexts.ReviewCard}:1")).Screen!;
         var insert = Assert.Single(card.Buttons, b => b.Data.StartsWith("rc:"));
         Assert.Equal("rc:1:0", insert.Data);
         Assert.Contains("слон", insert.Text);
@@ -302,7 +302,7 @@ public class LetterRequestsApiTests(ApiFactory factory) : IAsyncLifetime
         var updated = await Press(insert.Data);
         Assert.Equal("Письмо обновлено", updated.Notice);
         Assert.Contains("Кодовое слово: слон", (await Vacancy()).GetProperty("coverLetter").GetString());
-        Assert.DoesNotContain(updated.Edit!.Buttons, b => b.Data == "rc:1:0");
+        Assert.DoesNotContain(updated.Screen!.Buttons, b => b.Data == "rc:1:0");
     }
 
     [Fact]
@@ -405,14 +405,15 @@ public class LetterRequestsApiTests(ApiFactory factory) : IAsyncLifetime
 
         var written = await InScope(sp => sp.GetRequiredService<NotifyReviewsCommandHandler>().Handle(new NotifyReviewsCommand()));
         Assert.Equal(1, written);
-        var text = await factory.WithDbAsync(db => db.Notifications.Select(n => n.Text).FirstAsync(n => n.Contains("На проверке")));
-        Assert.Contains("расскажите о проекте", text);
-        Assert.Contains("не закрыта", text);
+        // В сводку — строка с причиной: просьбы к письму
+        var text = await factory.WithDbAsync(db => db.Notifications.Select(n => n.Text).SingleAsync());
+        Assert.Contains("просьбы к письму", text);
 
         // #115: решение человека в Telegram — как «Одобрить» в вебе: просьбы видны в карточке, одобрение закрывает их
         var card = await InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>()
             .Handle(new HandleTelegramCallbackCommand { ChatId = chat, Data = $"{BotTexts.ReviewCard}:1" }));
-        Assert.Contains("расскажите о проекте", card.Edit!.Text);
+        Assert.Contains("расскажите о проекте", card.Screen!.Text);
+        Assert.Contains("Просьбы к письму", card.Screen.Text);
 
         var press = await InScope(sp => sp.GetRequiredService<HandleTelegramCallbackCommandHandler>()
             .Handle(new HandleTelegramCallbackCommand { ChatId = chat, Data = $"{BotTexts.Approve}:1" }));

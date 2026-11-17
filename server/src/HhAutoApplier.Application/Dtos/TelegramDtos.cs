@@ -6,7 +6,7 @@ public record TelegramChatDto(bool Configured, bool Linked, string? Username, Da
 // Код привязки показывается один раз; Link — ссылка на бота с кодом (null — имя бота не получено, код отправить вручную: /start <код>)
 public record TelegramLinkDto(string Code, string? Link, DateTimeOffset ExpiresAt);
 
-// Ответ бота: текст и ряды кнопок под ним (Data возвращается боту при нажатии)
+// Сообщение бота: текст и ряды кнопок под ним (Data возвращается боту при нажатии)
 public record BotMessage
 {
     public BotMessage(string text) => Text = text;
@@ -20,28 +20,20 @@ public record BotMessage
 
     public IEnumerable<BotButton> Buttons => Rows.SelectMany(r => r);
 
-    // Клавиатура меню внизу чата; у сообщения с кнопками под ним — не меняется (у сообщения Telegram одна разметка)
-    public BotMenu Menu { get; init; }
-
-    // Текст с разметкой HTML Telegram (<b>, <i>, <a>, <pre>); всё, что пришло извне, экранировано (BotHtml)
+    // Текст с разметкой HTML Telegram (<b>, <i>, <a>, <pre>, <blockquote>); всё, что пришло извне, экранировано (BotHtml)
     public bool Html { get; init; }
 
-    // Попросить ответить на это сообщение (ForceReply) с подсказкой в поле ввода; ответ придёт с ReplyTo. Кнопок у такого сообщения нет
-    public string? AskReply { get; init; }
+    // Убрать клавиатуру-меню внизу чата, оставшуюся от прежних версий бота (#115: меню — экран и команда /menu)
+    public bool RemoveKeyboard { get; init; }
+
+    // Служебное сообщение: удалить сразу после отправки (так убирается клавиатура, не оставляя следа в чате)
+    public bool DeleteAfterSend { get; init; }
 
     // Файл вместо текста: Text — подпись
     public BotFile? File { get; init; }
 }
 
 public record BotFile(byte[] Content, string Name);
-
-public enum BotMenu
-{
-    // Не трогать: показанное меню остаётся
-    Keep,
-    Show,
-    Remove,
-}
 
 // Url — кнопка-ссылка: открывает адрес, боту ничего не приходит
 public record BotButton(string Text, string Data)
@@ -51,19 +43,33 @@ public record BotButton(string Text, string Data)
     public static BotButton Link(string text, string url) => new(text, "") { Url = url };
 }
 
-// Сообщение бота, на которое ответили или под которым нажали кнопку: текст без разметки и блоки <pre> по порядку.
-// FromBot — сообщение написал этот бот: только такому тексту можно верить как своему
-public record BotSource(string Text, IReadOnlyList<string> Blocks, bool FromBot);
-
-// Нажатие кнопки: Notice — всплывающая подсказка; Status — дописать к сообщению и заменить кнопки на StatusRows
-// (null — сообщение не трогать); Edit — заменить сообщение целиком (листание на месте); Replies — новые сообщения в чат
-public record BotCallbackResult(string Notice, string? Status)
+// Ответ бота на сообщение или нажатие (#115, «один экран»): что сделать с чатом
+public record BotResult
 {
+    // Всплывающая подсказка нажатия — подтверждения вместо новых сообщений
+    public string Notice { get; init; } = "";
+
+    // Перерисовать экран: сообщение ScreenMessageId; null или не правится — прислать новый и запомнить
+    public BotMessage? Screen { get; init; }
+
+    public int? ScreenMessageId { get; init; }
+
+    // Экран — заново внизу чата: прежний (ScreenMessageId) удалить
+    public bool MoveScreen { get; init; }
+
+    // Свернуть нажатое сообщение (уведомление) до первой строки и итога; кнопки — StatusRows
+    public string? Status { get; init; }
+
     public IReadOnlyList<IReadOnlyList<BotButton>> StatusRows { get; init; } = [];
 
-    public BotMessage? Edit { get; init; }
+    // Удалить нажатое сообщение («Понятно» под уведомлением)
+    public bool DeletePressed { get; init; }
 
-    public IReadOnlyList<BotMessage> Replies { get; init; } = [];
+    // Удалить сообщения: команду и введённый текст пользователя
+    public IReadOnlyList<int> Delete { get; init; } = [];
+
+    // Отдельные сообщения: файл, ответ на привязку, служебное снятие клавиатуры
+    public IReadOnlyList<BotMessage> Messages { get; init; } = [];
 }
 
 public record ReportEventResultDto(bool Notified);

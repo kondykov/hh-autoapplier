@@ -31,10 +31,10 @@ public class OverviewSection(
 
     public IReadOnlyCollection<string> Actions => [Show, Report];
 
-    public async Task<BotCallbackResult> PressAsync(BotPress press, CancellationToken ct) => press.Action switch
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct) => press.Action switch
     {
-        Report => BotResults.Reply(await ReportAsync(ct), "Отчёт"),
-        _ => BotResults.Edit(await ScreenAsync(ct)),
+        Report => new BotResult { Notice = "Отчёт", Messages = [await ReportAsync(ct)] },
+        _ => BotResults.Show(await ScreenAsync(ct)),
     };
 
     public async Task<BotMessage> ScreenAsync(CancellationToken ct)
@@ -73,8 +73,8 @@ public class OverviewSection(
         rows.AddRange(Rows(present.Select(s => new BotButton($"{Status(s)}: {Count(s)}", $"{VacanciesSection.List}:{VacanciesSection.Context((int)s, 0, 0)}")), 2));
         rows.Add([new BotButton("💬 Ответы работодателей", $"{DialogsSection.List}:0:o"), new BotButton("📄 Отчёт CSV", $"{Report}:")]);
         rows.Add(current.IsAdmin
-            ? [new BotButton("🛠 Сбор", $"{CollectionSection.Show}:"), new BotButton("🔄 Обновить", $"{Show}:")]
-            : [new BotButton("🔄 Обновить", $"{Show}:")]);
+            ? [new BotButton("🛠 Сбор", $"{CollectionSection.Show}:"), new BotButton("🔄 Обновить", $"{Show}:"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]
+            : [new BotButton("🔄 Обновить", $"{Show}:"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]);
         return new BotMessage(text.ToString().TrimEnd()) { Html = true, Rows = rows };
     }
 

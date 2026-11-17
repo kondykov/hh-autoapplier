@@ -17,10 +17,10 @@ public class SearchesSection(GetSearchesQueryHandler searches, SaveSearchCommand
 
     public IReadOnlyCollection<string> Actions => [Show, Toggle];
 
-    public async Task<BotCallbackResult> PressAsync(BotPress press, CancellationToken ct)
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
     {
         if (press.Action == Show)
-            return BotResults.Edit(await ScreenAsync(ct));
+            return BotResults.Show(await ScreenAsync(ct));
 
         var list = await ListAsync(ct);
         // id из кнопки ищется среди своих поисков: чужой не найти
@@ -40,7 +40,7 @@ public class SearchesSection(GetSearchesQueryHandler searches, SaveSearchCommand
         if (result is not SearchDto saved)
             return BotResults.Notice(Cut(result is Error e ? e.Message : "Не удалось", 190));
 
-        return BotResults.Edit(await ScreenAsync(ct), saved.Enabled ? "Включён" : "Выключен");
+        return BotResults.Show(await ScreenAsync(ct), saved.Enabled ? "Включён" : "Выключен");
     }
 
     private async Task<List<SearchDto>> ListAsync(CancellationToken ct) =>
@@ -57,7 +57,7 @@ public class SearchesSection(GetSearchesQueryHandler searches, SaveSearchCommand
         text.Append($"\n\n{I("Выключенный поиск сбор пропускает. Запрос и правила отбора меняются в веб-интерфейсе.")}");
 
         var rows = list.Select(s => (IReadOnlyList<BotButton>)[new BotButton($"{(s.Enabled ? "⏸ Выключить" : "▶️ Включить")} «{Cut(s.Name, 30)}»", $"{Toggle}:{s.Id}")]).ToList();
-        rows.Add([new BotButton("🔄 Обновить", $"{Show}:")]);
+        rows.Add([new BotButton("🔄 Обновить", $"{Show}:"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]);
         return new BotMessage(text.ToString()) { Html = true, Rows = rows };
     }
 }

@@ -23,6 +23,7 @@ public static class DependencyInjection
         // Бот Telegram (#115): пользователь чата для сценариев и разделы бота — новый раздел регистрируется сам
         services.AddScoped<ActingUser>();
         services.AddScoped<BotChat>();
+        services.AddScoped<BotDigest>();
         services.Scan(scan => scan
             .FromAssemblyOf<ApplicationAssembly>()
             .AddClasses(classes => classes.AssignableTo<IBotSection>())

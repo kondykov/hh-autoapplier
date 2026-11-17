@@ -17,16 +17,16 @@ public class CollectionSection(GetCollectionStateQueryHandler state, StartCollec
 
     public IReadOnlyCollection<string> Actions => [Show, Start];
 
-    public async Task<BotCallbackResult> PressAsync(BotPress press, CancellationToken ct)
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
     {
         if (!current.IsAdmin)
             return BotResults.Notice(AdminOnly);
 
         if (press.Action == Show)
-            return BotResults.Edit(await ScreenAsync(ct));
+            return BotResults.Show(await ScreenAsync(ct));
 
         var started = (await start.Handle(new StartCollectionCommand(), ct)).Value is CollectionStateDto;
-        return BotResults.Edit(await ScreenAsync(ct), started ? "Сбор запущен" : "Сбор уже идёт");
+        return BotResults.Show(await ScreenAsync(ct), started ? "Сбор запущен" : "Сбор уже идёт");
     }
 
     public async Task<BotMessage> ScreenAsync(CancellationToken ct)
@@ -39,6 +39,7 @@ public class CollectionSection(GetCollectionStateQueryHandler state, StartCollec
         if (s.Current is null)
             rows.Add(new BotButton("▶️ Запустить сейчас", $"{Start}:"));
         rows.Add(new BotButton("🔄 Обновить", $"{Show}:"));
+        rows.Add(new BotButton("☰ Меню", $"{MenuSection.Show}:"));
         return new BotMessage($"🛠 {B("Сбор вакансий")}\nИдёт сам раз в час; запущенный сбор продолжается на сервере.\n\n{E(Text(s))}")
         {
             Html = true,

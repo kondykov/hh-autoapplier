@@ -19,7 +19,8 @@ public class VacanciesSection(
     GetSearchesQueryHandler searches,
     SetVacancyStatusCommandHandler setStatus,
     SetVacancyHiddenCommandHandler setHidden,
-    ReevaluateVacancyCommandHandler reevaluate
+    ReevaluateVacancyCommandHandler reevaluate,
+    BotChat chat
 ) : IBotSection
 {
     public const string Menu = "vm";
@@ -69,23 +70,23 @@ public class VacanciesSection(
         }
     }
 
-    public async Task<BotCallbackResult> PressAsync(BotPress press, CancellationToken ct)
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
     {
         var id = press.Arg(0);
         switch (press.Action)
         {
             case Menu:
-                return BotResults.Edit(await MenuAsync(ct));
+                return BotResults.Show(await MenuAsync(ct));
             case List:
-                return BotResults.Edit(await ListAsync(ListContext.Parse(press.Arg(0)), ct));
+                return BotResults.Show(await ListAsync(ListContext.Parse(press.Arg(0)), ct));
             case Filter:
-                return BotResults.Edit(await FilterAsync(ListContext.Parse(press.Arg(0)), ct));
+                return BotResults.Show(await FilterAsync(ListContext.Parse(press.Arg(0)), ct));
             case Card:
                 return await CardResultAsync(id, ListContext.Parse(press.Arg(1)), "", ct);
             case Description:
-                return await DescriptionAsync(id, ct);
+                return await DescriptionAsync(id, press.Arg(1), ct);
             case SkipWithReason:
-                return await SkipPromptAsync(id, ct);
+                return await SkipPromptAsync(id, press.Arg(1), ct);
         }
 
         var context = ListContext.Parse(press.Arg(1));
@@ -109,7 +110,7 @@ public class VacanciesSection(
             Unhide => "Возвращена в список",
             _ => done.Status == VacancyStatus.Skipped ? "Снова отсеяна" : Status(done.Status),
         };
-        return BotResults.Edit(CardScreen(done, context), notice);
+        return BotResults.Show(CardScreen(done, context), notice);
     }
 
     // Итог команды: VacancyDto или текст ошибки (не найдена, переход недопустим, LLM недоступна)
@@ -127,7 +128,7 @@ public class VacanciesSection(
         var buttons = Enum.GetValues<VacancyStatus>().Where(s => counts.GetValueOrDefault(s.ToString()) > 0)
             .Select(s => new BotButton($"{Status(s)}: {counts[s.ToString()]}", $"{List}:{Context((int)s, 0, 0)}"));
         var rows = Rows(buttons, 2).ToList();
-        rows.Add([new BotButton($"Все: {counts.Values.Sum()}", $"{List}:{Context(All, 0, 0)}")]);
+        rows.Add([new BotButton($"Все: {counts.Values.Sum()}", $"{List}:{Context(All, 0, 0)}"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]);
         return new BotMessage($"📋 {B("Вакансии")}: выберите статус") { Html = true, Rows = rows };
     }
 
@@ -166,7 +167,7 @@ public class VacanciesSection(
             nav.Add(new BotButton("Дальше →", $"{List}:{context with { Skip = context.Skip + PageSize }}"));
         if (nav.Count > 0)
             rows.Add(nav);
-        rows.Add([new BotButton("🔎 Поиск", $"{Filter}:{context}"), new BotButton("☰ Статусы", $"{Menu}:")]);
+        rows.Add([new BotButton("🔎 Поиск", $"{Filter}:{context}"), new BotButton("☰ Статусы", $"{Menu}:"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]);
         return new BotMessage(text.ToString()) { Html = true, Rows = rows };
     }
 
@@ -188,9 +189,9 @@ public class VacanciesSection(
         return list.FirstOrDefault(s => s.Id == id)?.Name;
     }
 
-    private async Task<BotCallbackResult> CardResultAsync(string id, ListContext context, string notice, CancellationToken ct) =>
+    private async Task<BotResult> CardResultAsync(string id, ListContext context, string notice, CancellationToken ct) =>
         (await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is VacancyDto v
-            ? BotResults.Edit(CardScreen(v, context), notice)
+            ? BotResults.Show(CardScreen(v, context), notice)
             : BotResults.Notice("Вакансия не найдена");
 
     private static BotMessage CardScreen(VacancyDto v, ListContext context)
@@ -214,11 +215,11 @@ public class VacanciesSection(
         else if (Skippable.Contains(v.Status))
         {
             actions.Add(new BotButton("⏭ Пропустить", $"{Skip}:{v.Id}:{context}"));
-            actions.Add(new BotButton("⏭ С причиной", $"{SkipWithReason}:{v.Id}"));
+            actions.Add(new BotButton("⏭ С причиной", $"{SkipWithReason}:{v.Id}:{context}"));
         }
 
         rows.AddRange(Rows(actions, 3));
-        var links = new List<BotButton> { new("📄 Описание", $"{Description}:{v.Id}") };
+        var links = new List<BotButton> { new("📄 Описание", $"{Description}:{v.Id}:{context}") };
         if (SafeUrl(v.Url) is { } url)
             links.Add(BotButton.Link("🔗 hh.ru", url));
         rows.Add(links);
@@ -257,36 +258,39 @@ public class VacanciesSection(
 
     private static string Join(IEnumerable<string?> parts) => string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 
-    // Описание вакансии — новым сообщением: в карточку не помещается. Длинное — обрезано, полностью — на hh.ru
-    public async Task<BotCallbackResult> DescriptionAsync(string id, CancellationToken ct)
+    // Описание вакансии — на экране вместо карточки, «← Назад» возвращает к ней (r — к карточке проверки). Длинное — обрезано, полностью — на hh.ru
+    public async Task<BotResult> DescriptionAsync(string id, string back, CancellationToken ct)
     {
         if ((await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is not VacancyDto v)
             return BotResults.Notice("Вакансия не найдена");
 
-        var text = new StringBuilder($"📄 {Link(v.Title, v.Url)}\n");
+        var text = new StringBuilder($"📄 <b>{Link(v.Title, v.Url)}</b>\n");
         if (v.Stack.Length > 0)
             text.Append(E($"Стек: {string.Join(", ", v.Stack)}")).Append('\n');
         text.Append('\n').Append(E(Cut(string.IsNullOrWhiteSpace(v.Description) ? "описания нет" : v.Description, 3500)));
         if (v.Description.Length > 3500)
             text.Append($"\n\nПолностью — {Link("на hh.ru", v.Url)}");
-        return BotResults.Reply(new BotMessage(text.ToString()) { Html = true });
+        var backData = back == "r" ? $"{BotTexts.ReviewCard}:{v.Id}" : $"{Card}:{v.Id}:{ListContext.Parse(back)}";
+        return BotResults.Show(new BotMessage(text.ToString()) { Html = true, Rows = [[new BotButton("← Назад", backData)]] });
     }
 
-    private async Task<BotCallbackResult> SkipPromptAsync(string id, CancellationToken ct)
+    // Пропустить с причиной: экран ждёт причину обычным сообщением
+    private async Task<BotResult> SkipPromptAsync(string id, string context, CancellationToken ct)
     {
         if ((await vacancy.Handle(new GetVacancyQuery(id), ct)).Value is not VacancyDto v)
             return BotResults.Notice("Вакансия не найдена");
 
-        var text = $"{BotPrompt.Header(BotPrompt.SkipReason, v.Id)}\n{B(v.Title)}\nОтветьте на это сообщение причиной пропуска — вакансия уйдёт в «пропущенные».";
-        return BotResults.Reply(new BotMessage(text) { Html = true, AskReply = "Причина пропуска" });
+        await chat.AwaitInputAsync(BotInput.SkipReason, v.Id, null, $"{Card}:{v.Id}:{ListContext.Parse(context)}", ct);
+        return BotResults.Show(BotInput.Screen($"⏭ {B("Причина пропуска")}\n{B(v.Title)}\n\nНапишите причину обычным сообщением — вакансия уйдёт в «пропущенные»."));
     }
 
-    // Ответ на просьбу о причине пропуска
-    public async Task<BotMessage> SkipAsync(string id, string reason, CancellationToken ct)
+    // Причина пропуска из режима ввода; back — карточка, откуда пришли
+    public async Task<BotResult> SkipAsync(string id, string reason, string back, CancellationToken ct)
     {
+        var context = ListContext.Parse(BotPress.Parse(back).Arg(1));
         var result = (await setStatus.Handle(new SetVacancyStatusCommand { VacancyId = id, Status = VacancyStatus.Skipped, Reason = SkipReason(reason) }, ct)).Value;
         return result is VacancyDto v
-            ? new BotMessage($"⏭ {B(v.Title)}: пропущена — {E(Cut(reason, 400))}") { Html = true }
-            : new BotMessage(result is Error e ? e.Message : "Не удалось");
+            ? BotResults.Show(CardScreen(v, context), "Пропущена")
+            : BotResults.Show(await MenuAsync(ct), Cut(result is Error e ? e.Message : "Не удалось", 190));
     }
 }

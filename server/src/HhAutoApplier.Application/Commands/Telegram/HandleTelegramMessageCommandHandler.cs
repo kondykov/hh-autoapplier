@@ -8,12 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HhAutoApplier.Application.Commands.Telegram;
 
-// Команды бота: /start <код> привязывает чат, остальные работают только в привязанном чате незаблокированного пользователя.
-// Ответ на просьбу бота (правка письма, причина) — по первой строке сообщения бота, на которое ответили (BotPrompt)
+// Сообщения боту (#115, «один экран»): /start <код> привязывает чат; команды присылают экран заново внизу чата, а сама команда
+// удаляется; текст, когда экран ждёт ввода, идёт в режим ввода (правка письма, причина) и тоже удаляется.
+// Всё, кроме привязки, — только в привязанном чате незаблокированного пользователя
 public class HandleTelegramMessageCommandHandler(
     IAppDbContext db,
     IUserService users,
     BotChat bot,
+    MenuSection menu,
     OverviewSection overview,
     ReviewSection review,
     VacanciesSection vacancies,
@@ -21,78 +23,115 @@ public class HandleTelegramMessageCommandHandler(
     SearchesSection searches,
     CollectionSection collection,
     TimeProvider clock
-) : ICommandHandler<HandleTelegramMessageCommand, IReadOnlyList<BotMessage>>
+) : ICommandHandler<HandleTelegramMessageCommand, BotResult>
 {
-    public async Task<IReadOnlyList<BotMessage>> Handle(HandleTelegramMessageCommand command, CancellationToken ct = default)
+    // Снять клавиатуру-меню прежних версий: служебное сообщение, удаляется сразу
+    private static readonly BotMessage RemoveKeyboard = new("Меню — кнопкой /menu") { RemoveKeyboard = true, DeleteAfterSend = true };
+
+    public async Task<BotResult> Handle(HandleTelegramMessageCommand command, CancellationToken ct = default)
     {
         if (!command.IsPrivate)
-            return [];
+            return new BotResult();
 
-        var parts = command.Text.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        // В группах Telegram дописывает имя бота: /status@my_bot. Кнопка меню присылает свою подпись
-        var name = command.Text.Trim() switch
+        var trimmed = command.Text.Trim();
+        var parts = trimmed.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // В группах Telegram дописывает имя бота: /status@my_bot. Кнопки клавиатуры прежних версий присылают свою подпись
+        var name = trimmed switch
         {
-            BotTexts.OverviewButton or BotTexts.OldStatusButton => "/overview",
-            BotTexts.ReviewButton or BotTexts.OldReviewButton => "/review",
-            BotTexts.DialogsButton => "/dialogs",
-            BotTexts.VacanciesButton => "/vacancies",
-            BotTexts.SearchesButton => "/searches",
-            BotTexts.HelpButton => "/help",
-            _ => parts.Length > 0 ? parts[0].Split('@')[0].ToLowerInvariant() : "",
+            BotTexts.OldStatusButton => "/overview",
+            BotTexts.OldReviewButton => "/review",
+            BotTexts.OldHelpButton => "/help",
+            _ => parts.Length > 0 && parts[0].StartsWith('/') ? parts[0].Split('@')[0].ToLowerInvariant() : "",
         };
         var argument = parts.Length > 1 ? parts[1] : "";
 
         if (name == "/start" && argument != "")
-            return [await LinkAsync(command, argument, ct)];
+            return await LinkAsync(command, argument, ct);
 
-        var (state, _) = await bot.EnterAsync(command.ChatId, ct);
-        if (state == BotEntryState.NotLinked)
-            return [new BotMessage(BotTexts.NotLinked)];
-        if (state == BotEntryState.Blocked)
-            return [new BotMessage("Учётная запись заблокирована")];
+        switch (await bot.EnterAsync(command.ChatId, ct))
+        {
+            case BotEntryState.NotLinked:
+                return new BotResult { Messages = [new BotMessage(BotTexts.NotLinked)] };
+            case BotEntryState.Blocked:
+                return new BotResult { Messages = [new BotMessage("Учётная запись заблокирована")] };
+        }
 
-        // Ответ текстом на просьбу бота; команда в ответе — всё равно команда
-        if (!name.StartsWith('/') && BotPrompt.Parse(command.ReplyTo) is { } prompt)
-            return [await ReplyAsync(prompt.Kind, prompt.VacancyId, command.Text, command.ReplyTo!, ct)];
+        var chat = bot.Current!;
+        var remove = command.MessageId > 0 ? new[] { command.MessageId } : [];
 
+        // Текст для экрана в режиме ввода; команда в это время — всё равно команда (и снимает режим)
+        if (name == "" && chat.AwaitsInput(bot.Now))
+        {
+            var (kind, target, number, back) = (chat.InputKind!, chat.InputTarget!, chat.InputNumber, chat.InputBack ?? $"{MenuSection.Show}:");
+            chat.ClearInput();
+            await bot.SaveAsync(ct);
+            var input = kind == BotInput.SkipReason
+                ? await vacancies.SkipAsync(target, trimmed, back, ct)
+                : await review.InputAsync(kind, target, number, command.Text, ct);
+            return input with { ScreenMessageId = chat.ScreenMessageId, Delete = remove };
+        }
+
+        var expired = chat.InputKind is not null;
+        chat.ClearInput();
+        await bot.SaveAsync(ct);
+
+        BotMessage screen;
+        var messages = new List<BotMessage>();
         switch (name)
         {
+            case "/menu" or "/start":
+                screen = await menu.ScreenAsync(ct);
+                messages.Add(RemoveKeyboard);
+                break;
             case "/overview" or "/status":
-                return [await overview.ScreenAsync(ct)];
+                screen = await overview.ScreenAsync(ct);
+                break;
             case "/review":
-                return [await review.CardAsync(null, 0, ct)];
+                screen = await review.CardAsync(null, 0, ct);
+                break;
             case "/dialogs":
-                return [await dialogs.ListAsync(0, false, ct)];
+                screen = await dialogs.ListAsync(0, false, ct);
+                break;
             case "/vacancies":
-                return [await vacancies.MenuAsync(ct)];
+                screen = await vacancies.MenuAsync(ct);
+                break;
             case "/searches":
-                return [await searches.ScreenAsync(ct)];
+                screen = await searches.ScreenAsync(ct);
+                break;
             case "/collect":
-                return [await collection.ScreenAsync(ct)];
+                screen = await collection.ScreenAsync(ct);
+                break;
             case "/report":
-                return [await overview.ReportAsync(ct)];
+                return new BotResult { Messages = [await overview.ReportAsync(ct)], Delete = remove };
             case "/stop":
-                // Отвязка — кнопкой подтверждения (HandleTelegramCallbackCommandHandler): привязать обратно можно только новым кодом
-                return [BotTexts.UnlinkConfirm()];
+                // Отвязка — кнопкой подтверждения: привязать обратно можно только новым кодом
+                screen = MenuSection.StopScreen();
+                break;
+            case "/help":
+                screen = MenuSection.HelpScreen();
+                break;
             default:
-                return [new BotMessage(BotTexts.Help) { Menu = BotMenu.Show }];
+                // Просто текст: экран не ждал ввода (или время ввода вышло) — экран заново внизу с подсказкой
+                var menuScreen = await menu.ScreenAsync(ct);
+                var hint = expired
+                    ? "⌛ Время ввода вышло (30 минут) — нажмите «✏️ …» снова.\n\n"
+                    : "Текст принимается, когда экран его ждёт: «✏️ Письмо», «❌ С причиной». Команды — /menu, /help.\n\n";
+                screen = menuScreen with { Text = $"{BotHtml.E(hint)}{menuScreen.Text}", Html = true };
+                break;
         }
+
+        return new BotResult { Screen = screen, MoveScreen = true, ScreenMessageId = chat.ScreenMessageId, Delete = remove, Messages = messages };
     }
 
-    private Task<BotMessage> ReplyAsync(string kind, string vacancyId, string text, BotSource source, CancellationToken ct) =>
-        kind == BotPrompt.SkipReason
-            ? vacancies.SkipAsync(vacancyId, text.Trim(), ct)
-            : review.ReplyAsync(kind, vacancyId, text, source, ct);
-
-    private async Task<BotMessage> LinkAsync(HandleTelegramMessageCommand command, string code, CancellationToken ct)
+    private async Task<BotResult> LinkAsync(HandleTelegramMessageCommand command, string code, CancellationToken ct)
     {
         var hash = TelegramChat.HashOf(code);
         var chat = await db.TelegramChats.FirstOrDefaultAsync(c => c.CodeHash == hash, ct);
         if (chat is null || (await users.GetBlockedIdsAsync(ct)).Contains(chat.UserId))
-            return new BotMessage("Код не найден или устарел — получите новый");
+            return new BotResult { Messages = [new BotMessage("Код не найден или устарел — получите новый")] };
 
         if (!chat.CodeValid(clock.GetUtcNow()))
-            return new BotMessage("Код привязки устарел — получите новый");
+            return new BotResult { Messages = [new BotMessage("Код привязки устарел — получите новый")] };
 
         // Чат — у одного пользователя: прежняя привязка этого чата к другому снимается.
         // Отдельным сохранением до привязки: порядок UPDATE в одном сохранении не гарантирован, а ChatId уникален
@@ -106,6 +145,14 @@ public class HandleTelegramMessageCommandHandler(
         chat.Link(command.ChatId, command.Username, clock.GetUtcNow());
         await db.SaveChangesAsync(ct);
         var user = await users.FindAsync(chat.UserId, ct);
-        return new BotMessage($"Чат привязан к {user?.Email ?? "учётной записи"}.\n\n{BotTexts.Help}") { Menu = BotMenu.Show };
+
+        // Сразу и экран: дальше всё — на нём
+        await bot.EnterAsync(command.ChatId, ct);
+        return new BotResult
+        {
+            Messages = [new BotMessage($"Чат привязан к {user?.Email ?? "учётной записи"}.") { RemoveKeyboard = true }],
+            Screen = await menu.ScreenAsync(ct),
+            MoveScreen = true,
+        };
     }
 }

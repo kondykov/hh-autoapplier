@@ -26,7 +26,7 @@ public class DialogsSection(
 
     public IReadOnlyCollection<string> Actions => [List, Card, Handled, BotTexts.Handled];
 
-    public async Task<BotCallbackResult> PressAsync(BotPress press, CancellationToken ct)
+    public async Task<BotResult> PressAsync(BotPress press, CancellationToken ct)
     {
         var skip = int.TryParse(press.Arg(press.Action == List ? 0 : 1), out var s) ? Math.Max(s, 0) : 0;
         var all = press.Arg(press.Action == List ? 1 : 2) == "a";
@@ -34,19 +34,19 @@ public class DialogsSection(
         switch (press.Action)
         {
             case List:
-                return BotResults.Edit(await ListAsync(skip, all, ct));
+                return BotResults.Show(await ListAsync(skip, all, ct));
             case Card:
                 return (await dialog.Handle(new GetDialogQuery(chatId), ct)).Value is EmployerMessageDto m
-                    ? BotResults.Edit(CardScreen(m, skip, all))
+                    ? BotResults.Show(CardScreen(m, skip, all))
                     : BotResults.Notice("Чат не найден");
             case Handled:
                 return (await markHandled.Handle(new MarkDialogHandledCommand(chatId), ct)).Value is EmployerMessageDto done
-                    ? BotResults.Edit(CardScreen(done, skip, all), "Обработано")
+                    ? BotResults.Show(CardScreen(done, skip, all), "Обработано")
                     : BotResults.Notice("Чат не найден");
             default:
                 // Кнопка уведомления: дописать итог к сообщению
                 return (await markHandled.Handle(new MarkDialogHandledCommand(chatId), ct)).Value is EmployerMessageDto
-                    ? new BotCallbackResult("Обработано", "✔ Обработано")
+                    ? new BotResult { Notice = "Обработано", Status = "✔ Обработано" }
                     : BotResults.Notice("Чат не найден");
         }
     }
@@ -90,7 +90,7 @@ public class DialogsSection(
             nav.Add(new BotButton("Дальше →", $"{List}:{skip + PageSize}:{Filter(all)}"));
         if (nav.Count > 0)
             rows.Add(nav);
-        rows.Add([all ? new BotButton("Только необработанные", $"{List}:0:o") : new BotButton("Показать все", $"{List}:0:a")]);
+        rows.Add([all ? new BotButton("Только необработанные", $"{List}:0:o") : new BotButton("Показать все", $"{List}:0:a"), new BotButton("☰ Меню", $"{MenuSection.Show}:")]);
         return new BotMessage(text.ToString()) { Html = true, Rows = rows };
     }
 
