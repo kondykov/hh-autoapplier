@@ -6,40 +6,52 @@ using HhAutoApplier.Domain.Notifications;
 
 namespace HhAutoApplier.Application.Notifications;
 
-// Тексты бота. Простой текст без разметки: названия вакансий и письма не нужно экранировать
+// Как бот доставляет уведомление (#115, решение владельца 2026-11-17): важное — отдельным коротким сообщением с кнопками действий,
+// обычное — строкой в сводку, которая дописывается правкой без нового звука
+public enum NotificationDelivery
+{
+    Important,
+    Digest,
+}
+
+// Тексты уведомлений и команды бота. Уведомления — простой текст без разметки: названия вакансий и письма не нужно экранировать.
+// Экраны разделов — в Application/Telegram
 public static class BotTexts
 {
     public const string Help = """
-        Кнопки меню внизу чата или команды:
-        /status — очередь, проверка и отклики за сутки
-        /review — отклики на проверке с кнопками «Одобрить» и «Отклонить»
-        /help — эта справка
-        /stop — отвязать чат
+        Бот — одно сообщение-экран: кнопки перерисовывают его на месте, новых сообщений нет. Открыть экран заново внизу чата — /menu.
 
-        Уведомления: отклик на проверке, приглашения и вопросы работодателей с черновиком ответа, капча и дневной лимит в расширении, анкета без ответа LLM; администратору — сбои сбора и LLM.
+        Разделы: 📊 Обзор (счётчики, что дальше, отчёт CSV), 📝 Проверка (одобрить, отклонить, поправить письмо и ответы анкеты), 💬 Ответы работодателей (черновик копируется нажатием), 📋 Вакансии (в очередь, пропустить, оценить заново), 🔎 Поиски (включить и выключить), 🛠 Сбор (администратор).
+
+        Текст — письмо, ответ анкеты, причину — пишите обычным сообщением, когда экран его ждёт: бот заберёт его и уберёт из чата.
+
+        Уведомления: капча, нет входа, дневной лимит, ответ работодателя, сбои — отдельными сообщениями; новые отклики на проверке и анкеты — одной сводкой, которая дописывается.
+
+        Резюме, профиль, правила поисков, пароль и пользователи — в веб-интерфейсе. /stop — отвязать чат.
         """;
 
     public const string NotLinked = "Чат не привязан. Получите код на backend (POST /api/telegram/link после входа по паролю) и отправьте сюда: /start <код>";
 
-    // Кнопки меню присылают свой текст как обычное сообщение — бот понимает его как команду
-    public const string StatusButton = "📊 Статус";
+    // Подписи клавиатуры-меню прежних версий: у кого она осталась, кнопки продолжают работать, пока /menu её не уберёт
+    public const string OldStatusButton = "📊 Статус";
 
-    public const string ReviewButton = "📝 На проверке";
+    public const string OldReviewButton = "📝 На проверке";
 
-    public const string HelpButton = "❓ Помощь";
-
-    public static readonly IReadOnlyList<IReadOnlyList<string>> MenuRows = [[StatusButton, ReviewButton], [HelpButton]];
+    public const string OldHelpButton = "❓ Помощь";
 
     // Меню команд бота («/» в поле ввода)
     public static readonly IReadOnlyList<(string Command, string Description)> Commands =
     [
-        ("status", "Очередь, проверка и отклики за сутки"),
-        ("review", "Отклики на проверке"),
+        ("menu", "Экран бота"),
+        ("review", "Проверка откликов"),
+        ("dialogs", "Ответы работодателей"),
+        ("vacancies", "Вакансии"),
+        ("overview", "Обзор и отчёт"),
         ("help", "Справка"),
         ("stop", "Отвязать чат"),
     ];
 
-    // Data кнопок: «действие:аргумент»
+    // Data кнопок уведомлений: «действие:аргумент»; эти — с первой версии бота и остаются в уже отправленных сообщениях
     public const string Approve = "approve";
 
     public const string Decline = "decline";
@@ -52,67 +64,51 @@ public static class BotTexts
 
     public const string Handled = "handled";
 
-    public static BotMessage UnlinkConfirm() =>
-        new("Отвязать чат? Уведомления перестанут приходить, привязать снова можно только новым кодом.",
-            [new BotButton("Отвязать", $"{Unlink}:"), new BotButton("Отмена", $"{Cancel}:")]);
+    // Карточка отклика на проверке (#115, кнопка уведомлений до сводок)
+    public const string ReviewCard = "rk";
 
-    // Счётчики с кнопкой перехода к проверке, если есть что проверять
-    public static BotMessage Status(string text, int review) =>
-        review > 0 ? new BotMessage(text, [new BotButton($"{ReviewButton} ({review})", $"{ShowReview}:")]) : new BotMessage(text) { Menu = BotMenu.Show };
+    // «Открыть»: остальная data — экран, который прислать заново внизу чата (уведомление не меняется)
+    public const string Open = "o";
 
-    // Кнопки уведомления по его виду: отклик — решить, сводка — показать по одному, ответ работодателя — отметить обработанным
-    public static IReadOnlyList<BotButton> NotificationButtons(NotificationKind kind, string key, string? vacancyId) => kind switch
+    // «Понятно»: убрать уведомление
+    public const string Dismiss = "ok";
+
+    // Вид уведомления и кнопки — в одном месте. Обычные: новые отклики на проверке и анкеты без ответа LLM; остальное — важное
+    public static NotificationDelivery Delivery(NotificationKind kind) => kind switch
     {
-        NotificationKind.Review when vacancyId is not null => ReviewButtons(vacancyId),
-        NotificationKind.Review when key.StartsWith("review-digest:") => [new BotButton("📝 Решить по одному", $"{ShowReview}:")],
-        NotificationKind.EmployerReply when key.Split(':') is ["dialog", var chatId, ..] => [new BotButton("✔ Обработано", $"{Handled}:{chatId}")],
+        NotificationKind.Review or NotificationKind.Questionnaire => NotificationDelivery.Digest,
+        _ => NotificationDelivery.Important,
+    };
+
+    // Кнопки важного уведомления по его виду; у сводки кнопки — по счётчикам (BotDigest)
+    public static IReadOnlyList<IReadOnlyList<BotButton>> NotificationButtons(NotificationKind kind, string key, string? vacancyId) => kind switch
+    {
+        NotificationKind.EmployerReply when key.Split(':') is ["dialog", var chatId, ..] =>
+        [
+            [BotButton.Link("💬 Открыть чат", $"https://hh.ru/chat/{chatId}"), new BotButton("✔ Обработано", $"{Handled}:{chatId}")],
+            [new BotButton("📝 Подробнее", $"{Open}:dc:{chatId}:0:o")],
+        ],
+        NotificationKind.SourceBlocked => [[new BotButton("🛠 Сбор", $"{Open}:cs:"), new BotButton("✔ Понятно", $"{Dismiss}:")]],
+        NotificationKind.Captcha or NotificationKind.DailyLimit or NotificationKind.SignedOut or NotificationKind.LlmUnavailable or NotificationKind.LlmQuality =>
+            [[new BotButton("✔ Понятно", $"{Dismiss}:")]],
         _ => [],
     };
 
-    // Отклик на проверке (сомнительный или с ответами анкеты) для решения в чате; Data кнопок — «действие:id вакансии» (лимит Telegram — 64 байта)
-    public static BotMessage Review(JobApplication application)
+    // Строка сводки: отклик ждёт проверки
+    public static string ReviewLine(JobApplication application)
     {
         var v = application.Vacancy;
-        var answered = application.Questions.Where(q => q.Answer.Count > 0).ToList();
         // У анкеты и письма на проверке причина — в статусе («анкета: проверить …»), пояснение оценки LLM — о другом
-        var reason = application.Questions.Count > 0 || application.LetterRejected ? application.StatusReason : application.LlmReason ?? application.StatusReason;
-        var text = new StringBuilder()
-            .AppendLine($"На проверке: {v.Title}{(string.IsNullOrWhiteSpace(v.Company) ? "" : $" — {v.Company}")}")
-            .AppendLine(v.Url)
-            .AppendLine($"LLM {application.LlmScore ?? application.Score}: {reason ?? "без пояснения"}");
-        if (!string.IsNullOrWhiteSpace(application.ResumeProfile))
-            text.AppendLine($"Резюме: {application.ResumeProfile}");
-
-        if (answered.Count > 0)
-        {
-            text.AppendLine().AppendLine("Анкета (поправить ответы — в веб-интерфейсе, «Проверка»):");
-            foreach (var q in answered)
-                text.AppendLine($"— {q.Text}").AppendLine($"  {string.Join("; ", q.Answer)}");
-        }
-        else if (application.Questions.Count > 0)
-        {
-            text.AppendLine().AppendLine("Ответов на анкету нет: «Одобрить» вернёт отклик в очередь, расширение пришлёт анкету заново. Ответить можно и вручную на hh.ru.");
-        }
-
-        if (application.LetterRequestsState == LetterRequestsState.Failed)
-            text.AppendLine().AppendLine("Просьбы работодателя к письму разобрать не удалось: прочитайте вакансию и решите в веб-интерфейсе, «Проверка».");
-        else if (application.LetterRequests.Count > 0)
-        {
-            text.AppendLine().AppendLine("Просьбы работодателя к письму:");
-            foreach (var r in application.LetterRequests)
-                text.AppendLine($"— {r.Text}").AppendLine(r.Closed ? $"  ответ: {r.Answer ?? "решено человеком"}" : $"  не закрыта: {r.Problem ?? $"ждёт письма, значение {r.Answer}"}");
-            if (application.AwaitsClosingLetter)
-                text.AppendLine("Незакрытые просьбы решаются в веб-интерфейсе, «Проверка».");
-        }
-
-        text.AppendLine().AppendLine(string.IsNullOrWhiteSpace(application.CoverLetter)
-            ? "Письма пока нет — расширение возьмёт свой шаблон. Поправить письмо — в веб-интерфейсе, раздел «Проверка»."
-            : $"Письмо (поправить — в веб-интерфейсе, «Проверка»):\n{application.CoverLetter}");
-
-        return new BotMessage(text.ToString().TrimEnd(), ReviewButtons(application.VacancyId));
+        var reason = application.Questions.Count > 0 || application.LetterRejected || application.AwaitsClosingLetter
+            ? application.StatusReason
+            : application.LlmReason ?? application.StatusReason;
+        var line = $"📝 {v.Title}{(string.IsNullOrWhiteSpace(v.Company) ? "" : $" — {v.Company}")} (LLM {application.LlmScore ?? application.Score})";
+        return string.IsNullOrWhiteSpace(reason) ? line : $"{line}: {Short(reason, 150)}";
     }
 
-    // Ответ работодателя с разбором LLM и черновиком; отвечает человек — в чате hh.ru
+    public static string Short(string text, int max) => text.Length <= max ? text : text[..max].TrimEnd() + "…";
+
+    // Ответ работодателя с разбором LLM и черновиком; отвечает человек — в чате hh.ru. Коротко: полностью — «Подробнее»
     public static string EmployerReply(EmployerMessage message)
     {
         var kind = message.Kind switch
@@ -123,34 +119,25 @@ public static class BotTexts
             _ => "Сообщение работодателя",
         };
         var text = new StringBuilder()
-            .AppendLine($"{kind}: {message.Title}{(string.IsNullOrWhiteSpace(message.Company) ? "" : $" — {message.Company}")}")
+            .AppendLine($"💬 {kind}: {message.Title}{(string.IsNullOrWhiteSpace(message.Company) ? "" : $" — {message.Company}")}")
             .AppendLine($"https://hh.ru/chat/{message.ChatId}");
-        if (!string.IsNullOrWhiteSpace(message.Summary))
-            text.AppendLine($"Суть: {message.Summary}");
-
-        text.AppendLine().AppendLine("Сообщение:").AppendLine(message.Text);
+        text.AppendLine(string.IsNullOrWhiteSpace(message.Summary) ? Short(message.Text, 300) : $"Суть: {message.Summary}");
         if (!string.IsNullOrWhiteSpace(message.SuggestedReply))
-            text.AppendLine().AppendLine("Черновик ответа (отправьте сами в чате, поправив [заглушки]):").AppendLine(message.SuggestedReply);
+            text.AppendLine().AppendLine("Черновик ответа (отправьте сами в чате, поправив [заглушки]):").AppendLine(Short(message.SuggestedReply, 1500));
 
-        return text.AppendLine().Append("Все ответы — в веб-интерфейсе, раздел «Ответы работодателей»").ToString();
+        return text.ToString().TrimEnd();
     }
 
-    // Сводка вместо пачки сообщений: решать по одному — /review (с кнопками) или в веб-интерфейсе
+    // Много новых откликов за проход — одна строка-итог вместо десятка
     public static string ReviewDigest(IReadOnlyCollection<JobApplication> fresh, int total)
     {
-        const int shown = 10;
-        var text = new StringBuilder().AppendLine($"На проверке новых: {fresh.Count} (всего {total})");
+        const int shown = 5;
+        var text = new StringBuilder().AppendLine($"📝 На проверке новых: {fresh.Count} (всего {total})");
         foreach (var a in fresh.OrderByDescending(a => a.LlmScore ?? a.Score).Take(shown))
             text.AppendLine($"• {a.Vacancy.Title}{(string.IsNullOrWhiteSpace(a.Vacancy.Company) ? "" : $" — {a.Vacancy.Company}")} (LLM {a.LlmScore ?? a.Score})");
         if (fresh.Count > shown)
             text.AppendLine($"…и ещё {fresh.Count - shown}");
 
-        return text.AppendLine().Append("Решить: /review — по одному с кнопками, или в веб-интерфейсе, раздел «Проверка»").ToString();
+        return text.Append("Решить: /review").ToString();
     }
-
-    public static IReadOnlyList<BotButton> ReviewButtons(string vacancyId) =>
-    [
-        new BotButton("✅ Одобрить", $"{Approve}:{vacancyId}"),
-        new BotButton("❌ Отклонить", $"{Decline}:{vacancyId}"),
-    ];
 }

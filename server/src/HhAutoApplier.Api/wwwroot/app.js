@@ -262,6 +262,34 @@ async function review() {
   ];
 }
 
+// Поле ответа на вопрос анкеты: label и node — для карточки, inputs — что выключать на время запроса, value() — ответ для API
+function answerField(v, q, i) {
+  const id = `answer-${v.id}-${i}`;
+  const label = el("label", { className: "field", for: id, textContent: q.question });
+  if (q.type === "Text") {
+    const input = el("textarea", { value: q.answer.join("\n"), id, disabled: readOnly(), "aria-label": q.question });
+    return { label, node: input, inputs: [input], value: () => [input.value.trim()] };
+  }
+  if (q.type === "Radio") {
+    const select = el("select", { id, disabled: readOnly(), "aria-label": q.question },
+      el("option", { value: "", textContent: "— не выбрано —" }), q.options.map((o) => el("option", { value: o, textContent: o })));
+    select.value = q.options.includes(q.answer[0]) ? q.answer[0] : "";
+    return { label, node: select, inputs: [select], value: () => (select.value ? [select.value] : []) };
+  }
+  if (q.type === "Checkbox") {
+    const boxes = q.options.map((o, k) => el("input", { type: "checkbox", id: `${id}-${k}`, value: o, checked: q.answer.includes(o), disabled: readOnly() }));
+    const node = el("div", { role: "group", "aria-label": q.question },
+      boxes.map((b) => el("div", {}, b, " ", el("label", { for: b.id, textContent: b.value }))));
+    return { label: el("b", { textContent: q.question }), node, inputs: boxes, value: () => boxes.filter((b) => b.checked).map((b) => b.value) };
+  }
+  return null;
+}
+
+// Ответ поля совпадает с ответом LLM: текст — без пробелов по краям, варианты — тем же набором
+const sameAnswer = (value, q) => q.type === "Text"
+  ? (value[0] ?? "") === q.answer.join("\n").trim()
+  : value.length === q.answer.length && value.every((x) => q.answer.includes(x));
+
 function reviewCard(v) {
   const awaitsLetter = v.letterRequestsState === "Found" || v.letterRequestsState === "Failed";
   const letter = el("textarea", { value: v.coverLetter ?? "", id: `letter-${v.id}`, disabled: readOnly(),
@@ -270,13 +298,12 @@ function reviewCard(v) {
   const approve = el("button", { className: "approve", textContent: "Одобрить" });
   const decline = el("button", { className: "danger", textContent: "Отклонить" });
   const result = el("span", { className: "result" });
-  // Текстовые ответы LLM на анкету (#58) — в полях: уходят работодателю от имени кандидата
+  // Ответы LLM на анкету (#58) — в полях: уходят работодателю от имени кандидата. Правится каждый вопрос (#115):
+  // текст — полем, один вариант — списком, несколько — галочками. Нераспознанный вопрос (Unknown) — только показ
   const questions = v.questions ?? [];
   const answered = questions.some((q) => q.answer.length);
-  const answerFields = questions.map((q, i) => answered && q.type === "Text"
-    ? el("textarea", { value: q.answer.join("\n"), id: `answer-${v.id}-${i}`, disabled: readOnly(), "aria-label": q.question })
-    : null);
-  const fields = () => [letter, ...answerFields.filter(Boolean)];
+  const answerFields = questions.map((q, i) => (answered ? answerField(v, q, i) : null));
+  const fields = () => [letter, ...answerFields.filter(Boolean).flatMap((f) => f.inputs)];
 
   // Кодовое слово вставляется только по подтверждению, значения из профиля — по кнопке после его заполнения. Ссылки и контакты не выполняются
   const resolveRequests = (button, confirmCodeWords) => run(button, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/letter-requests/resolve`, { confirmCodeWords }),
@@ -299,7 +326,7 @@ function reviewCard(v) {
     el("details", {}, el("summary", { textContent: "Описание вакансии" }), el("div", { className: "desc", textContent: v.description || "описания нет" })),
     questions.length ? el("details", { open: answered }, el("summary", { textContent: `Анкета (${questions.length})` }),
       questions.map((q, i) => answerFields[i]
-        ? el("div", { className: "reason" }, el("label", { className: "field", for: answerFields[i].id, textContent: q.question }), answerFields[i])
+        ? el("div", { className: "reason" }, answerFields[i].label, answerFields[i].node)
         : el("div", { className: "reason" }, el("b", { textContent: q.question }), el("br"), q.answer.length ? q.answer.join("; ") : "ответа нет"))) : null,
     v.letterRequestsState === "Failed" ? letterRequestsBlock(v) : null,
     requestRows.length ? el("details", { open: true }, el("summary", { textContent: `Просьбы к письму (${requestRows.length})` }), requestRows, refresh ? el("div", { className: "actions" }, refresh) : null) : null,
@@ -325,11 +352,11 @@ function reviewCard(v) {
   }
 
   // Письмо уходит, только если его поправили: иначе остаётся письмо LLM с её моделью.
-  // Ответы анкеты — все по порядку вопросов, если поправлен хоть один текстовый: варианты остаются ответами LLM
+  // Ответы анкеты — все по порядку вопросов, если поправлен хоть один; вариант не из списка или пустой выбор сервер отклонит (409)
   approve.onclick = () => {
     const text = letter.value.trim();
-    const edited = answerFields.some((f, i) => f && f.value.trim() !== questions[i].answer.join("\n").trim());
-    const answers = edited ? questions.map((q, i) => (answerFields[i] ? [answerFields[i].value.trim()] : q.answer)) : null;
+    const edited = answerFields.some((f, i) => f && !sameAnswer(f.value(), questions[i]));
+    const answers = edited ? questions.map((q, i) => (answerFields[i] ? answerFields[i].value() : q.answer)) : null;
     act({ approve: true, coverLetter: text && text !== (v.coverLetter ?? "").trim() ? text : null, answers }, "одобрено, в очереди");
   };
   decline.onclick = () => act({ approve: false, reason: reason.value.trim() || null }, "отклонено");

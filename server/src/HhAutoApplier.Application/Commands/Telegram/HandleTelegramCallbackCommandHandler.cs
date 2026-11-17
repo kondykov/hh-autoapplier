@@ -1,95 +1,68 @@
-using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Notifications;
-using HhAutoApplier.Domain;
-using HhAutoApplier.Domain.Vacancies;
-using Microsoft.EntityFrameworkCore;
+using HhAutoApplier.Application.Telegram;
 
 namespace HhAutoApplier.Application.Commands.Telegram;
 
-// Кнопки под сообщениями бота. Ручная проверка — те же правила, что в веб-интерфейсе («Проверка») (JobApplication.Approve/Decline), письмо — как написала LLM.
-// Отклики и ответы работодателей ищутся только среди данных владельца привязанного чата
-public class HandleTelegramCallbackCommandHandler(
-    IAppDbContext db,
-    IUserService users,
-    HandleTelegramMessageCommandHandler messages,
-    TimeProvider clock
-) : ICommandHandler<HandleTelegramCallbackCommand, BotCallbackResult>
+// Кнопки под сообщениями бота (#115, «один экран»). Нажатие на экране перерисовывает его на месте; «Открыть» под уведомлением
+// присылает экран заново внизу чата; кнопки решения под уведомлением сворачивают его до итога.
+// Разделы действуют через те же команды и запросы, что веб-интерфейс, от имени пользователя привязанного чата:
+// подделанная callback_data не откроет чужого — сценарии ищут только среди его данных
+public class HandleTelegramCallbackCommandHandler(BotChat bot, IEnumerable<IBotSection> sections)
+    : ICommandHandler<HandleTelegramCallbackCommand, BotResult>
 {
-    public async Task<BotCallbackResult> Handle(HandleTelegramCallbackCommand command, CancellationToken ct = default)
+    // Кнопки уведомлений прежних версий, которые открывают экран: экраном станет новое сообщение, уведомление останется
+    private static readonly string[] OpenFromNotification = [BotTexts.ShowReview, BotTexts.ReviewCard];
+
+    public async Task<BotResult> Handle(HandleTelegramCallbackCommand command, CancellationToken ct = default)
     {
-        var chat = await db.TelegramChats.FirstOrDefaultAsync(c => c.ChatId == command.ChatId, ct);
-        if (chat is null || (await users.GetBlockedIdsAsync(ct)).Contains(chat.UserId))
-            return new BotCallbackResult("Чат не привязан", null);
+        if (await bot.EnterAsync(command.ChatId, ct) != BotEntryState.Linked)
+            return BotResults.Notice("Чат не привязан");
 
-        var parts = command.Data.Split(':', 2);
-        if (parts.Length != 2)
-            return new BotCallbackResult("Неизвестная кнопка", null);
+        var chat = bot.Current!;
+        if (!command.Data.Contains(':'))
+            return BotResults.Notice("Неизвестная кнопка");
 
-        switch (parts[0])
+        var press = BotPress.Parse(command.Data);
+        if (press.Action == BotTexts.Dismiss)
+            return new BotResult { DeletePressed = true };
+
+        if (press.Action == BotTexts.Open || (OpenFromNotification.Contains(press.Action) && command.MessageId != chat.ScreenMessageId))
         {
-            case BotTexts.Approve or BotTexts.Decline:
-                return await ReviewAsync(chat.UserId, parts[0] == BotTexts.Approve, parts[1], ct);
-            case BotTexts.ShowReview:
-                // Как команда /review: отклики на проверке новыми сообщениями, сообщение с кнопкой не меняется
-                var replies = await messages.Handle(new HandleTelegramMessageCommand { ChatId = command.ChatId, IsPrivate = true, Text = "/review" }, ct);
-                return new BotCallbackResult("", null) { Replies = replies };
-            case BotTexts.Handled:
-                return await HandledAsync(chat.UserId, parts[1], ct);
-            case BotTexts.Unlink:
-                chat.Unlink();
-                await db.SaveChangesAsync(ct);
-                return new BotCallbackResult("Чат отвязан", "Чат отвязан: уведомлений больше не будет. Привязать снова — новым кодом: /start <код>")
-                {
-                    Replies = [new BotMessage("Меню убрано.") { Menu = BotMenu.Remove }],
-                };
-            case BotTexts.Cancel:
-                return new BotCallbackResult("Отменено", "Отменено");
-            default:
-                return new BotCallbackResult("Неизвестная кнопка", null);
+            // Сводку открыли — следующее событие начнёт новую
+            if (command.MessageId != 0 && command.MessageId == chat.DigestMessageId)
+                chat.ResetDigest();
+            chat.ClearInput();
+            await bot.SaveAsync(ct);
+            var inner = press.Action == BotTexts.Open ? BotPress.Parse(string.Join(':', press.Args)) : press;
+            var opened = await RouteAsync(inner, ct);
+            return opened with { MoveScreen = opened.Screen is not null, ScreenMessageId = chat.ScreenMessageId };
         }
+
+        // «Отменить» в режиме ввода — вернуться туда, откуда пришли
+        if (press.Action == BotInput.Cancel)
+            press = BotPress.Parse(chat.InputBack ?? $"{MenuSection.Show}:");
+
+        // Любое нажатие снимает режим ввода; раздел включит его заново, если кнопка — «✏️ …»
+        chat.ClearInput();
+        var result = await RouteAsync(press, ct);
+        if (result.Screen is null)
+        {
+            await bot.SaveAsync(ct);
+            return result;
+        }
+
+        // Нажатое сообщение и есть экран
+        if (command.MessageId > 0)
+            chat.ShowScreen(command.MessageId);
+        await bot.SaveAsync(ct);
+        return result with { ScreenMessageId = chat.ScreenMessageId };
     }
 
-    private async Task<BotCallbackResult> ReviewAsync(Guid userId, bool approve, string vacancyId, CancellationToken ct)
+    private async Task<BotResult> RouteAsync(BotPress press, CancellationToken ct)
     {
-        var application = await db.FindApplicationAsync(userId, vacancyId, ct);
-        if (application is null)
-            return new BotCallbackResult("Вакансия не найдена", "Вакансия не найдена");
-
-        // В Telegram письмо не поправить и кодовое слово не подтвердить: незакрытые просьбы (#72) — только в «Проверке»
-        if (approve && application.AwaitsClosingLetter && application.Status == VacancyStatus.Review)
-            return new BotCallbackResult("Просьбы не закрыты", "Есть незакрытые просьбы работодателя к письму: решите в веб-интерфейсе, раздел «Проверка»");
-
-        try
-        {
-            if (approve)
-                application.Approve(null, clock.GetUtcNow());
-            else
-                application.Decline(null, clock.GetUtcNow());
-        }
-        catch (DomainException)
-        {
-            // Уже решено на странице проверки или другим нажатием — показать, что сейчас
-            return new BotCallbackResult("Уже решено", $"Уже решено, статус: {application.Status}");
-        }
-
-        await db.SaveChangesAsync(ct);
-        return approve
-            ? new BotCallbackResult("Одобрено", "✅ Одобрено — в очереди")
-            : new BotCallbackResult("Отклонено", "❌ Отклонено");
-    }
-
-    // Как «Обработано» в веб-интерфейсе («Ответы работодателей»)
-    private async Task<BotCallbackResult> HandledAsync(Guid userId, string chatId, CancellationToken ct)
-    {
-        var id = long.TryParse(chatId, out var parsed) ? parsed : 0;
-        var message = await db.EmployerMessages.FirstOrDefaultAsync(m => m.UserId == userId && m.ChatId == id, ct);
-        if (message is null)
-            return new BotCallbackResult("Чат не найден", null);
-
-        message.MarkHandled(clock.GetUtcNow());
-        await db.SaveChangesAsync(ct);
-        return new BotCallbackResult("Обработано", "✔ Обработано");
+        var section = sections.FirstOrDefault(s => s.Actions.Contains(press.Action));
+        return section is null ? BotResults.Notice("Неизвестная кнопка") : await section.PressAsync(press, ct);
     }
 }
