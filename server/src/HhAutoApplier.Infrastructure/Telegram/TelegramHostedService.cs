@@ -320,7 +320,11 @@ public class TelegramHostedService(
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
-                notification.MarkFailed(e.Message);
+                // Сбой связи (#132): после последней попытки уведомление ждёт, пока проверка связи снова увидит Telegram
+                if (IsLinkFailure(e))
+                    notification.MarkLinkFailed(e.Message, clock.GetUtcNow());
+                else
+                    notification.MarkFailed(e.Message);
                 logger.LogWarning(e, "Telegram: уведомление {Id} не отправлено", notification.Id);
             }
 
@@ -328,6 +332,19 @@ public class TelegramHostedService(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    // Связь, а не отказ Telegram: сеть, прокси (Bad Gateway на CONNECT), таймаут; у Bot API — 429 и 5xx.
+    // Иной ответ Bot API (400 — неверный текст) после связи не пройдёт, ждать незачем
+    public static bool IsLinkFailure(Exception e)
+    {
+        if (e is ApiRequestException api)
+            return api.ErrorCode == (int)HttpStatusCode.TooManyRequests || api.ErrorCode >= 500;
+
+        for (var x = e; x is not null; x = x.InnerException)
+            if (x is HttpRequestException or IOException or System.Net.Sockets.SocketException or TimeoutException or TaskCanceledException)
+                return true;
+        return false;
     }
 
     // Строка в сводку: дописать в прежнюю правкой или начать новую
