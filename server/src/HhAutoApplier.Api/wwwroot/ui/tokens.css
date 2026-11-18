@@ -1,8 +1,9 @@
 /* Токены UI kit (#129): единственное место с палитрой, отступами, радиусами, шрифтами и тенями.
    Веб отдаёт файл как статику (/ui/tokens.css); расширение потом встроит его же в панель вместо своей копии палитры.
+   В shadow root те же правила срабатывают на :host (стили — injectStyles из ui.js).
    Тема: по умолчанию системная; data-theme="dark|light" на <html> (или на любом блоке — витрина показывает обе рядом) — выбор вручную. */
 
-:root, [data-theme="light"] {
+:root, :host, [data-theme="light"] {
   color-scheme: light;
   /* Светлая — парная к тёмной «как профиль» */
   --bg: #f6f8fa; --card: #ffffff; --card2: #f0f3f6; --text: #1f2328; --muted: #59636e; --border: #d0d7de; --grid: #e4e8ec;
@@ -13,7 +14,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]), :host(:not([data-theme="light"])) {
     color-scheme: dark;
     --bg: #0d1117; --card: #161b22; --card2: #1c222b; --text: #e6edf3; --muted: #8b98a8; --border: #263040; --grid: #1a222d;
     --accent: #f0a3a8; --on-accent: #2a0f12; --accent-soft: #3a2a2e;
@@ -23,7 +24,7 @@
   }
 }
 
-[data-theme="dark"] {
+:host([data-theme="dark"]), [data-theme="dark"] {
   color-scheme: dark;
   --bg: #0d1117; --card: #161b22; --card2: #1c222b; --text: #e6edf3; --muted: #8b98a8; --border: #263040; --grid: #1a222d;
   --accent: #f0a3a8; --on-accent: #2a0f12; --accent-soft: #3a2a2e;
@@ -32,7 +33,7 @@
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .35);
 }
 
-:root {
+:root, :host {
   /* Источники вакансий (#32): одинаковые в обеих темах */
   --src-hh: #ff6b78; --src-hirify: #8fb4ff; --src-getmatch: #b9a3ff; --src-other: #8b98a8;
 

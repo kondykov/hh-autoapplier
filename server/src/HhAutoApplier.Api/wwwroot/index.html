@@ -10,9 +10,11 @@
     // Тема (#120): system | dark | light, выбор в localStorage; до отрисовки, чтобы не мигало
     try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
   </script>
-  <!-- UI kit (#129): токены, основа и компоненты — ui/ -->
+  <!-- UI kit (#129): токены и компоненты — ui/ (общие с расширением), каркас веба — app.css -->
   <link rel="stylesheet" href="ui/tokens.css">
   <link rel="stylesheet" href="ui/ui.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="modulepreload" href="ui/ui.js">
 </head>
 <body>
 <header>
@@ -41,9 +43,9 @@
   <section id="view"></section>
 </main>
 
-<nav id="tabbar" hidden aria-label="Разделы"></nav>
+<nav id="tabbar" class="tabbar" hidden aria-label="Разделы"></nav>
 
-<script src="ui/ui.js"></script>
-<script src="app.js"></script>
+<!-- Модуль: компоненты импортирует из ui/ui.js -->
+<script type="module" src="app.js"></script>
 </body>
 </html>

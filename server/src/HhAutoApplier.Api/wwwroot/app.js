@@ -1,7 +1,12 @@
-"use strict";
 // Единый веб-интерфейс (#46): разделы по хешу адреса поверх того же API, что у расширения. Вход — пароль, дальше cookie.
 // Администратор может смотреть данные другого пользователя (?userId=) — только чтение: правки API делает от своего имени.
-// Разметка — компонентами UI kit (ui/ui.js, #129); данные с hh.ru и от LLM — только текстом
+// Разметка — компонентами UI kit (ui/ui.js, #129); данные с hh.ru и от LLM — только текстом. Модуль: строгий режим сам
+
+import {
+  el, safeUrl, pct, busy, Icon, ICONS, Button, Actions, Toolbar, Result, Pill, Badge, Card, Meta, PageHead, Caption, Callout, Quote, Pre, Secret, Note,
+  Disclosure, EmptyState, Skeleton, Tabs, TabBar, Segmented, Chips, Stat, Stats, Meter, Funnel, Bars, RankList, StackTable, Field, FormGrid, Form,
+  Toast, Sheet, SheetLinks, Count,
+} from "./ui/ui.js";
 
 const view = document.getElementById("view");
 const status = document.getElementById("status");
@@ -996,7 +1001,7 @@ async function kit(arg) {
   const body = el("div");
   function draw() {
     // Листы прошлой отрисовки витрины — прочь
-    document.querySelectorAll(".sheet.kit-demo").forEach((n) => n.remove());
+    document.querySelectorAll(".sheet.kit-demo").forEach((n) => n.dispose());
     if (kitState.width !== "auto") {
       body.replaceChildren(el("iframe", { className: "kit-frame", src: "#kit/frame", title: `Витрина шириной ${kitState.width}px`, style: `max-width:${kitState.width}px` }));
       return;

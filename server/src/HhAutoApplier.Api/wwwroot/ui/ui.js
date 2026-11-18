@@ -1,10 +1,11 @@
-"use strict";
-// UI kit веба (#129): компоненты-функции поверх el(), без фреймворков и сборки. Стили — ui/ui.css, токены — ui/tokens.css,
-// иконки — ui/icons.svg. Подключается обычным <script> до app.js: функции — глобальные.
-// Безопасность: данные с hh.ru и от LLM попадают в узлы только текстом (textContent / текстовые дети el), ссылки — через safeUrl
+// UI kit (#129): компоненты-функции поверх el() — ES-модуль без фреймворков, сборки и побочных эффектов при импорте.
+// Общий для веба (<script type="module">) и расширения (импорт через esbuild): нет состояния приложения, fetch и API —
+// данные, тексты и обработчики приходят параметрами. Работает в обычном документе и в shadow root.
+// Стили — tokens.css и ui.css рядом (в вебе — <link>, в shadow root — injectStyles), иконки — спрайт icons.svg.
+// Безопасность: данные попадают в узлы только текстом (textContent / текстовые дети el), ссылки — через safeUrl
 
-// Узел из тега, свойств и детей; дети-строки становятся текстом, null/false пропускаются
-function el(tag, props = {}, ...children) {
+// Узел из тега, свойств и детей; дети-строки становятся текстом, null/false/undefined пропускаются
+export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
     if (value === undefined) continue;
@@ -16,7 +17,7 @@ function el(tag, props = {}, ...children) {
 }
 
 // Ссылка — только http(s): javascript: и прочее из данных не попадает в href
-function safeUrl(url) {
+export function safeUrl(url) {
   try {
     const u = new URL(url);
     return u.protocol === "https:" || u.protocol === "http:" ? u.href : "#";
@@ -25,13 +26,39 @@ function safeUrl(url) {
   }
 }
 
-const cls = (...names) => names.filter(Boolean).join(" ");
+export const cls = (...names) => names.filter(Boolean).join(" ");
+export const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
-// ── Icon ──────────────────────────────────────────────────────────────
-// Иконка из спрайта; title — подпись для чтения с экрана, без неё иконка декоративная
-const ICONS = ["dashboard", "review", "dialogs", "vacancies", "overview", "llm", "search", "resume", "user", "admin", "link", "external",
+// ── Стили и иконки в shadow root ─────────────────────────────────────
+// Веб подключает tokens.css и ui.css через <link>. Shadow root и страницы расширения — текстом (esbuild loader "text"):
+// injectStyles(root, [tokensCss, uiCss]). Повторный вызов с тем же root ничего не дублирует
+export function injectStyles(root, cssTexts) {
+  const target = root instanceof Document ? root.head : root;
+  let style = target.querySelector?.("style[data-ui-kit]");
+  if (!style) target.prepend(style = el("style", { "data-ui-kit": "" }));
+  style.textContent = [].concat(cssTexts).join("\n");
+  return style;
+}
+
+// Иконки: по умолчанию — внешний спрайт рядом со страницей (веб, страницы расширения: setIconSprite(chrome.runtime.getURL(...))).
+// В shadow root на чужом сайте внешний спрайт другого источника не грузится — тогда injectIcons(root, svgText) встраивает
+// спрайт в root, и Icon ссылается на #имя внутри него
+export const ICONS = ["dashboard", "review", "dialogs", "vacancies", "overview", "llm", "search", "resume", "user", "admin", "link", "external",
   "clock", "check", "x", "undo", "more", "plus", "copy", "alert", "hash", "theme", "moon", "sun", "logout", "kit"];
-function Icon(name, { title, size } = {}) {
+let sprite = "ui/icons.svg";
+export function setIconSprite(url) { sprite = url; }
+export function injectIcons(root, svgText) {
+  const target = root instanceof Document ? root.body : root;
+  target.querySelector?.("[data-ui-icons]")?.remove();
+  const holder = el("div", { "data-ui-icons": "", hidden: true, "aria-hidden": "true" });
+  // Текст спрайта — свой файл kit, не данные
+  holder.innerHTML = svgText;
+  target.append(holder);
+  sprite = "";
+}
+
+// Иконка из спрайта; title — подпись для чтения с экрана, без неё иконка декоративная
+export function Icon(name, { title, size } = {}) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("class", "ic");
@@ -42,14 +69,14 @@ function Icon(name, { title, size } = {}) {
     svg.setAttribute("aria-label", title);
   } else svg.setAttribute("aria-hidden", "true");
   const use = document.createElementNS(ns, "use");
-  use.setAttribute("href", `ui/icons.svg#${name}`);
+  use.setAttribute("href", `${sprite}#${name}`);
   svg.append(use);
   return svg;
 }
 
 // ── Button ────────────────────────────────────────────────────────────
 // Занятость: на время действия узел выключен и помечен aria-busy, после — включён (даже если действие упало)
-async function busy(node, action) {
+export async function busy(node, action) {
   node.disabled = true;
   node.setAttribute("aria-busy", "true");
   try {
@@ -62,7 +89,7 @@ async function busy(node, action) {
 
 // kind: primary | ok | danger | ghost; size: sm | lg; icon — имя иконки слева (iconOnly — только иконка, text уходит в подпись).
 // onClick, вернувший промис, держит кнопку занятой до его завершения
-function Button(text, { kind, size, icon, iconOnly, type = "button", title, disabled, onClick, className } = {}) {
+export function Button(text, { kind, size, icon, iconOnly, type = "button", title, disabled, onClick, className } = {}) {
   const b = el("button", {
     type, title: title ?? (iconOnly ? text : undefined), disabled: !!disabled,
     className: cls(kind, size, iconOnly && "icon", icon && !iconOnly && "with-icon", className) || undefined,
@@ -77,26 +104,33 @@ function Button(text, { kind, size, icon, iconOnly, type = "button", title, disa
 }
 
 // Ряды кнопок: Actions — под карточкой, Toolbar — фильтры и формы в строку. flush — без внешних отступов, after — отступ сверху
-const Actions = (children, { flush } = {}) => el("div", { className: cls("actions", flush && "flush") }, children);
-const Toolbar = (children, { flush, after } = {}) => el("div", { className: cls("bar", flush && "flush", after && "after") }, children);
+export const Actions = (children, { flush } = {}) => el("div", { className: cls("actions", flush && "flush") }, children);
+export const Toolbar = (children, { flush, after } = {}) => el("div", { className: cls("bar", flush && "flush", after && "after") }, children);
 // Итог действия рядом с кнопками (текст меняет вызывающий)
-const Result = (text = "") => el("span", { className: "result", textContent: text });
+export const Result = (text = "") => el("span", { className: "result", textContent: text });
 
 // ── Pill, Badge, Count ────────────────────────────────────────────────
-// Pill — статус моноширинной меткой; tone: ok | bad | accent; dot — цвет точки (источник вакансии)
-function Pill(text, { tone, dot, title } = {}) {
+// Pill — статус моноширинной меткой; tone: ok | bad | accent; dot — цвет точки (например, источник)
+export function Pill(text, { tone, dot, title } = {}) {
   return el("span", { className: cls("pill", dot && "src", tone), title },
     dot ? el("i", { style: `background:${dot}` }) : null, text);
 }
-// Badge — залитая метка вида сообщения; tone: ok | accent | bad
-const Badge = (text, { tone } = {}) => el("span", { className: cls("kind", tone), textContent: text });
-// Count — счётчик у раздела; 0 — ничего
-const Count = (n) => (n ? el("span", { className: "count", textContent: n > 99 ? "99+" : n }) : null);
+// Badge — залитая метка; tone: ok | accent | bad
+export const Badge = (text, { tone } = {}) => el("span", { className: cls("kind", tone), textContent: text });
+// Count — счётчик; 0 — ничего
+export const Count = (n) => (n ? el("span", { className: "count", textContent: n > 99 ? "99+" : n }) : null);
 
-// ── Card ──────────────────────────────────────────────────────────────
+// ── Card и тексты ─────────────────────────────────────────────────────
+// Строка «серым»: части через « · », пустые выкидываются; lead — узел в начале строки (метка)
+export function Meta(parts, { lead } = {}) {
+  if (parts == null) return null;
+  const text = Array.isArray(parts) ? parts.filter(Boolean).join(" · ") : String(parts);
+  return el("div", { className: "meta" }, lead ?? null, text);
+}
+
 // as: article | form | div; title — заголовок h2 (href — ссылкой в новой вкладке) или head — свой узел шапки;
-// meta — строка или список частей через « · »; actions — ряд кнопок внизу; decided — состояние «решено» (приглушено)
-function Card({ as = "div", title, href, head, meta, actions, decided, tight, className, ...props } = {}, ...children) {
+// meta — строка или список частей; actions — ряд кнопок внизу; decided — «решено» (приглушено); tight — плотная
+export function Card({ as = "div", title, href, head, meta, actions, decided, tight, className, ...props } = {}, ...children) {
   const heading = head ?? (title == null ? null
     : el("h2", {}, href ? el("a", { href: safeUrl(href), target: "_blank", rel: "noopener", textContent: title }) : title));
   return el(as, { className: cls("card", tight && "tight", decided && "decided", className), ...props },
@@ -104,98 +138,85 @@ function Card({ as = "div", title, href, head, meta, actions, decided, tight, cl
 }
 Card.decide = (node) => node.closest(".card")?.classList.add("decided");
 
-// Строка «серым»: части через « · », пустые выкидываются; lead — узел в начале строки (метка)
-function Meta(parts, { lead } = {}) {
-  if (parts == null) return null;
-  const text = Array.isArray(parts) ? parts.filter(Boolean).join(" · ") : String(parts);
-  return el("div", { className: "meta" }, lead ?? null, text);
-}
-
-// Заголовок раздела: h1 и подзаголовок; aside — справа (переключатели)
-function PageHead(title, sub, aside) {
+// Заголовок страницы: h1 и подзаголовок; aside — справа (переключатели)
+export function PageHead(title, sub, aside) {
   if (!aside) return [el("h1", { textContent: title }), sub ? el("p", { className: "sub", textContent: sub }) : null];
   return el("div", { className: "page-head" },
     el("div", {}, el("h1", { textContent: title }), sub ? el("div", { className: "muted", textContent: sub }) : null), aside);
 }
 // Подпись блока внутри карточки
-const Caption = (text) => el("h3", { textContent: text });
+export const Caption = (text) => el("h3", { textContent: text });
 
-// Тексты из данных: Callout — вывод LLM на жёлтом, Quote — сообщение работодателя, Pre — длинный текст с переносами,
-// Secret — токен и код, Note — служебная пометка, Disclosure — раскрывающийся блок
-const Callout = (text) => el("div", { className: "callout", textContent: text });
-const Quote = (text) => el("div", { className: "quote", textContent: text });
-const Pre = (text, { scroll } = {}) => el("div", { className: cls("pre", scroll && "scroll"), textContent: text });
-const Secret = (text) => el("span", { className: "secret", textContent: text });
-const Note = (text) => el("div", { className: "note", textContent: text });
-const Disclosure = (summary, children, { open } = {}) => el("details", { open: !!open }, el("summary", { textContent: summary }), children);
+// Callout — вывод на жёлтом, Quote — цитата сообщения, Pre — длинный текст с переносами (scroll — с прокруткой),
+// Secret — токен или код, Note — служебная пометка, Disclosure — раскрывающийся блок
+export const Callout = (text) => el("div", { className: "callout", textContent: text });
+export const Quote = (text) => el("div", { className: "quote", textContent: text });
+export const Pre = (text, { scroll } = {}) => el("div", { className: cls("pre", scroll && "scroll"), textContent: text });
+export const Secret = (text) => el("span", { className: "secret", textContent: text });
+export const Note = (text) => el("div", { className: "note", textContent: text });
+export const Disclosure = (summary, children, { open } = {}) => el("details", { open: !!open }, el("summary", { textContent: summary }), children);
 
 // ── EmptyState, Skeleton ──────────────────────────────────────────────
-const EmptyState = (text, { icon } = {}) => el("p", { className: "empty" }, icon ? Icon(icon) : null, text);
-// lines — строки текста, block — плашка (карточка или график)
-const Skeleton = ({ lines = 3, block = false } = {}) => el("div", { className: "skel", "aria-busy": "true", "aria-label": "Загрузка" },
+export const EmptyState = (text, { icon } = {}) => el("p", { className: "empty" }, icon ? Icon(icon) : null, text);
+// lines — строки текста, block — плашка (карточка или график); label — подпись для чтения с экрана
+export const Skeleton = ({ lines = 3, block = false, label = "Загрузка" } = {}) => el("div", { className: "skel", "aria-busy": "true", "aria-label": label },
   block ? el("i", { className: "block" }) : null, Array.from({ length: lines }, () => el("i")));
 
 // ── Tabs, TabBar, Segmented, Chips ────────────────────────────────────
 // Tabs — ссылки разделов: items [{ href, label, active, count }]
-const Tabs = (items, { label } = {}) => el("div", { className: "tabs", role: label ? "group" : undefined, "aria-label": label },
+export const Tabs = (items, { label } = {}) => el("div", { className: "tabs", role: label ? "group" : undefined, "aria-label": label },
   items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined }, t.label, Count(t.count))));
 
-// TabBar — нижняя панель телефона: items [{ href, icon, label, active, count }] и кнопка «Ещё» последней
-const TabBar = (items, more) => [
+// TabBar — пункты нижней панели телефона: items [{ href, icon, label, active, count }] и, последним, свой узел (кнопка «Ещё»)
+export const TabBar = (items, more) => [
   ...items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined },
     Icon(t.icon), t.label, Count(t.count))),
   more ?? null,
 ].filter(Boolean);
 
-// Segmented — один из нескольких: options [{ value, label }]; onChange(value)
-function Segmented(options, value, onChange, { label } = {}) {
-  const root = el("div", { className: "seg", role: "group", "aria-label": label });
+// Выбор одного из кнопок: подсветка и aria-pressed переключаются на месте, onChange(value) — дальше решает вызывающий
+function choice(options, value, onChange, make) {
   const buttons = options.map((o) => {
-    const b = el("button", { type: "button", className: o.value === value ? "on" : "", textContent: o.label, "aria-pressed": String(o.value === value) });
+    const b = make(o);
+    b.type = "button";
+    b.className = o.value === value ? "on" : "";
+    b.setAttribute("aria-pressed", String(o.value === value));
     b.onclick = () => {
       buttons.forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b)); });
       onChange(o.value);
     };
     return b;
   });
-  root.append(...buttons);
-  return root;
+  return buttons;
 }
 
-// Chips — фильтр кнопками с цветной точкой: options [{ value, label, color, disabled, title }]
-function Chips(options, value, onChange, { label } = {}) {
-  const buttons = options.map((o) => {
-    const b = el("button", { type: "button", className: o.value === value ? "on" : "", disabled: !!o.disabled, title: o.title ?? "", "aria-pressed": String(o.value === value) },
-      o.color ? el("i", { style: `background:${o.color}` }) : null, o.label);
-    b.onclick = () => {
-      buttons.forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b)); });
-      onChange(o.value);
-    };
-    return b;
-  });
-  return el("div", { className: "chips", role: "group", "aria-label": label }, label ? el("span", { className: "muted", textContent: label }) : null, buttons);
-}
+// Segmented — один из нескольких: options [{ value, label }]
+export const Segmented = (options, value, onChange, { label } = {}) => el("div", { className: "seg", role: "group", "aria-label": label },
+  choice(options, value, onChange, (o) => el("button", { textContent: o.label })));
+
+// Chips — фильтр кнопками с цветной точкой: options [{ value, label, color, disabled, title }]; label — подпись слева
+export const Chips = (options, value, onChange, { label } = {}) => el("div", { className: "chips", role: "group", "aria-label": label },
+  label ? el("span", { className: "muted", textContent: label }) : null,
+  choice(options, value, onChange, (o) => el("button", { disabled: !!o.disabled, title: o.title ?? "" }, o.color ? el("i", { style: `background:${o.color}` }) : null, o.label)));
 
 // ── Stat, Meter, Funnel, Bars, RankList ───────────────────────────────
-// Stat — KPI: value (+ unit мелко), label, note — строка ниже; trend: up | down — цвет строки.
-// href — компактная плитка-ссылка (обзор)
-function Stat({ value, unit, label, note, trend, href }) {
+// Stat — KPI: value (+ unit мелко), label, note — строка ниже; trend: up | down — цвет строки. href — компактная плитка-ссылка
+export function Stat({ value, unit, label, note, trend, href }) {
   if (href) return el("a", { className: "tile", href }, el("b", { textContent: value }), el("span", { textContent: label }));
   return el("div", { className: "card kpi" },
     el("b", {}, String(value), unit ? el("small", { textContent: unit }) : null),
     el("span", { textContent: label }),
     note != null ? el("i", { className: trend ?? "", textContent: note }) : null);
 }
-const Stats = (children, { tiles } = {}) => el("div", { className: tiles ? "grid" : "kpis" }, children);
+export const Stats = (children, { tiles } = {}) => el("div", { className: tiles ? "grid" : "kpis" }, children);
 
 // Meter — доля value из max полосой; color — цвет заполнения (токен), по умолчанию акцент
-const Meter = (value, max, { color, label } = {}) => el("div", { className: "track", role: "meter",
+export const Meter = (value, max, { color, label } = {}) => el("div", { className: "track", role: "meter",
   "aria-valuenow": value, "aria-valuemin": 0, "aria-valuemax": max, "aria-label": label },
 el("s", { style: `width:${max ? (value / max) * 100 : 0}%${color ? `;background:${color}` : ""}` }));
 
 // Funnel — шаги воронки: rows [{ label, value, base, color }]; полоса — от max, % — от base (null — 100%)
-const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-function Funnel(rows, { max, note } = {}) {
+export function Funnel(rows, { max, note } = {}) {
   const top = Math.max(1, max ?? Math.max(...rows.map((r) => r.value)));
   return el("div", { className: "funnel" },
     rows.map((r) => el("div", { className: "f" },
@@ -206,9 +227,9 @@ function Funnel(rows, { max, note } = {}) {
     note ? el("div", { className: "muted fnote", textContent: note }) : null);
 }
 
-// Bars — столбцы с накоплением: items [{ total, parts: [{ value, tone: ok | accent }], title }] — снизу вверх;
+// Bars — столбцы с накоплением: items [{ total, parts: [{ value, tone: ok | accent }], title }] — части снизу вверх;
 // фон столбца — total, части — доля от total. from/to — подписи оси, legend [{ label, color }]
-function Bars(items, { from, to, legend } = {}) {
+export function Bars(items, { from, to, legend } = {}) {
   const top = Math.max(1, ...items.map((i) => i.total));
   return el("div", {},
     el("div", { className: cls("bars", items.length > 20 && "dense") }, items.map((i) => el("div", { style: `height:${(i.total / top) * 100}%`, title: i.title },
@@ -218,12 +239,12 @@ function Bars(items, { from, to, legend } = {}) {
 }
 
 // RankList — строки «текст … число»: items [[text, n]]
-const RankList = (items) => el("ul", { className: "reasons" }, items.map(([text, n]) => el("li", {}, el("span", { textContent: text }), el("b", { className: "mono", textContent: n }))));
+export const RankList = (items) => el("ul", { className: "reasons" }, items.map(([text, n]) => el("li", {}, el("span", { textContent: text }), el("b", { className: "mono", textContent: n }))));
 
 // ── StackTable ────────────────────────────────────────────────────────
-// Таблица, которая на телефоне становится карточками «поле: значение» (#120): подпись поля — из заголовка столбца.
+// Таблица, которая на телефоне становится карточками «поле: значение»: подпись поля — из заголовка столбца.
 // columns: [{ title, num? }], rows: массивы ячеек (текст или узлы)
-function StackTable(columns, rows) {
+export function StackTable(columns, rows) {
   return el("table", { className: "stack" },
     el("thead", {}, el("tr", {}, columns.map((c) => el("th", { className: c.num ? "n" : "", textContent: c.title })))),
     el("tbody", {}, rows.map((cells) => el("tr", {}, cells.map((cell, i) => {
@@ -236,16 +257,16 @@ function StackTable(columns, rows) {
 // ── Field, Form ───────────────────────────────────────────────────────
 // Field — подпись и поле: в сетке FormGrid (wide — на всю ширину) или stacked — подпись над полем
 let fieldIds = 0;
-function Field(label, control, { wide, stacked } = {}) {
+export function Field(label, control, { wide, stacked } = {}) {
   control.id ||= `f-${++fieldIds}`;
   if (stacked) return [el("label", { className: "field", for: control.id, textContent: label }), control];
   if (wide) control.classList.add("wide");
   return [el("label", { for: control.id, className: wide ? "wide" : "", textContent: label }), control];
 }
-const FormGrid = (...fields) => el("div", { className: "form" }, fields);
+export const FormGrid = (...fields) => el("div", { className: "form" }, fields);
 
-// Form — карточка-форма: onSubmit (может вернуть промис) держит submit занятой; className по умолчанию card
-function Form({ submit, onSubmit, className = "card" } = {}, ...children) {
+// Form — форма: onSubmit (может вернуть промис) держит submit занятой; className по умолчанию card
+export function Form({ submit, onSubmit, className = "card" } = {}, ...children) {
   const form = el("form", { className }, children);
   form.onsubmit = (e) => {
     e.preventDefault();
@@ -255,29 +276,34 @@ function Form({ submit, onSubmit, className = "card" } = {}, ...children) {
 }
 
 // ── Toast, Sheet ──────────────────────────────────────────────────────
-// Toast — короткий итог внизу экрана; undo — «Отменить» (вызывается один раз и закрывает тост); tone: ok | bad
-function Toast(text, { undo, tone, timeout = 6000 } = {}) {
-  let box = document.querySelector(".toasts");
-  if (!box) document.body.append(box = el("div", { className: "toasts", role: "status", "aria-live": "polite" }));
+// Toast — короткий итог внизу экрана; undo — действие «Отменить» (вызывается один раз и закрывает тост); tone: ok | bad.
+// root — куда класть (document.body или shadow root); labels — подписи кнопок
+export function Toast(text, { undo, tone, timeout = 6000, root = document.body, labels = {} } = {}) {
+  let box = root.querySelector(":scope > .toasts");
+  if (!box) root.append(box = el("div", { className: "toasts", role: "status", "aria-live": "polite" }));
   const close = () => toast.remove();
   const toast = el("div", { className: cls("toast", tone) }, el("span", { textContent: text }),
-    undo ? Button("Отменить", { kind: "ghost", size: "sm", icon: "undo", onClick: async () => { close(); await undo(); } }) : null,
-    Button("Закрыть", { kind: "ghost", size: "sm", icon: "x", iconOnly: true, onClick: close }));
+    undo ? Button(labels.undo ?? "Отменить", { kind: "ghost", size: "sm", icon: "undo", onClick: async () => { close(); await undo(); } }) : null,
+    Button(labels.close ?? "Закрыть", { kind: "ghost", size: "sm", icon: "x", iconOnly: true, onClick: close }));
   box.append(toast);
   if (timeout) setTimeout(close, timeout);
   return toast;
 }
 
-// Sheet — нижний лист: на телефоне — над нижней панелью, на компьютере — в углу. Закрывается кликом мимо и Esc.
-// Узел с методами open() / close() / toggle(); title — подпись сверху
-function Sheet(children, { title, label } = {}) {
+// Sheet — нижний лист: на телефоне — над нижней панелью, на компьютере — в углу. Закрывается кликом мимо и Esc
+// (клик внутри shadow root узнаётся по composedPath). Узел с методами open() / close() / toggle(); вставляет вызывающий
+export function Sheet(children, { title, label } = {}) {
   const sheet = el("div", { className: "sheet", hidden: true, role: "dialog", "aria-label": label ?? title }, title ? Caption(title) : null, children);
   sheet.open = () => { sheet.hidden = false; };
   sheet.close = () => { sheet.hidden = true; };
   sheet.toggle = () => { sheet.hidden = !sheet.hidden; };
-  document.addEventListener("click", (e) => { if (!sheet.hidden && !sheet.contains(e.target)) sheet.close(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") sheet.close(); });
+  const outside = (e) => { if (!sheet.hidden && !e.composedPath().includes(sheet)) sheet.close(); };
+  const escape = (e) => { if (e.key === "Escape") sheet.close(); };
+  document.addEventListener("click", outside);
+  document.addEventListener("keydown", escape);
+  // Убрать слушатели, когда лист больше не нужен
+  sheet.dispose = () => { document.removeEventListener("click", outside); document.removeEventListener("keydown", escape); sheet.remove(); };
   return sheet;
 }
 // Пункты листа-меню: items [{ href, label, icon, active }]
-const SheetLinks = (items) => items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "" }, i.icon ? Icon(i.icon) : null, i.label));
+export const SheetLinks = (items) => items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "" }, i.icon ? Icon(i.icon) : null, i.label));
