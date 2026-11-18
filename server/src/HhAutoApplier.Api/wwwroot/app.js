@@ -43,7 +43,7 @@ function scoped(path) {
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
-    if (key.startsWith("data-") || key === "for" || key === "aria-label") node.setAttribute(key, value);
+    if (key.startsWith("data-") || key.startsWith("aria-") || key === "for" || key === "role") node.setAttribute(key, value);
     else node[key] = value;
   }
   for (const child of children.flat()) if (child != null && child !== false) node.append(child);
@@ -59,6 +59,25 @@ function safeUrl(url) {
     return "#";
   }
 }
+
+// Таблица, которая на телефоне становится карточками «поле: значение» (#120): подпись поля — из заголовка столбца.
+// columns: [{ title, num? }], rows: массивы ячеек (текст или узлы)
+function stackTable(columns, rows) {
+  return el("table", { className: "stack" },
+    el("thead", {}, el("tr", {}, columns.map((c) => el("th", { className: c.num ? "n" : "", textContent: c.title })))),
+    el("tbody", {}, rows.map((cells) => el("tr", {}, cells.map((cell, i) => {
+      const td = el("td", { className: columns[i]?.num ? "n" : "", "data-label": columns[i]?.title ?? "" });
+      if (cell != null && cell !== false) td.append(cell);
+      return td;
+    })))));
+}
+
+// Источник вакансии (задел под другие агрегаторы, #32): пока все вакансии — с hh.ru
+const SOURCES = { hh: { name: "hh.ru", color: "#ff6b78" } };
+const sourcePill = (v) => {
+  const s = SOURCES[v.source ?? "hh"] ?? { name: v.source, color: "#8b98a8" };
+  return el("span", { className: "pill src", title: "Источник вакансии" }, el("i", { style: `background:${s.color}` }), s.name);
+};
 
 const date = (value) => (value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "");
 const readOnly = () => viewedUser !== null;
@@ -84,6 +103,192 @@ async function run(button, action, done) {
 }
 
 // ── Разделы ──────────────────────────────────────────────────────────
+
+// Дашборд (#121), демо: считается в браузере по тем же данным, что «Вакансии» (история статусов каждого отклика).
+// В задаче — эндпоинт GET /api/dashboard: тогда страница перестанет выкачивать все отклики
+const DAY = 86400000;
+const PERIODS = [7, 30, 90];
+const AGGREGATORS = [
+  { id: "all", name: "Все" },
+  { id: "hh", name: "hh.ru", color: "#ff6b78" },
+  { id: "hirify", name: "hirify", color: "#8fb4ff", off: true },
+  { id: "getmatch", name: "getmatch", color: "#b9a3ff", off: true },
+];
+const dashState = { period: 30, source: "hh" };
+
+async function allApplications() {
+  const items = [];
+  for (let skip = 0; ; skip += 500) {
+    const page = await api(scoped(`/api/vacancies?skip=${skip}&take=500&includeHidden=true`));
+    items.push(...page);
+    if (page.length < 500 || skip > 20000) return items;
+  }
+}
+
+// Когда отклик впервые пришёл в статус (по истории); null — не приходил
+function reached(v, status) {
+  const h = (v.history ?? []).find((x) => x.to === status);
+  if (h) return new Date(h.at).getTime();
+  if (status === "Applied" && v.appliedAt) return new Date(v.appliedAt).getTime();
+  return v.status === status && v.updatedAt ? new Date(v.updatedAt).getTime() : null;
+}
+const collected = (v) => new Date(v.collectedAt ?? v.history?.[0]?.at ?? 0).getTime();
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+async function dashboard() {
+  const [apps, searchList, chats, collect] = await Promise.all([
+    allApplications(),
+    api(scoped("/api/searches")).catch(() => []),
+    api(scoped("/api/dialogs?take=200")).catch(() => []),
+    api("/api/collect/status").catch(() => null),
+  ]);
+  const root = el("div");
+
+  const lastChat = chats.reduce((max, m) => Math.max(max, new Date(m.at).getTime() || 0), 0);
+  const lastCollect = collect?.current ? "идёт сбор" : collect?.last?.finishedAt ? `сбор ${date(collect.last.finishedAt)}` : null;
+
+  function draw() {
+    const now = Date.now();
+    const from = now - dashState.period * DAY;
+    const prevFrom = from - dashState.period * DAY;
+    // Источник: пока у всех откликов — hh.ru; «Все» = сумма источников
+    const pool = apps.filter((v) => dashState.source === "all" || (v.source ?? "hh") === dashState.source);
+    const inPeriod = (t, a = from, b = now) => t != null && t >= a && t < b;
+
+    const cohort = pool.filter((v) => inPeriod(collected(v)));
+    const prevCohort = pool.filter((v) => inPeriod(collected(v), prevFrom, from));
+    const appliedIn = (a, b) => pool.filter((v) => inPeriod(reached(v, "Applied"), a, b));
+    const applied = appliedIn(from, now);
+    const prevApplied = appliedIn(prevFrom, from);
+    const invited = pool.filter((v) => inPeriod(reached(v, "Invited")));
+    const rejected = pool.filter((v) => inPeriod(reached(v, "Rejected")));
+
+    const delta = (a, b) => {
+      if (!b) return el("i", { textContent: a ? "новое за период" : "—" });
+      const d = Math.round(((a - b) / b) * 100);
+      return el("i", { className: d > 0 ? "up" : d < 0 ? "down" : "", textContent: `${d > 0 ? "+" : ""}${d}% к прошлым ${dashState.period} дн` });
+    };
+    const kpi = (value, label, note) => el("div", { className: "card kpi" }, el("b", {}, value), el("span", { textContent: label }), note);
+
+    // Воронка — по вакансиям, собранным за период: % — от предыдущего шага, отказ — от отправленных
+    const step = (pred) => cohort.filter(pred).length;
+    const f = [
+      ["Собрано", cohort.length],
+      ["Оценено LLM", step((v) => v.llmScore != null)],
+      ["В очередь", step((v) => reached(v, "Queued") != null || reached(v, "Applied") != null)],
+      ["Отправлено", step((v) => reached(v, "Applied") != null)],
+      ["Приглашение", step((v) => reached(v, "Invited") != null), "ok"],
+    ];
+    const sent = f[3][1];
+    const rejectedCohort = step((v) => reached(v, "Rejected") != null);
+    const max = Math.max(1, cohort.length);
+    const funnelRow = (label, n, base, color) => el("div", { className: "f" },
+      el("em", { textContent: label }),
+      el("div", { className: "track" }, el("s", { style: `width:${(n / max) * 100}%${color ? `;background:${color}` : ""}` })),
+      el("b", { textContent: n }), el("small", { textContent: base == null ? "100%" : `${pct(n, base)}%` }));
+
+    // Отклики по дням (за 90 дней — по неделям): отправлено, ответы (приглашение или отказ), из них приглашения
+    const bucket = dashState.period > 30 ? 7 : 1;
+    const buckets = Math.ceil(dashState.period / bucket);
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const first = start.getTime() - (buckets * bucket - 1) * DAY;
+    const series = Array.from({ length: buckets }, (_, i) => ({ at: first + i * bucket * DAY, sent: 0, answered: 0, invited: 0 }));
+    const add = (t, key) => {
+      if (t == null || t < first) return;
+      const i = Math.floor((t - first) / (bucket * DAY));
+      if (series[i]) series[i][key]++;
+    };
+    for (const v of pool) {
+      add(reached(v, "Applied"), "sent");
+      add(reached(v, "Invited"), "invited");
+      add(reached(v, "Invited"), "answered");
+      add(reached(v, "Rejected"), "answered");
+    }
+    const top = Math.max(1, ...series.map((s) => Math.max(s.sent, s.answered)));
+    const dayLabel = (t) => new Date(t).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    const bars = el("div", { className: "bars", style: buckets > 20 ? "gap:2px" : "" }, series.map((s) => el("div", {
+      style: `height:${(Math.max(s.sent, s.answered) / top) * 100}%`,
+      title: `${dayLabel(s.at)}${bucket > 1 ? " (неделя)" : ""}: отправлено ${s.sent}, ответов ${s.answered}, приглашений ${s.invited}`,
+    }, el("u", { className: "inv", style: `height:${s.answered ? (s.invited / Math.max(s.sent, s.answered)) * 100 : 0}%` }),
+    el("u", { style: `height:${s.answered ? ((s.answered - s.invited) / Math.max(s.sent, s.answered)) * 100 : 0}%` }))));
+
+    // По поискам: собрано за период, отправлено, ответили, приглашения, конверсия в приглашение
+    const bySearch = new Map();
+    for (const v of cohort) {
+      const key = v.searchName ?? "без поиска";
+      const row = bySearch.get(key) ?? { collected: 0, sent: 0, answered: 0, invited: 0 };
+      row.collected++;
+      if (reached(v, "Applied") != null) row.sent++;
+      if (reached(v, "Invited") != null) row.invited++;
+      if (reached(v, "Invited") != null || reached(v, "Rejected") != null) row.answered++;
+      bySearch.set(key, row);
+    }
+    const searchRows = [...bySearch.entries()].sort((a, b) => b[1].collected - a[1].collected)
+      .map(([name, r]) => [name, r.collected, r.sent, r.answered, r.invited, el("span", { style: r.invited ? "color:var(--ok)" : "", textContent: `${pct(r.invited, r.sent)}%` })]);
+
+    // Причины отсева — по первой части причины («правило: …», «LLM: …»); числа и слова в кавычках — общим местом,
+    // чтобы «оценка 59 ниже 70» и «оценка 62 ниже 70» легли в одну строку
+    const reasons = new Map();
+    for (const v of cohort.filter((x) => x.status === "Skipped")) {
+      const text = (v.statusReason ?? "без причины").split(/[:.(]/)[0].replace(/«[^»]*»/g, "«…»").replace(/\d+/g, "N").trim().slice(0, 70) || "без причины";
+      reasons.set(text, (reasons.get(text) ?? 0) + 1);
+    }
+    const topReasons = [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+    const periodSeg = el("div", { className: "seg", role: "group", "aria-label": "Период" }, PERIODS.map((p) => {
+      const b = el("button", { type: "button", className: p === dashState.period ? "on" : "", textContent: `${p} дн` });
+      b.onclick = () => { dashState.period = p; draw(); };
+      return b;
+    }));
+    const sources = el("div", { className: "sources" }, el("span", { className: "muted", style: "font-size:12px", textContent: "Агрегатор" }),
+      AGGREGATORS.map((a) => {
+        const b = el("button", { type: "button", className: a.id === dashState.source ? "on" : "", disabled: !!a.off,
+          title: a.off ? "После подключения (#32)" : "" }, a.color ? el("i", { style: `background:${a.color}` }) : null, a.name);
+        b.onclick = () => { dashState.source = a.id; draw(); };
+        return b;
+      }));
+    const sourceName = AGGREGATORS.find((a) => a.id === dashState.source).name;
+
+    root.replaceChildren(
+      el("div", { className: "dash-head" },
+        el("div", {}, el("h1", { textContent: "Дашборд" }),
+          el("div", { className: "muted", style: "font-size:13px", textContent: [
+            lastChat ? `последнее сообщение из чатов ${date(lastChat)}` : "чаты ещё не синхронизировались",
+            lastCollect,
+          ].filter(Boolean).join(" · ") })),
+        periodSeg),
+      sources,
+      el("div", { className: "demo-note", textContent: "Демо #121: числа считаются в браузере по истории откликов. Ответы работодателей — на момент последней синхронизации чатов в расширении." }),
+      el("div", { className: "kpis" },
+        kpi(cohort.length, "собрано вакансий", delta(cohort.length, prevCohort.length)),
+        kpi(applied.length, "откликов отправлено", delta(applied.length, prevApplied.length)),
+        kpi([String(pct(invited.length, applied.length)), el("span", { className: "muted", style: "font-size:16px", textContent: "%" })], "в приглашение",
+          el("i", { textContent: `${invited.length} приглашений за период` })),
+        kpi(rejected.length, "отказов", el("i", { textContent: "собеседования — после #122" }))),
+      el("div", { className: "cols" },
+        el("div", { className: "card funnel" }, el("h3", { textContent: `Воронка за ${dashState.period} дней · ${sourceName}` }),
+          f.map(([label, n, color], i) => funnelRow(label, n, i ? f[i - 1][1] : null, color ? "var(--ok)" : null)),
+          funnelRow("Отказ", rejectedCohort, sent, "var(--bad)"),
+          el("div", { className: "muted", style: "font-size:11px;margin-top:8px", textContent: "% — от предыдущего шага; отказ — от отправленных" })),
+        el("div", { className: "card" }, el("h3", { textContent: bucket > 1 ? "Отклики по неделям" : "Отклики по дням" }), bars,
+          el("div", { className: "days" }, el("span", { textContent: dayLabel(first) }), el("span", { textContent: "сегодня" })),
+          el("div", { className: "legend" },
+            el("span", {}, el("i", { style: "background:var(--bar)" }), "отправлено"),
+            el("span", {}, el("i", { style: "background:var(--accent)" }), "ответили отказом"),
+            el("span", {}, el("i", { style: "background:var(--ok)" }), "приглашение")))),
+      el("div", { className: "cols wide-left", style: "margin-top:12px" },
+        el("div", { className: "card" }, el("h3", { textContent: `По поискам · ${sourceName}` }),
+          searchRows.length ? stackTable([{ title: "Поиск" }, { title: "Собрано", num: true }, { title: "Отправлено", num: true }, { title: "Ответили", num: true }, { title: "Приглашения", num: true }, { title: "Конверсия", num: true }], searchRows)
+            : el("p", { className: "empty", textContent: "За период ничего не собрано." }),
+          el("p", { className: "muted", style: "font-size:12px;margin:8px 0 0", textContent: `Поисков включено: ${searchList.filter((s) => s.enabled).length} из ${searchList.length}` })),
+        el("div", { className: "card" }, el("h3", { textContent: "Почему отсеяно" }),
+          topReasons.length ? el("ul", { className: "reasons" }, topReasons.map(([text, n]) => el("li", {}, el("span", { textContent: text }), el("b", { className: "mono", textContent: n }))))
+            : el("p", { className: "empty", textContent: "Отсеянных за период нет." }))));
+  }
+
+  draw();
+  return root;
+}
 
 async function overview() {
   const [stats, telegram] = await Promise.all([api(scoped("/api/stats")), readOnly() ? null : api("/api/telegram").catch(() => null)]);
@@ -236,7 +441,7 @@ function letterRequestsBlock(v) {
 function vacancyCard(v) {
   const pill = el("span", { className: "pill", textContent: STATUSES[v.status] ?? v.status });
   return el("article", { className: "card" },
-    el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title }), " ", pill,
+    el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title, title: "Открыть вакансию" }), " ", pill, " ", sourcePill(v),
       v.hiddenAt ? " " : null, v.hiddenAt ? el("span", { className: "pill", textContent: "скрыта" }) : null,
       v.vacancyArchived ? " " : null, v.vacancyArchived ? el("span", { className: "pill", textContent: "в архиве" }) : null),
     el("div", { className: "meta", textContent: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`].filter(Boolean).join(" · ") }),
@@ -246,7 +451,8 @@ function vacancyCard(v) {
     letterRequestsBlock(v),
     v.coverLetter ? el("details", {}, el("summary", { textContent: "Письмо" }), el("div", { className: "pre", textContent: v.coverLetter })) : null,
     v.history?.length ? el("details", {}, el("summary", { textContent: `История (${v.history.length})` }),
-      el("table", {}, v.history.map((h) => el("tr", {}, el("td", { textContent: date(h.at) }), el("td", { textContent: STATUSES[h.to] ?? h.to }), el("td", { textContent: h.reason ?? "" }))))) : null,
+      stackTable([{ title: "Когда" }, { title: "Статус" }, { title: "Причина" }],
+        v.history.map((h) => [date(h.at), STATUSES[h.to] ?? h.to, h.reason ?? ""]))) : null,
     vacancyActions(v, pill));
 }
 
@@ -621,15 +827,14 @@ async function account() {
 
   function tokenRows(items) {
     if (!items.length) return el("p", { className: "muted", textContent: "Токенов нет." });
-    return el("table", {}, el("tr", {}, el("th", { textContent: "Название" }), el("th", { textContent: "Начало" }), el("th", { textContent: "Выпущен" }), el("th")),
+    return stackTable([{ title: "Название" }, { title: "Начало" }, { title: "Выпущен" }, { title: "" }],
       items.map((t) => {
         const revoke = el("button", { className: "danger", textContent: "Отозвать" });
         revoke.onclick = () => {
           if (confirm(`Отозвать токен «${t.name}»? Расширение с ним перестанет работать.`))
             run(revoke, () => api(`/api/tokens/${t.id}`, { method: "DELETE" }), () => { render(); return `Токен «${t.name}» отозван`; });
         };
-        return el("tr", {}, el("td", { textContent: t.name }), el("td", { textContent: `${t.prefix}…` }), el("td", { textContent: date(t.createdAt) }),
-          el("td", {}, t.revokedAt ? `отозван ${date(t.revokedAt)}` : revoke));
+        return [t.name, el("span", { className: "mono", textContent: `${t.prefix}…` }), date(t.createdAt), t.revokedAt ? `отозван ${date(t.revokedAt)}` : revoke];
       }));
   }
 
@@ -731,8 +936,7 @@ async function admin() {
       const password = prompt(`Новый пароль для ${u.email} (не короче 10 символов)`);
       if (password) run(reset, () => put(`/api/users/${u.id}/password`, { password }), `${u.email}: пароль задан`);
     };
-    return el("tr", {}, el("td", { textContent: u.email }), el("td", {}, role), el("td", { textContent: date(u.createdAt) }),
-      el("td", {}, el("div", { className: "bar", style: "margin:0" }, block, reset)));
+    return [u.email, role, date(u.createdAt), el("div", { className: "actions", style: "margin:0" }, block, reset)];
   });
 
   const email = el("input", { type: "email", placeholder: "Email", "aria-label": "Email", required: true });
@@ -761,7 +965,7 @@ async function admin() {
   return [
     el("h1", { textContent: "Администрирование" }),
     el("div", { className: "card" }, el("h2", { textContent: "Пользователи" }),
-      el("table", {}, el("tr", {}, el("th", { textContent: "Email" }), el("th", { textContent: "Роль" }), el("th", { textContent: "Создан" }), el("th")), rows),
+      stackTable([{ title: "Email" }, { title: "Роль" }, { title: "Создан" }, { title: "" }], rows),
       el("h2", { textContent: "Новый пользователь", style: "margin-top:16px" }), createForm),
     collectionCard(),
     el("div", { className: "card" }, el("h2", { textContent: "Запустить сейчас" }),
@@ -772,7 +976,72 @@ async function admin() {
 
 // ── Каркас ───────────────────────────────────────────────────────────
 
-const routes = { overview, vacancies, review, dialogs, searches, resumes, account, admin };
+const routes = { dashboard, overview, vacancies, review, dialogs, searches, resumes, account, admin };
+
+// Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же
+const SECTIONS = [
+  { route: "dashboard", title: "Дашборд", icon: "◫", tab: true },
+  { route: "review", title: "Проверка", icon: "✎", tab: true, count: "review" },
+  { route: "dialogs", title: "Ответы", icon: "✉", tab: true, count: "dialogs" },
+  { route: "vacancies", title: "Вакансии", icon: "☰", tab: true },
+  { route: "overview", title: "Обзор" },
+  { route: "searches", title: "Поиски" },
+  { route: "resumes", title: "Резюме" },
+  { route: "account", title: "Профиль" },
+  { route: "admin", title: "Администрирование", admin: true },
+];
+const counts = { review: 0, dialogs: 0 };
+const tabbar = document.getElementById("tabbar");
+const more = document.getElementById("more");
+
+function countBadge(s) {
+  const n = s.count ? counts[s.count] : 0;
+  return n ? el("span", { className: "count", textContent: n > 99 ? "99+" : n }) : null;
+}
+
+function buildNav(route) {
+  const visible = SECTIONS.filter((s) => !s.admin || me?.role === "Admin");
+  nav.replaceChildren(...visible.map((s) => el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, s.title, countBadge(s))));
+  const rest = visible.filter((s) => !s.tab);
+  const moreOn = rest.some((s) => s.route === route);
+  const moreButton = el("button", { type: "button", className: moreOn ? "active" : "", "aria-label": "Ещё разделы" }, el("b", { textContent: "⋯" }), "Ещё");
+  moreButton.onclick = (e) => { e.stopPropagation(); more.hidden = !more.hidden; };
+  tabbar.replaceChildren(...visible.filter((s) => s.tab).map((s) =>
+    el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, el("b", { textContent: s.icon }), s.title, countBadge(s))), moreButton);
+  more.replaceChildren(...rest.map((s) => el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, s.title)));
+  more.hidden = true;
+}
+
+// Счётчики в навигации: на проверке и необработанные ответы (кроме отказов) — как в «Ответах работодателей»
+async function loadCounts() {
+  const [stats, open] = await Promise.all([
+    api(scoped("/api/stats")).catch(() => ({})),
+    api(scoped("/api/dialogs?take=200&handled=false")).catch(() => []),
+  ]);
+  counts.review = stats.Review ?? 0;
+  counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
+}
+
+document.addEventListener("click", (e) => { if (!more.hidden && !more.contains(e.target)) more.hidden = true; });
+
+// Тема: системная → тёмная → светлая; выбор — в localStorage (может быть недоступен — тогда только на эту вкладку)
+const THEMES = [["system", "◐", "Тема: как в системе"], ["dark", "●", "Тема: тёмная"], ["light", "○", "Тема: светлая"]];
+const themeButton = document.getElementById("theme");
+function applyTheme(name) {
+  if (name === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = name;
+  const [, icon, title] = THEMES.find(([n]) => n === name);
+  themeButton.textContent = icon;
+  themeButton.title = title;
+  themeButton.setAttribute("aria-label", title);
+}
+themeButton.onclick = () => {
+  const now = document.documentElement.dataset.theme ?? "system";
+  const next = THEMES[(THEMES.findIndex(([n]) => n === now) + 1) % THEMES.length][0];
+  try { next === "system" ? localStorage.removeItem("theme") : localStorage.setItem("theme", next); } catch {}
+  applyTheme(next);
+};
+applyTheme(document.documentElement.dataset.theme ?? "system");
 
 // Номер последней отрисовки: раздел, загрузившийся позже следующего перехода, не перерисовывает страницу
 let renders = 0;
@@ -781,8 +1050,8 @@ async function render() {
   if (!me) return;
   const current = ++renders;
   const [name, arg] = location.hash.slice(1).split("/");
-  const route = routes[name] ? name : "overview";
-  for (const a of nav.querySelectorAll("a")) a.classList.toggle("active", a.getAttribute("href") === `#${route}`);
+  const route = routes[name] ? name : "dashboard";
+  buildNav(route);
   try {
     const content = await routes[route](arg);
     if (current !== renders) return;
@@ -807,7 +1076,7 @@ async function loadUsers() {
 function showLogin() {
   me = null;
   view.replaceChildren();
-  nav.hidden = true;
+  nav.hidden = tabbar.hidden = more.hidden = true;
   document.getElementById("logout").hidden = true;
   document.getElementById("viewing").hidden = true;
   document.getElementById("who").textContent = "";
@@ -818,11 +1087,10 @@ function showLogin() {
 async function showSession(user) {
   me = user;
   loginForm.hidden = true;
-  nav.hidden = false;
+  nav.hidden = tabbar.hidden = false;
   document.getElementById("logout").hidden = false;
   document.getElementById("who").textContent = user.name;
-  for (const a of nav.querySelectorAll("[data-admin]")) a.hidden = user.role !== "Admin";
-  await loadUsers();
+  await Promise.all([loadUsers(), loadCounts()]);
   await render();
 }
 
@@ -849,7 +1117,7 @@ document.getElementById("logout").onclick = async () => {
 viewAs.onchange = () => {
   viewedUser = viewAs.value || null;
   setStatus(viewedUser ? `Данные ${viewAs.selectedOptions[0].textContent} — только просмотр` : "");
-  render();
+  loadCounts().then(render);
 };
 
 window.addEventListener("hashchange", () => { setStatus(viewedUser ? status.textContent : ""); render(); });
