@@ -20,6 +20,8 @@ public enum NotificationKind
     LlmQuality = 7,
     // Расширение увидело, что вход в hh.ru слетел, и остановило очередь (#95)
     SignedOut = 8,
+    // Сводка обычных уведомлений, которые не дошли, пока не было связи с Telegram (#132)
+    MissedDigest = 9,
 }
 
 // Агрегат: уведомление пользователю в Telegram (outbox). Сценарий записывает его вместе со своими данными,
@@ -52,7 +54,15 @@ public class Notification
 
     public string? Error { get; private set; }
 
+    // Попытки кончились из-за связи (#132): уведомление ждёт, пока проверка снова увидит Telegram
+    public DateTimeOffset? WaitingSince { get; private set; }
+
     public bool Pending => SentAt is null && Attempts < MaxAttempts;
+
+    public bool Waiting => SentAt is null && WaitingSince is not null;
+
+    // Ждущее старше суток не досылается: новость уже не нужна (решение владельца 2026-11-18)
+    public bool Stale(DateTimeOffset now) => now - CreatedAt > MaxWait;
 
     public static Notification Create(Guid userId, NotificationKind kind, string key, string text, DateTimeOffset at, string? vacancyId = null)
     {
@@ -75,21 +85,65 @@ public class Notification
         };
     }
 
-    public void MarkSent(DateTimeOffset at) => (SentAt, Error) = (at, null);
+    public void MarkSent(DateTimeOffset at) => (SentAt, Error, WaitingSince) = (at, null, null);
 
-    // Неудачная попытка; после MaxAttempts уведомление больше не отправляется
+    // Неудачная попытка, Telegram ответил отказом; после MaxAttempts уведомление больше не отправляется
     public void MarkFailed(string error)
     {
         Attempts++;
-        Error = error.Length > 500 ? error[..500] : error;
+        Error = Cut(error);
+    }
+
+    // Неудачная попытка из-за связи (сеть, прокси, таймаут): после MaxAttempts уведомление не теряется, а ждёт связи
+    public void MarkLinkFailed(string error, DateTimeOffset at)
+    {
+        MarkFailed(error);
+        if (Attempts >= MaxAttempts && SentAt is null)
+            WaitingSince ??= at;
+    }
+
+    // Связь вернулась: новые попытки, как у только что записанного. Старше суток — «устарело», не слать; false — не возобновлено
+    public bool Resume(DateTimeOffset now)
+    {
+        if (!Waiting)
+            throw new DomainException("Уведомление не ждёт связи");
+
+        WaitingSince = null;
+        if (Stale(now))
+        {
+            Error = Expired;
+            return false;
+        }
+
+        (Attempts, Error) = (0, null);
+        return true;
+    }
+
+    // Связь вернулась, обычное уведомление вошло в сводку пропущенного (MissedDigest): отдельно не слать
+    public void CoverByDigest()
+    {
+        if (!Waiting)
+            throw new DomainException("Уведомление не ждёт связи");
+
+        WaitingSince = null;
+        Cancel(InMissedDigest);
     }
 
     // Доставить некуда (чат отвязан, бот заблокирован пользователем): больше не пытаться
     public void Cancel(string reason)
     {
         Attempts = MaxAttempts;
-        Error = reason.Length > 500 ? reason[..500] : reason;
+        WaitingSince = null;
+        Error = Cut(reason);
     }
+
+    private static string Cut(string text) => text.Length > 500 ? text[..500] : text;
+
+    public const string Expired = "устарело";
+
+    public const string InMissedDigest = "в сводке пропущенного";
+
+    public static readonly TimeSpan MaxWait = TimeSpan.FromDays(1);
 
     public const int MaxAttempts = 5;
 

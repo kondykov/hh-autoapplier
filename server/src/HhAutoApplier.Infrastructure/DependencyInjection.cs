@@ -1,10 +1,12 @@
 using System.Net;
+using HhAutoApplier.Application;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Collecting;
 using HhAutoApplier.Application.Llm;
 using HhAutoApplier.Domain.Llm;
 using HhAutoApplier.Infrastructure.Collecting;
 using HhAutoApplier.Infrastructure.Identity;
+using HhAutoApplier.Infrastructure.Links;
 using HhAutoApplier.Infrastructure.Llm;
 using HhAutoApplier.Infrastructure.Persistence;
 using HhAutoApplier.Infrastructure.Sources.Hh;
@@ -23,6 +25,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<CollectorOptions>(config.GetSection(CollectorOptions.Section));
+        services.Configure<StageOptions>(config.GetSection(StageOptions.Section));
         services.AddDbContext<AppDbContext>(o => o.UseNpgsql(config.GetConnectionString("Default")));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
@@ -118,6 +121,13 @@ public static class DependencyInjection
         services.AddSingleton<TelegramBot>();
         services.AddSingleton<ITelegramBot>(sp => sp.GetRequiredService<TelegramBot>());
         services.AddHostedService<TelegramHostedService>();
+
+        // Проверка связи по направлениям (#132): Bot API и провайдеры LLM с ключом — тем же прокси, что у HTTP-клиентов
+        services.Configure<LinkOptions>(config.GetSection(LinkOptions.Section));
+        var telegramOn = !string.IsNullOrWhiteSpace(config.GetSection(TelegramOptions.Section).Get<TelegramOptions>()?.BotToken);
+        var llmUrls = new[] { llmOptions }.Concat(llmRoutes.Values).Where(o => !string.IsNullOrWhiteSpace(o.ApiKey)).Select(o => o.BaseUrl);
+        services.AddSingleton(new LinkTargets(LinkTargets.Endpoints(telegramOn, llmUrls), HttpClient.DefaultProxy));
+        services.AddHostedService<LinkMonitorHostedService>();
 
         services.AddSingleton<CollectionProgress>();
         services.AddSingleton<ICollectionBackground, CollectionBackground>();

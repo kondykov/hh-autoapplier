@@ -1,6 +1,7 @@
 using HhAutoApplier.Domain.Applications;
 using HhAutoApplier.Domain.Candidates;
 using HhAutoApplier.Domain.Dialogs;
+using HhAutoApplier.Domain.Links;
 using HhAutoApplier.Domain.Llm;
 using HhAutoApplier.Domain.Notifications;
 using HhAutoApplier.Domain.Resumes;
@@ -34,6 +35,8 @@ public interface IAppDbContext
     DbSet<Notification> Notifications { get; }
 
     DbSet<EmployerMessage> EmployerMessages { get; }
+
+    DbSet<LinkOutage> LinkOutages { get; }
 
     // Сброс отслеживания после неудачного сохранения (сбор продолжает со следующего поиска)
     ChangeTracker ChangeTracker { get; }

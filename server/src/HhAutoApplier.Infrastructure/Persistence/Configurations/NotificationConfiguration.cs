@@ -20,6 +20,9 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         // Отправка выбирает неотправленные
         builder.HasIndex(x => x.SentAt).HasFilter("\"SentAt\" IS NULL");
         builder.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        // Досылка после сбоя связи (#132) выбирает ждущие
+        builder.HasIndex(x => x.WaitingSince).HasFilter("\"WaitingSince\" IS NOT NULL");
         builder.Ignore(x => x.Pending);
+        builder.Ignore(x => x.Waiting);
     }
 }

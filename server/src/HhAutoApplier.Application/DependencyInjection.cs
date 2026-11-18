@@ -1,6 +1,7 @@
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Telegram;
+using HhAutoApplier.Application.Links;
 using HhAutoApplier.Application.Llm;
 using HhAutoApplier.Application.Notifications;
 using HhAutoApplier.Domain.Services;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<LlmQualityMonitor>();
         services.AddSingleton<LlmPipelineGate>();
         services.AddSingleton<LlmOutage>();
+        services.AddSingleton<LinkStatus>();
         services.AddSingleton<BotStrangerThrottle>();
         services.AddSingleton(VacancyEvaluator.Default);
         services.AddSingleton(TimeProvider.System);

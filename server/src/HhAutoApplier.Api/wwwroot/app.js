@@ -854,5 +854,13 @@ viewAs.onchange = () => {
 
 window.addEventListener("hashchange", () => { setStatus(viewedUser ? status.textContent : ""); render(); });
 
+// Тестовый стенд (#124): /api/version без входа отдаёт метку stage — плашка над шапкой на всех страницах, включая вход
+fetch("/api/version").then((r) => (r.ok ? r.json() : null)).then((v) => {
+  if (!v?.stage) return;
+  document.title = `[STAGE] ${document.title}`;
+  document.body.prepend(el("div", { className: "stage", role: "status" },
+    el("b", { textContent: "STAGE" }), ` · ${v.stage} · тестовая база, не боевой сервер`));
+}).catch(() => null);
+
 // Сессия могла остаться с прошлого раза
 api("/api/auth/me").then(showSession).catch(() => showLogin());
