@@ -96,7 +96,8 @@ public static class BotTexts
             [new BotButton("📝 Подробнее", $"{Open}:dc:{chatId}:0:o")],
         ],
         NotificationKind.SourceBlocked => [[new BotButton("🛠 Сбор", $"{Open}:cs:"), new BotButton("✔ Понятно", $"{Dismiss}:")]],
-        NotificationKind.Captcha or NotificationKind.DailyLimit or NotificationKind.SignedOut or NotificationKind.LlmUnavailable or NotificationKind.LlmQuality =>
+        NotificationKind.Captcha or NotificationKind.DailyLimit or NotificationKind.SignedOut or NotificationKind.LlmUnavailable or NotificationKind.LlmQuality
+            or NotificationKind.MissedDigest =>
             [[new BotButton("✔ Понятно", $"{Dismiss}:")]],
         _ => [],
     };
@@ -114,6 +115,10 @@ public static class BotTexts
     }
 
     public static string Short(string text, int max) => text.Length <= max ? text : text[..max].TrimEnd() + "…";
+
+    // Сводка обычных уведомлений, не дошедших за время сбоя связи (#132): строка — время и начало текста
+    public static string MissedDigest(IEnumerable<(DateTimeOffset At, string Text)> missed) =>
+        "📭 Пока не было связи с Telegram:\n" + string.Join("\n", missed.Select(m => $"• {MoscowTime.Format(m.At)} — {Short(m.Text.Split('\n', 2)[0], 200)}"));
 
     // Ответ работодателя с разбором LLM и черновиком; отвечает человек — в чате hh.ru. Коротко: полностью — «Подробнее»
     public static string EmployerReply(EmployerMessage message)
