@@ -155,6 +155,34 @@ public class LinkCheckTests
         Assert.StartsWith("TLS", probe.Detail);
     }
 
+    // #138: своя проверка сертификата направления (ГигаЧат — корень Минцифры) применяется без общей подмены
+    [Fact]
+    public async Task Probe_TargetOwnCertificateCheck_IsUsed()
+    {
+        await using var proxy = new FakeProxy(async (stream, _, ct) =>
+        {
+            await Reply(stream, "200 Connection established", ct);
+            await using var tls = new SslStream(stream);
+            await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = Certificate }, ct);
+        });
+
+        var probe = await new LinkProber(TimeSpan.FromSeconds(5)).ProbeAsync(Telegram(proxy.Uri) with { Certificates = AnyCertificate }, CancellationToken.None);
+
+        Assert.Equal(LinkState.Ok, probe.State);
+    }
+
+    [Fact]
+    public void Targets_OwnCertificateCheck_OnlyForItsHost()
+    {
+        RemoteCertificateValidationCallback check = (_, _, _, _) => true;
+        var targets = new LinkTargets(
+            LinkTargets.Endpoints(true, ["https://GigaChat.devices.sberbank.ru/api/v1", "https://api.groq.com/openai/v1"]), null,
+            new Dictionary<string, RemoteCertificateValidationCallback> { ["gigachat.devices.sberbank.ru"] = check });
+
+        Assert.Same(check, targets.Directions.Single(t => t.Host.Equals("gigachat.devices.sberbank.ru", StringComparison.OrdinalIgnoreCase)).Certificates);
+        Assert.All(targets.Directions.Where(t => !t.Host.Contains("sberbank")), t => Assert.Null(t.Certificates));
+    }
+
     [Fact]
     public async Task Probe_BadGatewayOnConnect()
     {
