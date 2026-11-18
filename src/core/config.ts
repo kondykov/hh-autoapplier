@@ -1,4 +1,5 @@
 import type { KeyValueStorage } from "../infra/storage";
+import { isPanelMode, type PanelMode } from "../shared/panel/model";
 
 // Backend: адрес и ключ X-Api-Key. Запросы к нему делает фоновый service worker расширения
 export interface ServerSettings {
@@ -22,6 +23,10 @@ export interface AppConfig {
   queueDryRun: boolean;
   // Автоответ на новый отказ работодателя (решение владельца 2026-10-26); отправляется, только где hh.ru разрешает писать
   rejectionReply: string;
+  // «Спасибо» на новые отказы при синхронизации чатов (#123): галочка на странице настроек
+  thanksOnReject: boolean;
+  // Вид панели (#123): боковая панель браузера, плавающая на странице или плашка; связь со страницей у всех одна
+  panelMode: PanelMode;
 }
 
 declare const __DEFAULT_LETTER__: string | undefined;
@@ -36,6 +41,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   importSearch: "",
   queueDryRun: true,
   rejectionReply: "Спасибо за ответ и удачи в поиске!",
+  thanksOnReject: true,
+  panelMode: "side",
 };
 
 const KEY = "hh_autoapply_config";
@@ -59,6 +66,8 @@ function fromSaved(saved: Partial<AppConfig>): AppConfig {
     importSearch: saved.importSearch ?? DEFAULT_CONFIG.importSearch,
     queueDryRun: saved.queueDryRun ?? DEFAULT_CONFIG.queueDryRun,
     rejectionReply: saved.rejectionReply ?? DEFAULT_CONFIG.rejectionReply,
+    thanksOnReject: saved.thanksOnReject ?? DEFAULT_CONFIG.thanksOnReject,
+    panelMode: isPanelMode(saved.panelMode) ? saved.panelMode : DEFAULT_CONFIG.panelMode,
   };
 }
 

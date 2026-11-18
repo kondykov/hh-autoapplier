@@ -9,11 +9,11 @@ import { MemoryStorage } from "../src/infra/storage";
 import { StaticTemplateProvider } from "../src/letters/letter-provider";
 import type { QueueItem } from "../src/queue/queue-mode";
 import { ResumeSelector } from "../src/resume/selector";
-import { Panel, type PanelHandlers } from "../src/ui/panel";
+import { PanelStore } from "../src/shared/panel/store";
+import { takeChatSync } from "../src/pages/chat-sync";
 
 // #51: две вкладки hh.ru над одним chrome.storage — очередь ведёт одна, остановка и настройки доходят до неё сразу
 const item = (id: string): QueueItem => ({ id, title: `Вакансия ${id}`, company: "Acme", resume: null });
-const handlers = new Proxy({}, { get: () => () => {} }) as PanelHandlers;
 
 async function tab(storage: MemoryStorage, self: number, opts: { open?: (id: number) => boolean } = {}) {
   const config = await loadConfig(storage);
@@ -22,11 +22,7 @@ async function tab(storage: MemoryStorage, self: number, opts: { open?: (id: num
   const logger = new Logger();
   const messages: string[] = [];
   logger.addSink({ write: (m) => messages.push(m) });
-  const panel = new Panel(storage, handlers, {
-    limit: config.dailyLimit, queueRunLimit: config.queueRunLimit, letter: "", server: config.server,
-    importSearch: "", queueDryRun: config.queueDryRun, rejectionReply: config.rejectionReply,
-  });
-  await panel.mount();
+  const panel = new PanelStore("test");
   const visited: string[] = [];
   const backend = {
     getServerVersion: vi.fn(async () => ({ state: "unknown" as const })),
@@ -72,7 +68,7 @@ describe("очередь в нескольких вкладках", () => {
     expect(a.visited).toHaveLength(1);
     expect(b.state.queueRunning).toBe(true);
     expect(b.controller.queue.accepts("unknown", b.state)).toBe(false);
-    expect(b.panel["el"]("hh-step-desc").textContent).toContain("в другой вкладке");
+    expect(b.panel.snapshot.step).toContain("в другой вкладке");
 
     // Страница во второй вкладке загрузилась при идущей очереди — не перехватывает её
     const c = await tab(storage.fork(), 3);
@@ -124,7 +120,7 @@ describe("очередь в нескольких вкладках", () => {
 
     await b.controller.settings.setQueueDryRun(false);
     expect(a.config.queueDryRun).toBe(false);
-    expect(a.panel["el"]<HTMLInputElement>("hh-input-dryrun").checked).toBe(false);
+    expect(a.panel.snapshot.queue.dryRun).toBe(false);
 
     await b.controller.settings.setQueueDryRun(true);
     expect(a.config.queueDryRun).toBe(true);
@@ -160,5 +156,36 @@ describe("MemoryStorage: события как у chrome.storage.onChanged", () 
 
     expect(seenA).not.toHaveBeenCalled();
     expect(seenB).toHaveBeenCalledWith({ v: 1 });
+  });
+});
+
+describe("Команды панели (#123)", () => {
+  it("«Синхронизировать чаты» не на чатах: открывает отклики и оставляет просьбу для страницы чатов", async () => {
+    const storage = new MemoryStorage();
+    const a = await tab(storage, 1);
+    await a.controller.dispatch({ kind: "chats.sync" });
+    expect(a.visited.at(-1)).toBe("https://hh.ru/applicant/negotiations");
+    expect(await takeChatSync(storage)).toBe(true);
+  });
+
+  it("«Синхронизировать чаты» при идущей очереди — отказ, без перехода", async () => {
+    const storage = new MemoryStorage();
+    const a = await tab(storage, 1);
+    a.state.queueRunning = true;
+    const before = a.visited.length;
+    await a.controller.dispatch({ kind: "chats.sync" });
+    expect(a.visited.length).toBe(before);
+    expect(a.messages.at(-1)).toContain("остановите");
+  });
+
+  it("вид панели и пробный режим сохраняются в настройках и видны в состоянии панели", async () => {
+    const storage = new MemoryStorage();
+    const a = await tab(storage, 1);
+    expect(a.panel.snapshot.page).toBe("other");
+    await a.controller.dispatch({ kind: "mode", mode: "floating" });
+    expect(a.panel.snapshot.mode).toBe("floating");
+    expect((await loadConfig(storage)).panelMode).toBe("floating");
+    await a.controller.dispatch({ kind: "queue.dryRun", enabled: true });
+    expect(a.panel.snapshot.queue.dryRun).toBe(true);
   });
 });

@@ -40,7 +40,8 @@ cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:808
 
 ## Project Structure
 - `src/content/main.ts` — композиция; `src/core/` — Controller (сборка и выбор шага), settings, config, selectors; `src/pages/*-step.ts` — шаги страниц (выдача → сервер, очередь, отказы) на `StepContext`
-- `src/{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra,ui}` — модули
+- `src/{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra}` — модули
+- `src/shared` — общее без hh.ru (панель, тема, протокол панели; вместе с `src/infra`): не импортирует hh-специфичное, проверяет `tests/settings.test.ts`. `src/sidepanel` — боковая панель, `src/options` — страница настроек (#123)
 - `src/api` — клиент backend и транспорт; `src/background/main.ts` — service worker, через который идут все запросы к backend (со страницы hh.ru Chrome блокирует запросы в локальную сеть)
 - `server/src/HhAutoApplier.{Domain,Application,Infrastructure,Api}` — DDD + CQRS: агрегаты, команды/запросы, EF и источники, контроллеры (`docs/adr/0001-backend-ddd-cqrs.md`)
 - `deploy/` — деплой backend на сервер по кнопке через self-hosted runner (`docs/DEPLOY.md`); метку `home-server` в других workflow не использовать

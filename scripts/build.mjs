@@ -4,6 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 mkdirSync("dist", { recursive: true });
 copyFileSync("manifest.json", "dist/manifest.json");
 copyFileSync("src/options/options.html", "dist/options.html");
+copyFileSync("src/sidepanel/sidepanel.html", "dist/sidepanel.html");
 
 // Личное письмо лежит в gitignored letter.local.txt и вшивается только в локальную сборку
 const defaultLetter = existsSync("letter.local.txt") ? readFileSync("letter.local.txt", "utf8").trim() : "";
@@ -14,8 +15,14 @@ const version = manifest.version_name ?? manifest.version;
 
 const options = {
   define: { __DEFAULT_LETTER__: JSON.stringify(defaultLetter), __VERSION__: JSON.stringify(version) },
-  // content.js — на страницах hh.ru, background.js — service worker для запросов к backend, options.js — страница настроек (#101)
-  entryPoints: { content: "src/content/main.ts", background: "src/background/main.ts", options: "src/options/main.ts" },
+  // content.js — на страницах hh.ru, background.js — service worker для запросов к backend, options.js — страница настроек (#101),
+  // sidepanel.js — боковая панель браузера (#123). Общий код — src/shared: второе расширение соберётся из него своим набором входов
+  entryPoints: {
+    content: "src/content/main.ts",
+    background: "src/background/main.ts",
+    options: "src/options/main.ts",
+    sidepanel: "src/sidepanel/main.ts",
+  },
   outdir: "dist",
   bundle: true,
   format: "iife",
