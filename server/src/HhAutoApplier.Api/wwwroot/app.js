@@ -1,6 +1,7 @@
 "use strict";
 // Единый веб-интерфейс (#46): разделы по хешу адреса поверх того же API, что у расширения. Вход — пароль, дальше cookie.
-// Администратор может смотреть данные другого пользователя (?userId=) — только чтение: правки API делает от своего имени
+// Администратор может смотреть данные другого пользователя (?userId=) — только чтение: правки API делает от своего имени.
+// Разметка — компонентами UI kit (ui/ui.js, #129); данные с hh.ru и от LLM — только текстом
 
 const view = document.getElementById("view");
 const status = document.getElementById("status");
@@ -39,44 +40,11 @@ function scoped(path) {
   return `${path}${path.includes("?") ? "&" : "?"}userId=${encodeURIComponent(viewedUser)}`;
 }
 
-// Данные — только текстом: вакансии и письма приходят с hh.ru и от LLM
-function el(tag, props = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (key.startsWith("data-") || key.startsWith("aria-") || key === "for" || key === "role") node.setAttribute(key, value);
-    else node[key] = value;
-  }
-  for (const child of children.flat()) if (child != null && child !== false) node.append(child);
-  return node;
-}
-
-// Ссылка — только http(s): javascript: и прочее из данных не попадает в href
-function safeUrl(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.href : "#";
-  } catch {
-    return "#";
-  }
-}
-
-// Таблица, которая на телефоне становится карточками «поле: значение» (#120): подпись поля — из заголовка столбца.
-// columns: [{ title, num? }], rows: массивы ячеек (текст или узлы)
-function stackTable(columns, rows) {
-  return el("table", { className: "stack" },
-    el("thead", {}, el("tr", {}, columns.map((c) => el("th", { className: c.num ? "n" : "", textContent: c.title })))),
-    el("tbody", {}, rows.map((cells) => el("tr", {}, cells.map((cell, i) => {
-      const td = el("td", { className: columns[i]?.num ? "n" : "", "data-label": columns[i]?.title ?? "" });
-      if (cell != null && cell !== false) td.append(cell);
-      return td;
-    })))));
-}
-
 // Источник вакансии (задел под другие агрегаторы, #32): пока все вакансии — с hh.ru
-const SOURCES = { hh: { name: "hh.ru", color: "#ff6b78" } };
+const SOURCES = { hh: { name: "hh.ru", color: "var(--src-hh)" } };
 const sourcePill = (v) => {
-  const s = SOURCES[v.source ?? "hh"] ?? { name: v.source, color: "#8b98a8" };
-  return el("span", { className: "pill src", title: "Источник вакансии" }, el("i", { style: `background:${s.color}` }), s.name);
+  const s = SOURCES[v.source ?? "hh"] ?? { name: v.source, color: "var(--src-other)" };
+  return Pill(s.name, { dot: s.color, title: "Источник вакансии" });
 };
 
 const date = (value) => (value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "");
@@ -87,9 +55,8 @@ const STATUSES = {
   Applied: "отклик отправлен", Invited: "приглашение", Rejected: "отказ", Skipped: "пропущена", Failed: "ошибка",
 };
 
-// Действие с кнопкой: на время запроса кнопка выключена, итог — в строке статуса
-async function run(button, action, done) {
-  button.disabled = true;
+// Действие: итог — в строке статуса, нужен вход — форма входа. Кнопку на время запроса держит занятой Button или busy()
+async function act(action, done) {
   try {
     const result = await action();
     if (done) setStatus(typeof done === "function" ? done(result) : done);
@@ -97,8 +64,6 @@ async function run(button, action, done) {
   } catch (e) {
     if (e instanceof Unauthorized) showLogin();
     setStatus(e.message, true);
-  } finally {
-    button.disabled = false;
   }
 }
 
@@ -109,10 +74,10 @@ async function run(button, action, done) {
 const DAY = 86400000;
 const PERIODS = [7, 30, 90];
 const AGGREGATORS = [
-  { id: "all", name: "Все" },
-  { id: "hh", name: "hh.ru", color: "#ff6b78" },
-  { id: "hirify", name: "hirify", color: "#8fb4ff", off: true },
-  { id: "getmatch", name: "getmatch", color: "#b9a3ff", off: true },
+  { value: "all", label: "Все" },
+  { value: "hh", label: "hh.ru", color: "var(--src-hh)" },
+  { value: "hirify", label: "hirify", color: "var(--src-hirify)", disabled: true, title: "После подключения (#32)" },
+  { value: "getmatch", label: "getmatch", color: "var(--src-getmatch)", disabled: true, title: "После подключения (#32)" },
 ];
 const dashState = { period: 30, source: "hh" };
 
@@ -133,7 +98,6 @@ function reached(v, status) {
   return v.status === status && v.updatedAt ? new Date(v.updatedAt).getTime() : null;
 }
 const collected = (v) => new Date(v.collectedAt ?? v.history?.[0]?.at ?? 0).getTime();
-const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
 async function dashboard() {
   const [apps, searchList, chats, collect] = await Promise.all([
@@ -163,12 +127,12 @@ async function dashboard() {
     const invited = pool.filter((v) => inPeriod(reached(v, "Invited")));
     const rejected = pool.filter((v) => inPeriod(reached(v, "Rejected")));
 
+    // Дельта к прошлому периоду той же длины
     const delta = (a, b) => {
-      if (!b) return el("i", { textContent: a ? "новое за период" : "—" });
+      if (!b) return { note: a ? "новое за период" : "—" };
       const d = Math.round(((a - b) / b) * 100);
-      return el("i", { className: d > 0 ? "up" : d < 0 ? "down" : "", textContent: `${d > 0 ? "+" : ""}${d}% к прошлым ${dashState.period} дн` });
+      return { trend: d > 0 ? "up" : d < 0 ? "down" : null, note: `${d > 0 ? "+" : ""}${d}% к прошлым ${dashState.period} дн` };
     };
-    const kpi = (value, label, note) => el("div", { className: "card kpi" }, el("b", {}, value), el("span", { textContent: label }), note);
 
     // Воронка — по вакансиям, собранным за период: % — от предыдущего шага, отказ — от отправленных
     const step = (pred) => cohort.filter(pred).length;
@@ -177,15 +141,10 @@ async function dashboard() {
       ["Оценено LLM", step((v) => v.llmScore != null)],
       ["В очередь", step((v) => reached(v, "Queued") != null || reached(v, "Applied") != null)],
       ["Отправлено", step((v) => reached(v, "Applied") != null)],
-      ["Приглашение", step((v) => reached(v, "Invited") != null), "ok"],
+      ["Приглашение", step((v) => reached(v, "Invited") != null), "var(--ok)"],
     ];
     const sent = f[3][1];
     const rejectedCohort = step((v) => reached(v, "Rejected") != null);
-    const max = Math.max(1, cohort.length);
-    const funnelRow = (label, n, base, color) => el("div", { className: "f" },
-      el("em", { textContent: label }),
-      el("div", { className: "track" }, el("s", { style: `width:${(n / max) * 100}%${color ? `;background:${color}` : ""}` })),
-      el("b", { textContent: n }), el("small", { textContent: base == null ? "100%" : `${pct(n, base)}%` }));
 
     // Отклики по дням (за 90 дней — по неделям): отправлено, ответы (приглашение или отказ), из них приглашения
     const bucket = dashState.period > 30 ? 7 : 1;
@@ -204,13 +163,16 @@ async function dashboard() {
       add(reached(v, "Invited"), "answered");
       add(reached(v, "Rejected"), "answered");
     }
-    const top = Math.max(1, ...series.map((s) => Math.max(s.sent, s.answered)));
     const dayLabel = (t) => new Date(t).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-    const bars = el("div", { className: "bars", style: buckets > 20 ? "gap:2px" : "" }, series.map((s) => el("div", {
-      style: `height:${(Math.max(s.sent, s.answered) / top) * 100}%`,
+    // Столбец — больше из «отправлено» и «ответили»; внутри — приглашения и отказы
+    const bars = Bars(series.map((s) => ({
+      total: Math.max(s.sent, s.answered),
       title: `${dayLabel(s.at)}${bucket > 1 ? " (неделя)" : ""}: отправлено ${s.sent}, ответов ${s.answered}, приглашений ${s.invited}`,
-    }, el("u", { className: "inv", style: `height:${s.answered ? (s.invited / Math.max(s.sent, s.answered)) * 100 : 0}%` }),
-    el("u", { style: `height:${s.answered ? ((s.answered - s.invited) / Math.max(s.sent, s.answered)) * 100 : 0}%` }))));
+      parts: [{ value: s.answered ? s.invited : 0, tone: "ok" }, { value: s.answered ? s.answered - s.invited : 0, tone: "accent" }],
+    })), {
+      from: dayLabel(first), to: "сегодня",
+      legend: [{ label: "отправлено", color: "var(--bar)" }, { label: "ответили отказом", color: "var(--accent)" }, { label: "приглашение", color: "var(--ok)" }],
+    });
 
     // По поискам: собрано за период, отправлено, ответили, приглашения, конверсия в приглашение
     const bySearch = new Map();
@@ -234,56 +196,36 @@ async function dashboard() {
       reasons.set(text, (reasons.get(text) ?? 0) + 1);
     }
     const topReasons = [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-
-    const periodSeg = el("div", { className: "seg", role: "group", "aria-label": "Период" }, PERIODS.map((p) => {
-      const b = el("button", { type: "button", className: p === dashState.period ? "on" : "", textContent: `${p} дн` });
-      b.onclick = () => { dashState.period = p; draw(); };
-      return b;
-    }));
-    const sources = el("div", { className: "sources" }, el("span", { className: "muted", style: "font-size:12px", textContent: "Агрегатор" }),
-      AGGREGATORS.map((a) => {
-        const b = el("button", { type: "button", className: a.id === dashState.source ? "on" : "", disabled: !!a.off,
-          title: a.off ? "После подключения (#32)" : "" }, a.color ? el("i", { style: `background:${a.color}` }) : null, a.name);
-        b.onclick = () => { dashState.source = a.id; draw(); };
-        return b;
-      }));
-    const sourceName = AGGREGATORS.find((a) => a.id === dashState.source).name;
+    const sourceName = AGGREGATORS.find((a) => a.value === dashState.source).label;
 
     root.replaceChildren(
-      el("div", { className: "dash-head" },
-        el("div", {}, el("h1", { textContent: "Дашборд" }),
-          el("div", { className: "muted", style: "font-size:13px", textContent: [
-            lastChat ? `последнее сообщение из чатов ${date(lastChat)}` : "чаты ещё не синхронизировались",
-            lastCollect,
-          ].filter(Boolean).join(" · ") })),
-        periodSeg),
-      sources,
-      el("div", { className: "demo-note", textContent: "Демо #121: числа считаются в браузере по истории откликов. Ответы работодателей — на момент последней синхронизации чатов в расширении." }),
-      el("div", { className: "kpis" },
-        kpi(cohort.length, "собрано вакансий", delta(cohort.length, prevCohort.length)),
-        kpi(applied.length, "откликов отправлено", delta(applied.length, prevApplied.length)),
-        kpi([String(pct(invited.length, applied.length)), el("span", { className: "muted", style: "font-size:16px", textContent: "%" })], "в приглашение",
-          el("i", { textContent: `${invited.length} приглашений за период` })),
-        kpi(rejected.length, "отказов", el("i", { textContent: "собеседования — после #122" }))),
+      PageHead("Дашборд", [
+        lastChat ? `последнее сообщение из чатов ${date(lastChat)}` : "чаты ещё не синхронизировались",
+        lastCollect,
+      ].filter(Boolean).join(" · "),
+      Segmented(PERIODS.map((p) => ({ value: p, label: `${p} дн` })), dashState.period, (p) => { dashState.period = p; draw(); }, { label: "Период" })),
+      Chips(AGGREGATORS, dashState.source, (s) => { dashState.source = s; draw(); }, { label: "Агрегатор" }),
+      Note("Демо #121: числа считаются в браузере по истории откликов. Ответы работодателей — на момент последней синхронизации чатов в расширении."),
+      Stats([
+        Stat({ value: cohort.length, label: "собрано вакансий", ...delta(cohort.length, prevCohort.length) }),
+        Stat({ value: applied.length, label: "откликов отправлено", ...delta(applied.length, prevApplied.length) }),
+        Stat({ value: pct(invited.length, applied.length), unit: "%", label: "в приглашение", note: `${invited.length} приглашений за период` }),
+        Stat({ value: rejected.length, label: "отказов", note: "собеседования — после #122" }),
+      ]),
       el("div", { className: "cols" },
-        el("div", { className: "card funnel" }, el("h3", { textContent: `Воронка за ${dashState.period} дней · ${sourceName}` }),
-          f.map(([label, n, color], i) => funnelRow(label, n, i ? f[i - 1][1] : null, color ? "var(--ok)" : null)),
-          funnelRow("Отказ", rejectedCohort, sent, "var(--bad)"),
-          el("div", { className: "muted", style: "font-size:11px;margin-top:8px", textContent: "% — от предыдущего шага; отказ — от отправленных" })),
-        el("div", { className: "card" }, el("h3", { textContent: bucket > 1 ? "Отклики по неделям" : "Отклики по дням" }), bars,
-          el("div", { className: "days" }, el("span", { textContent: dayLabel(first) }), el("span", { textContent: "сегодня" })),
-          el("div", { className: "legend" },
-            el("span", {}, el("i", { style: "background:var(--bar)" }), "отправлено"),
-            el("span", {}, el("i", { style: "background:var(--accent)" }), "ответили отказом"),
-            el("span", {}, el("i", { style: "background:var(--ok)" }), "приглашение")))),
-      el("div", { className: "cols wide-left", style: "margin-top:12px" },
-        el("div", { className: "card" }, el("h3", { textContent: `По поискам · ${sourceName}` }),
-          searchRows.length ? stackTable([{ title: "Поиск" }, { title: "Собрано", num: true }, { title: "Отправлено", num: true }, { title: "Ответили", num: true }, { title: "Приглашения", num: true }, { title: "Конверсия", num: true }], searchRows)
-            : el("p", { className: "empty", textContent: "За период ничего не собрано." }),
-          el("p", { className: "muted", style: "font-size:12px;margin:8px 0 0", textContent: `Поисков включено: ${searchList.filter((s) => s.enabled).length} из ${searchList.length}` })),
-        el("div", { className: "card" }, el("h3", { textContent: "Почему отсеяно" }),
-          topReasons.length ? el("ul", { className: "reasons" }, topReasons.map(([text, n]) => el("li", {}, el("span", { textContent: text }), el("b", { className: "mono", textContent: n }))))
-            : el("p", { className: "empty", textContent: "Отсеянных за период нет." }))));
+        Card({}, Caption(`Воронка за ${dashState.period} дней · ${sourceName}`),
+          Funnel([
+            ...f.map(([label, value, color], i) => ({ label, value, base: i ? f[i - 1][1] : null, color })),
+            { label: "Отказ", value: rejectedCohort, base: sent, color: "var(--bad)" },
+          ], { max: cohort.length, note: "% — от предыдущего шага; отказ — от отправленных" })),
+        Card({}, Caption(bucket > 1 ? "Отклики по неделям" : "Отклики по дням"), bars)),
+      el("div", { className: "cols wide-left" },
+        Card({}, Caption(`По поискам · ${sourceName}`),
+          searchRows.length ? StackTable([{ title: "Поиск" }, { title: "Собрано", num: true }, { title: "Отправлено", num: true }, { title: "Ответили", num: true }, { title: "Приглашения", num: true }, { title: "Конверсия", num: true }], searchRows)
+            : EmptyState("За период ничего не собрано."),
+          el("p", { className: "muted small", style: "margin:8px 0 0", textContent: `Поисков включено: ${searchList.filter((s) => s.enabled).length} из ${searchList.length}` })),
+        Card({}, Caption("Почему отсеяно"),
+          topReasons.length ? RankList(topReasons) : EmptyState("Отсеянных за период нет."))));
   }
 
   draw();
@@ -294,15 +236,12 @@ async function overview() {
   const [stats, telegram] = await Promise.all([api(scoped("/api/stats")), readOnly() ? null : api("/api/telegram").catch(() => null)]);
   const order = ["Queued", "Review", "Questionnaire", "Pending", "Applied", "Invited", "Rejected", "Skipped", "Failed", "New"];
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
-  const tiles = order.filter((s) => stats[s]).map((s) =>
-    el("a", { className: "tile", href: `#vacancies/${s}`, style: "text-decoration:none;color:inherit" }, el("b", { textContent: stats[s] }), el("span", { textContent: STATUSES[s] })));
+  const tiles = order.filter((s) => stats[s]).map((s) => Stat({ value: stats[s], label: STATUSES[s], href: `#vacancies/${s}` }));
 
   return [
-    el("h1", { textContent: "Обзор" }),
-    el("p", { className: "sub", textContent: `Всего откликов в работе: ${total}. Нажмите на счётчик — откроется список.` }),
-    tiles.length ? el("div", { className: "grid" }, tiles) : el("p", { className: "empty", textContent: "Откликов пока нет: добавьте поиск — сервер соберёт вакансии." }),
-    el("div", { className: "card" },
-      el("h2", { textContent: "Что дальше" }),
+    PageHead("Обзор", `Всего откликов в работе: ${total}. Нажмите на счётчик — откроется список.`),
+    tiles.length ? Stats(tiles, { tiles: true }) : EmptyState("Откликов пока нет: добавьте поиск — сервер соберёт вакансии."),
+    Card({ title: "Что дальше" },
       el("ul", {},
         stats.Review ? el("li", {}, `На проверке ${stats.Review}: `, el("a", { href: "#review", textContent: "решить" })) : null,
         stats.Failed ? el("li", {}, `С ошибкой ${stats.Failed}: `, el("a", { href: "#vacancies/Failed", textContent: "вернуть в очередь или оставить" })) : null,
@@ -315,19 +254,20 @@ async function overview() {
   ];
 }
 
+// Список вариантов для <select>: [[value, text]]
+const options = (pairs) => pairs.map(([value, textContent]) => el("option", { value, textContent }));
+
 async function vacancies(statusFilter) {
   const take = 50;
   const searches = await api(scoped("/api/searches"));
   const state = { status: statusFilter ?? "", search: "", hidden: false, skip: 0 };
 
-  const statusSelect = el("select", { "aria-label": "Статус" }, el("option", { value: "", textContent: "Все статусы" }),
-    Object.entries(STATUSES).map(([value, text]) => el("option", { value, textContent: text })));
+  const statusSelect = el("select", { "aria-label": "Статус" }, options([["", "Все статусы"], ...Object.entries(STATUSES)]));
   statusSelect.value = state.status;
-  const searchSelect = el("select", { "aria-label": "Поиск" }, el("option", { value: "", textContent: "Все поиски" }),
-    searches.map((s) => el("option", { value: s.name, textContent: s.name })));
+  const searchSelect = el("select", { "aria-label": "Поиск" }, options([["", "Все поиски"], ...searches.map((s) => [s.name, s.name])]));
   const hidden = el("input", { type: "checkbox" });
-  const prev = el("button", { textContent: "← Назад" });
-  const next = el("button", { textContent: "Дальше →" });
+  const prev = Button("← Назад", { onClick: () => { state.skip = Math.max(0, state.skip - take); load(); } });
+  const next = Button("Дальше →", { onClick: () => { state.skip += take; load(); } });
   const page = el("span", { className: "muted" });
   const list = el("div");
 
@@ -338,7 +278,7 @@ async function vacancies(statusFilter) {
     if (state.hidden) query.set("includeHidden", "true");
     try {
       const items = await api(scoped(`/api/vacancies?${query}`));
-      list.replaceChildren(...(items.length ? items.map(vacancyCard) : [el("p", { className: "empty", textContent: "Ничего нет." })]));
+      list.replaceChildren(...(items.length ? items.map(vacancyCard) : [EmptyState("Ничего нет.")]));
       prev.disabled = state.skip === 0;
       next.disabled = items.length < take;
       page.textContent = items.length ? `${state.skip + 1}–${state.skip + items.length}` : "";
@@ -350,11 +290,9 @@ async function vacancies(statusFilter) {
   statusSelect.onchange = () => { state.status = statusSelect.value; state.skip = 0; load(); };
   searchSelect.onchange = () => { state.search = searchSelect.value; state.skip = 0; load(); };
   hidden.onchange = () => { state.hidden = hidden.checked; state.skip = 0; load(); };
-  prev.onclick = () => { state.skip = Math.max(0, state.skip - take); load(); };
-  next.onclick = () => { state.skip += take; load(); };
   await load();
 
-  return [el("h1", { textContent: "Вакансии" }), el("div", { className: "bar" }, statusSelect, searchSelect, el("label", {}, hidden, " Показать скрытые"), prev, next, page), list];
+  return [el("h1", { textContent: "Вакансии" }), Toolbar([statusSelect, searchSelect, el("label", {}, hidden, " Показать скрытые"), prev, next, page]), list];
 }
 
 function salary(v) {
@@ -366,61 +304,47 @@ function salary(v) {
 // Решения по вакансии вне ручной проверки: пропущенную или упавшую — снова в очередь, ожидающую — пропустить (забыть)
 const REQUEUE = ["Skipped", "Failed"];
 const SKIPPABLE = ["Queued", "Pending", "Questionnaire", "New"];
+const vacancyPath = (v, action) => `/api/vacancies/${encodeURIComponent(v.id)}/${action}`;
 
 function vacancyActions(v, pill) {
   if (readOnly()) return null;
-  if (v.status === "Review") return el("div", { className: "actions" }, el("a", { href: "#review", textContent: "Решить в «Проверке» →" }));
+  if (v.status === "Review") return Actions([el("a", { href: "#review", textContent: "Решить в «Проверке» →" })]);
 
-  const result = el("span", { className: "result" });
-  const done = (node, status) => {
-    node.closest("article").classList.add("decided");
-    pill.textContent = STATUSES[status];
-    return `«${v.title}»: ${STATUSES[status]}`;
+  const result = Result();
+  // Итог на месте кнопок; карточка приглушается («решено»), статус в шапке — новый
+  const finish = (text, status) => {
+    Card.decide(result);
+    result.textContent = text;
+    if (status) pill.textContent = STATUSES[status];
+    return `«${v.title}»: ${status ? STATUSES[status] : text}`;
   };
 
   if (v.hiddenAt) {
-    const unhide = el("button", { textContent: "Вернуть" });
-    unhide.onclick = () => run(unhide, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/unhide`), () => {
-      unhide.remove();
-      result.textContent = "возвращена в список";
-      result.closest("article").classList.add("decided");
-      return `«${v.title}»: возвращена в список`;
-    });
-    return el("div", { className: "actions" }, unhide, result);
+    const unhide = Button("Вернуть", { onClick: () => act(() => post(vacancyPath(v, "unhide")), () => { unhide.remove(); return finish("возвращена в список"); }) });
+    return Actions([unhide, result]);
   }
 
   if (REQUEUE.includes(v.status)) {
-    const requeue = el("button", { className: "primary", textContent: "В очередь" });
     // Оценить заново и скрыть — только отсеянные: у Failed отклик мог уйти на hh.ru
-    const reevaluate = v.dismissed ? el("button", { textContent: "Оценить заново" }) : null;
-    const hide = v.dismissed ? el("button", { textContent: "Скрыть" }) : null;
     const clear = () => [requeue, reevaluate, hide].forEach((b) => b?.remove());
-
-    requeue.onclick = () => run(requeue, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/status`, { status: "Queued" }),
-      () => { clear(); result.textContent = "в очереди"; return done(result, "Queued"); });
-    if (v.dismissed) {
-      reevaluate.onclick = () => run(reevaluate, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/reevaluate`), (r) => {
+    const requeue = Button("В очередь", { kind: "primary",
+      onClick: () => act(() => post(vacancyPath(v, "status"), { status: "Queued" }), () => { clear(); return finish("в очереди", "Queued"); }) });
+    const reevaluate = v.dismissed ? Button("Оценить заново", {
+      onClick: () => act(() => post(vacancyPath(v, "reevaluate")), (r) => {
         clear();
-        result.textContent = r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status];
-        return done(result, r.status);
-      });
-      hide.onclick = () => run(hide, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/hide`), () => {
-        clear();
-        result.textContent = "скрыта";
-        result.closest("article").classList.add("decided");
-        return `«${v.title}»: скрыта`;
-      });
-    }
-    return el("div", { className: "actions" }, requeue, reevaluate, hide, result);
+        return finish(r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
+      }) }) : null;
+    const hide = v.dismissed ? Button("Скрыть", { onClick: () => act(() => post(vacancyPath(v, "hide")), () => { clear(); return finish("скрыта"); }) }) : null;
+    return Actions([requeue, reevaluate, hide, result]);
   }
 
   if (SKIPPABLE.includes(v.status)) {
     const reason = el("input", { placeholder: "Причина (необязательно)", "aria-label": "Причина пропуска" });
-    const skip = el("button", { className: "danger", textContent: "Пропустить" });
-    skip.onclick = () => run(skip, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/status`,
-      { status: "Skipped", reason: reason.value.trim() ? `пропущено вручную: ${reason.value.trim()}` : "пропущено вручную" }),
-    () => { skip.remove(); reason.remove(); result.textContent = "пропущена"; return done(result, "Skipped"); });
-    return el("div", { className: "actions" }, reason, skip, result);
+    const skip = Button("Пропустить", { kind: "danger",
+      onClick: () => act(() => post(vacancyPath(v, "status"),
+        { status: "Skipped", reason: reason.value.trim() ? `пропущено вручную: ${reason.value.trim()}` : "пропущено вручную" }),
+      () => { skip.remove(); reason.remove(); return finish("пропущена", "Skipped"); }) });
+    return Actions([reason, skip, result]);
   }
   return null;
 }
@@ -435,36 +359,32 @@ function letterRequestLine(r) {
 
 function letterRequestsBlock(v) {
   if (v.letterRequestsState === "Failed") return el("div", { className: "reason", textContent: "Просьбы работодателя к письму разобрать не удалось: прочитайте вакансию и напишите письмо сами." });
-  return v.letterRequests?.length ? el("details", { open: v.letterRequestsState === "Found" }, el("summary", { textContent: `Просьбы к письму (${v.letterRequests.length})` }), v.letterRequests.map(letterRequestLine)) : null;
+  return v.letterRequests?.length ? Disclosure(`Просьбы к письму (${v.letterRequests.length})`, v.letterRequests.map(letterRequestLine), { open: v.letterRequestsState === "Found" }) : null;
 }
 
 function vacancyCard(v) {
-  const pill = el("span", { className: "pill", textContent: STATUSES[v.status] ?? v.status });
-  return el("article", { className: "card" },
-    el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title, title: "Открыть вакансию" }), " ", pill, " ", sourcePill(v),
-      v.hiddenAt ? " " : null, v.hiddenAt ? el("span", { className: "pill", textContent: "скрыта" }) : null,
-      v.vacancyArchived ? " " : null, v.vacancyArchived ? el("span", { className: "pill", textContent: "в архиве" }) : null),
-    el("div", { className: "meta", textContent: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`].filter(Boolean).join(" · ") }),
-    // Вакансия общая: даты — когда её нашли впервые и когда она встретилась в сборе или импорте последний раз (#70)
-    el("div", { className: "meta", textContent: [v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`].filter(Boolean).join(" · ") }),
-    v.statusReason || v.llmReason ? el("div", { className: "reason", textContent: v.statusReason ?? v.llmReason }) : null,
-    letterRequestsBlock(v),
-    v.coverLetter ? el("details", {}, el("summary", { textContent: "Письмо" }), el("div", { className: "pre", textContent: v.coverLetter })) : null,
-    v.history?.length ? el("details", {}, el("summary", { textContent: `История (${v.history.length})` }),
-      stackTable([{ title: "Когда" }, { title: "Статус" }, { title: "Причина" }],
-        v.history.map((h) => [date(h.at), STATUSES[h.to] ?? h.to, h.reason ?? ""]))) : null,
-    vacancyActions(v, pill));
+  const pill = Pill(STATUSES[v.status] ?? v.status);
+  return Card({ as: "article",
+    head: el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title, title: "Открыть вакансию" }), " ", pill, " ", sourcePill(v),
+      v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
+    meta: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`] },
+  // Вакансия общая: даты — когда её нашли впервые и когда она встретилась в сборе или импорте последний раз (#70)
+  Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`]),
+  v.statusReason || v.llmReason ? el("div", { className: "reason", textContent: v.statusReason ?? v.llmReason }) : null,
+  letterRequestsBlock(v),
+  v.coverLetter ? Disclosure("Письмо", Pre(v.coverLetter)) : null,
+  v.history?.length ? Disclosure(`История (${v.history.length})`,
+    StackTable([{ title: "Когда" }, { title: "Статус" }, { title: "Причина" }], v.history.map((h) => [date(h.at), STATUSES[h.to] ?? h.to, h.reason ?? ""]))) : null,
+  vacancyActions(v, pill));
 }
 
 // Ручная проверка (#25, #58): вакансии, в которых LLM сомневается, и анкеты с текстовыми ответами LLM.
 // «Одобрить» — в очередь с письмом и ответами из полей, «Отклонить» — пропуск с причиной
 async function review() {
   const items = (await api(scoped("/api/vacancies?status=Review&take=200"))).sort((a, b) => b.score - a.score);
-  const list = el("div", {}, items.length ? items.map(reviewCard) : el("p", { className: "empty", textContent: "На проверке ничего нет." }));
   return [
-    el("h1", { textContent: "Проверка" }),
-    el("p", { className: "sub", textContent: `Вакансии, в которых LLM сомневается, и анкеты с ответами LLM: ${items.length}. Письмо и текстовые ответы можно поправить перед одобрением.` }),
-    list,
+    PageHead("Проверка", `Вакансии, в которых LLM сомневается, и анкеты с ответами LLM: ${items.length}. Письмо и текстовые ответы можно поправить перед одобрением.`),
+    el("div", {}, items.length ? items.map(reviewCard) : EmptyState("На проверке ничего нет.")),
   ];
 }
 
@@ -477,8 +397,7 @@ function answerField(v, q, i) {
     return { label, node: input, inputs: [input], value: () => [input.value.trim()] };
   }
   if (q.type === "Radio") {
-    const select = el("select", { id, disabled: readOnly(), "aria-label": q.question },
-      el("option", { value: "", textContent: "— не выбрано —" }), q.options.map((o) => el("option", { value: o, textContent: o })));
+    const select = el("select", { id, disabled: readOnly(), "aria-label": q.question }, options([["", "— не выбрано —"], ...q.options.map((o) => [o, o])]));
     select.value = q.options.includes(q.answer[0]) ? q.answer[0] : "";
     return { label, node: select, inputs: [select], value: () => (select.value ? [select.value] : []) };
   }
@@ -498,12 +417,11 @@ const sameAnswer = (value, q) => q.type === "Text"
 
 function reviewCard(v) {
   const awaitsLetter = v.letterRequestsState === "Found" || v.letterRequestsState === "Failed";
-  const letter = el("textarea", { value: v.coverLetter ?? "", id: `letter-${v.id}`, disabled: readOnly(),
+  const letter = el("textarea", { value: v.coverLetter ?? "", disabled: readOnly(),
     placeholder: awaitsLetter ? "LLM ещё не написала письмо. Без письма одобрить нельзя: шаблон расширения не ответит на просьбы работодателя." : "LLM ещё не написала письмо. Напишите своё или одобрите без письма — расширение возьмёт шаблон." });
+  letter.id = `letter-${v.id}`;
   const reason = el("input", { placeholder: "Причина отказа (необязательно)", "aria-label": "Причина отказа" });
-  const approve = el("button", { className: "approve", textContent: "Одобрить" });
-  const decline = el("button", { className: "danger", textContent: "Отклонить" });
-  const result = el("span", { className: "result" });
+  const result = Result();
   // Ответы LLM на анкету (#58) — в полях: уходят работодателю от имени кандидата. Правится каждый вопрос (#115):
   // текст — полем, один вариант — списком, несколько — галочками. Нераспознанный вопрос (Unknown) — только показ
   const questions = v.questions ?? [];
@@ -512,41 +430,22 @@ function reviewCard(v) {
   const fields = () => [letter, ...answerFields.filter(Boolean).flatMap((f) => f.inputs)];
 
   // Кодовое слово вставляется только по подтверждению, значения из профиля — по кнопке после его заполнения. Ссылки и контакты не выполняются
-  const resolveRequests = (button, confirmCodeWords) => run(button, () => post(`/api/vacancies/${encodeURIComponent(v.id)}/letter-requests/resolve`, { confirmCodeWords }),
+  const resolveRequests = (confirmCodeWords) => act(() => post(vacancyPath(v, "letter-requests/resolve"), { confirmCodeWords }),
     (updated) => { node.replaceWith(reviewCard(updated)); return `«${v.title}»: письмо обновлено`; });
   const requestRows = (v.letterRequests ?? []).map((r, i) => {
     if (readOnly() || r.closed || r.type !== "CodeWord" || !r.value) return letterRequestLine(r);
-    const confirm = el("button", { type: "button", textContent: `Вставить слово «${r.value}»` });
-    confirm.onclick = () => resolveRequests(confirm, [i]);
-    return el("div", {}, letterRequestLine(r), el("div", { className: "actions" }, confirm));
+    return el("div", {}, letterRequestLine(r), Actions([Button(`Вставить слово «${r.value}»`, { onClick: () => resolveRequests([i]) })]));
   });
   const needsProfile = (v.letterRequests ?? []).some((r) => !r.closed && (r.type === "Salary" || r.type === "TestTask"));
-  const refresh = needsProfile && !readOnly() && v.letterRequestsState === "Found" ? el("button", { type: "button", textContent: "Подставить из профиля" }) : null;
-  if (refresh) refresh.onclick = () => resolveRequests(refresh, []);
-
-  const node = el("article", { className: "card" },
-    el("h2", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title })),
-    el("div", { className: "meta", textContent: [v.company, v.area, salary(v) ?? "зарплата не указана", v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.hasTest && "есть тест"].filter(Boolean).join(" · ") }),
-    el("div", { className: "verdict", textContent: v.statusReason ?? v.llmReason ?? "LLM сомневается" }),
-    v.stack?.length ? el("div", { className: "meta", textContent: `Стек: ${v.stack.join(", ")}` }) : null,
-    el("details", {}, el("summary", { textContent: "Описание вакансии" }), el("div", { className: "desc", textContent: v.description || "описания нет" })),
-    questions.length ? el("details", { open: answered }, el("summary", { textContent: `Анкета (${questions.length})` }),
-      questions.map((q, i) => answerFields[i]
-        ? el("div", { className: "reason" }, answerFields[i].label, answerFields[i].node)
-        : el("div", { className: "reason" }, el("b", { textContent: q.question }), el("br"), q.answer.length ? q.answer.join("; ") : "ответа нет"))) : null,
-    v.letterRequestsState === "Failed" ? letterRequestsBlock(v) : null,
-    requestRows.length ? el("details", { open: true }, el("summary", { textContent: `Просьбы к письму (${requestRows.length})` }), requestRows, refresh ? el("div", { className: "actions" }, refresh) : null) : null,
-    el("label", { className: "field", for: letter.id, textContent: v.coverLetterModel ? `Письмо (${v.coverLetterModel === "manual" ? "ваше" : v.coverLetterModel})` : "Письмо" }),
-    letter,
-    readOnly() ? null : el("div", { className: "actions" }, approve, reason, decline, result));
+  const refresh = needsProfile && !readOnly() && v.letterRequestsState === "Found" ? Button("Подставить из профиля", { onClick: () => resolveRequests([]) }) : null;
 
   // Карточка после решения остаётся на месте с итогом: если убрать её, следующая подъедет под курсор и лишний клик решит за неё
-  async function act(body, done) {
+  async function decide(body, done) {
     approve.disabled = decline.disabled = reason.disabled = true;
     fields().forEach((f) => (f.disabled = true));
     try {
-      await post(`/api/vacancies/${encodeURIComponent(v.id)}/review`, body);
-      node.classList.add("decided");
+      await post(vacancyPath(v, "review"), body);
+      Card.decide(node);
       result.textContent = done;
       setStatus(`«${v.title}»: ${done}. Без решения: ${view.querySelectorAll("article.card:not(.decided)").length}`);
     } catch (e) {
@@ -559,60 +458,60 @@ function reviewCard(v) {
 
   // Письмо уходит, только если его поправили: иначе остаётся письмо LLM с её моделью.
   // Ответы анкеты — все по порядку вопросов, если поправлен хоть один; вариант не из списка или пустой выбор сервер отклонит (409)
-  approve.onclick = () => {
+  const approve = Button("Одобрить", { kind: "ok", onClick: () => {
     const text = letter.value.trim();
     const edited = answerFields.some((f, i) => f && !sameAnswer(f.value(), questions[i]));
     const answers = edited ? questions.map((q, i) => (answerFields[i] ? answerFields[i].value() : q.answer)) : null;
-    act({ approve: true, coverLetter: text && text !== (v.coverLetter ?? "").trim() ? text : null, answers }, "одобрено, в очереди");
-  };
-  decline.onclick = () => act({ approve: false, reason: reason.value.trim() || null }, "отклонено");
+    decide({ approve: true, coverLetter: text && text !== (v.coverLetter ?? "").trim() ? text : null, answers }, "одобрено, в очереди");
+  } });
+  const decline = Button("Отклонить", { kind: "danger", onClick: () => { decide({ approve: false, reason: reason.value.trim() || null }, "отклонено"); } });
+
+  const node = Card({ as: "article", title: v.title, href: v.url,
+    meta: [v.company, v.area, salary(v) ?? "зарплата не указана", v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.hasTest && "есть тест"],
+    actions: readOnly() ? null : [approve, reason, decline, result] },
+  Callout(v.statusReason ?? v.llmReason ?? "LLM сомневается"),
+  v.stack?.length ? Meta(`Стек: ${v.stack.join(", ")}`) : null,
+  Disclosure("Описание вакансии", Pre(v.description || "описания нет", { scroll: true })),
+  questions.length ? Disclosure(`Анкета (${questions.length})`,
+    questions.map((q, i) => answerFields[i]
+      ? el("div", { className: "reason" }, answerFields[i].label, answerFields[i].node)
+      : el("div", { className: "reason" }, el("b", { textContent: q.question }), el("br"), q.answer.length ? q.answer.join("; ") : "ответа нет")), { open: answered }) : null,
+  v.letterRequestsState === "Failed" ? letterRequestsBlock(v) : null,
+  requestRows.length ? Disclosure(`Просьбы к письму (${requestRows.length})`, [requestRows, refresh ? Actions([refresh]) : null], { open: true }) : null,
+  Field(v.coverLetterModel ? `Письмо (${v.coverLetterModel === "manual" ? "ваше" : v.coverLetterModel})` : "Письмо", letter, { stacked: true }));
   return node;
 }
 
 // Ответы работодателей (#26): разбор LLM и черновик; отвечает человек — в чате hh.ru
 const KINDS = { Invitation: "Приглашение", Question: "Вопрос", Rejection: "Отказ", Other: "Прочее" };
+const KIND_TONES = { Invitation: "ok", Question: "accent" };
 const AUTO_REPLY = { Pending: "автоответ ждёт отправки", Sent: "автоответ отправлен", Unavailable: "автоответ невозможен" };
 
 async function dialogs(filter = "open") {
   const open = filter === "open";
   const items = (await api(scoped(`/api/dialogs?take=200${open ? "&handled=false" : ""}`))).filter((m) => !open || m.kind !== "Rejection");
-  const select = el("select", { "aria-label": "Какие сообщения показать" },
-    el("option", { value: "open", textContent: "Необработанные, кроме отказов" }), el("option", { value: "all", textContent: "Все" }));
+  const select = el("select", { "aria-label": "Какие сообщения показать" }, options([["open", "Необработанные, кроме отказов"], ["all", "Все"]]));
   select.value = open ? "open" : "all";
   select.onchange = () => { location.hash = `#dialogs/${select.value}`; };
 
   return [
-    el("h1", { textContent: "Ответы работодателей" }),
-    el("p", { className: "sub", textContent: "Сообщения из чатов hh.ru присылает расширение («Автоответ» на странице чатов). LLM разбирает приглашения и вопросы и предлагает ответ — отправляете вы. Отказы распознаются без LLM." }),
-    el("div", { className: "bar" }, select, el("span", { className: "muted", textContent: `Сообщений: ${items.length}` })),
+    PageHead("Ответы работодателей", "Сообщения из чатов hh.ru присылает расширение («Автоответ» на странице чатов). LLM разбирает приглашения и вопросы и предлагает ответ — отправляете вы. Отказы распознаются без LLM."),
+    Toolbar([select, el("span", { className: "muted", textContent: `Сообщений: ${items.length}` })]),
     items.length ? items.map(dialogCard)
-      : el("p", { className: "empty", textContent: open ? "Новых ответов работодателей нет." : "Сообщений пока нет: нажмите «Автоответ» в панели расширения на странице чатов hh.ru." }),
+      : EmptyState(open ? "Новых ответов работодателей нет." : "Сообщений пока нет: нажмите «Автоответ» в панели расширения на странице чатов hh.ru."),
   ];
 }
 
 function dialogCard(m) {
   const chatUrl = `https://hh.ru/chat/${encodeURIComponent(m.chatId)}`;
   const rejection = m.kind === "Rejection";
-  const reply = el("textarea", { value: m.suggestedReply ?? "", id: `reply-${m.chatId}`,
+  const reply = el("textarea", { value: m.suggestedReply ?? "",
     placeholder: m.kind == null ? "LLM ещё не разобрала сообщение — обновите страницу через минуту." : "Черновика нет." });
-  const copy = el("button", { className: "primary", textContent: "Копировать и открыть чат" });
-  const done = el("button", { textContent: "Обработано" });
-  const result = el("span", { className: "result" });
-
-  const node = el("article", { className: m.handledAt ? "card decided" : "card" },
-    el("h2", {}, el("a", { href: chatUrl, target: "_blank", rel: "noopener", textContent: m.title || "Чат без вакансии" })),
-    el("div", { className: "meta" },
-      el("span", { className: `kind ${m.kind ?? "pending"}`, textContent: KINDS[m.kind] ?? "ждёт разбора" }),
-      [m.company, date(m.at), m.hhState && `hh: ${m.hhState}`, AUTO_REPLY[m.autoReply], m.autoReplyError, m.handledAt && "обработано"].filter(Boolean).join(" · ")),
-    m.summary ? el("div", { className: "summary", textContent: m.summary }) : null,
-    el("div", { className: "msg", textContent: m.text }),
-    rejection ? null : el("label", { className: "field", for: reply.id,
-      textContent: m.llmModel ? `Черновик ответа (${m.llmModel}) — поправьте [заглушки] перед отправкой` : "Черновик ответа" }),
-    rejection ? null : reply,
-    el("div", { className: "actions" }, rejection ? null : copy, m.handledAt || readOnly() ? null : done, result));
+  reply.id = `reply-${m.chatId}`;
+  const result = Result();
 
   // Буфер обмена доступен не везде (http без localhost): тогда текст просто выделяется для Ctrl+C
-  copy.onclick = async () => {
+  const copy = Button("Копировать и открыть чат", { kind: "primary", onClick: async () => {
     try {
       await navigator.clipboard.writeText(reply.value);
       result.textContent = "скопировано";
@@ -621,32 +520,31 @@ function dialogCard(m) {
       result.textContent = "выделено — скопируйте Ctrl+C";
     }
     window.open(chatUrl, "_blank", "noopener");
-  };
-
-  done.onclick = () => run(done, () => post(`/api/dialogs/${encodeURIComponent(m.chatId)}/handled`), () => {
-    node.classList.add("decided");
+  } });
+  const done = Button("Обработано", { onClick: () => act(() => post(`/api/dialogs/${encodeURIComponent(m.chatId)}/handled`), () => {
+    Card.decide(done);
     done.remove();
     result.textContent = "обработано";
     return `«${m.title}»: обработано`;
-  });
-  return node;
+  }) });
+
+  return Card({ as: "article", decided: !!m.handledAt, title: m.title || "Чат без вакансии", href: chatUrl,
+    actions: [rejection ? null : copy, m.handledAt || readOnly() ? null : done, result] },
+  Meta([m.company, date(m.at), m.hhState && `hh: ${m.hhState}`, AUTO_REPLY[m.autoReply], m.autoReplyError, m.handledAt && "обработано"],
+    { lead: Badge(KINDS[m.kind] ?? "ждёт разбора", { tone: KIND_TONES[m.kind] }) }),
+  m.summary ? Callout(m.summary) : null,
+  Quote(m.text),
+  rejection ? null : Field(m.llmModel ? `Черновик ответа (${m.llmModel}) — поправьте [заглушки] перед отправкой` : "Черновик ответа", reply, { stacked: true }));
 }
 
 const lines = (text) => text.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-
-function field(label, input, wide = false) {
-  input.id ||= `f-${Math.random().toString(36).slice(2)}`;
-  return wide ? [el("label", { for: input.id, className: "wide", textContent: label }), Object.assign(input, { className: "wide" })]
-    : [el("label", { for: input.id, textContent: label }), input];
-}
 
 async function searches() {
   const items = await api(scoped("/api/searches"));
   const list = items.map((s) => searchForm(s));
   if (!readOnly()) list.push(searchForm(null));
   return [
-    el("h1", { textContent: "Поиски" }),
-    el("p", { className: "sub", textContent: "Сервер собирает вакансии по включённым поискам раз в час и отбирает по правилам; остальное оценивает LLM." }),
+    PageHead("Поиски", "Сервер собирает вакансии по включённым поискам раз в час и отбирает по правилам; остальное оценивает LLM."),
     list,
   ];
 }
@@ -671,35 +569,29 @@ function searchForm(s) {
   };
   if (readOnly()) Object.values(inputs).forEach((i) => (i.disabled = true));
 
-  const save = el("button", { className: "primary", textContent: s ? "Сохранить" : "Добавить" });
-  const remove = s ? el("button", { className: "danger", textContent: "Удалить", type: "button" }) : null;
-  const form = el("form", { className: "card" },
-    el("h2", { textContent: s ? s.name : "Новый поиск" }),
-    el("div", { className: "form" },
-      field("Название", inputs.name), field("Запрос", inputs.query), field("Регион (area)", inputs.area), field("Доп. параметры", inputs.extraParams),
-      field("Включён", inputs.enabled), field("Нужные слова", inputs.includeKeywords), field("Исключить слова", inputs.excludeKeywords), field("Слова уровня (в названии)", inputs.levelKeywords),
-      field("Форматы работы", inputs.allowedFormats), field("Зарплата от, ₽", inputs.minSalaryRub), field("Мин. балл", inputs.minScore),
-      field("Только с зарплатой", inputs.requireSalary), field("Пропускать с тестом", inputs.skipWithTest), field("Без ручной проверки", inputs.skipReview)),
-    readOnly() ? null : el("div", { className: "bar", style: "margin:12px 0 0" }, save, remove));
-
-  form.onsubmit = (e) => {
-    e.preventDefault();
-    run(save, () => put("/api/searches", {
-      name: inputs.name.value.trim(), query: inputs.query.value.trim(), area: inputs.area.value.trim() || null,
-      extraParams: inputs.extraParams.value.trim() || null, enabled: inputs.enabled.checked,
-      rules: {
-        includeKeywords: lines(inputs.includeKeywords.value), excludeKeywords: lines(inputs.excludeKeywords.value), levelKeywords: lines(inputs.levelKeywords.value),
-        allowedFormats: lines(inputs.allowedFormats.value), minSalaryRub: inputs.minSalaryRub.value ? Number(inputs.minSalaryRub.value) : null,
-        minScore: Number(inputs.minScore.value || 0), requireSalary: inputs.requireSalary.checked,
-        skipWithTest: inputs.skipWithTest.checked, skipReview: inputs.skipReview.checked,
-      },
-    }), (saved) => { render(); return `Поиск «${saved.name}» сохранён`; });
-  };
-  if (remove) remove.onclick = () => {
+  const save = Button(s ? "Сохранить" : "Добавить", { kind: "primary", type: "submit" });
+  const remove = s ? Button("Удалить", { kind: "danger", onClick: () => {
     if (confirm(`Удалить поиск «${s.name}»?`))
-      run(remove, () => api(`/api/searches/${s.id}`, { method: "DELETE" }), () => { render(); return `Поиск «${s.name}» удалён`; });
-  };
-  return form;
+      return act(() => api(`/api/searches/${s.id}`, { method: "DELETE" }), () => { render(); return `Поиск «${s.name}» удалён`; });
+  } }) : null;
+
+  return Form({ submit: save, onSubmit: () => act(() => put("/api/searches", {
+    name: inputs.name.value.trim(), query: inputs.query.value.trim(), area: inputs.area.value.trim() || null,
+    extraParams: inputs.extraParams.value.trim() || null, enabled: inputs.enabled.checked,
+    rules: {
+      includeKeywords: lines(inputs.includeKeywords.value), excludeKeywords: lines(inputs.excludeKeywords.value), levelKeywords: lines(inputs.levelKeywords.value),
+      allowedFormats: lines(inputs.allowedFormats.value), minSalaryRub: inputs.minSalaryRub.value ? Number(inputs.minSalaryRub.value) : null,
+      minScore: Number(inputs.minScore.value || 0), requireSalary: inputs.requireSalary.checked,
+      skipWithTest: inputs.skipWithTest.checked, skipReview: inputs.skipReview.checked,
+    },
+  }), (saved) => { render(); return `Поиск «${saved.name}» сохранён`; }) },
+  el("h2", { textContent: s ? s.name : "Новый поиск" }),
+  FormGrid(
+    Field("Название", inputs.name), Field("Запрос", inputs.query), Field("Регион (area)", inputs.area), Field("Доп. параметры", inputs.extraParams),
+    Field("Включён", inputs.enabled), Field("Нужные слова", inputs.includeKeywords), Field("Исключить слова", inputs.excludeKeywords), Field("Слова уровня (в названии)", inputs.levelKeywords),
+    Field("Форматы работы", inputs.allowedFormats), Field("Зарплата от, ₽", inputs.minSalaryRub), Field("Мин. балл", inputs.minScore),
+    Field("Только с зарплатой", inputs.requireSalary), Field("Пропускать с тестом", inputs.skipWithTest), Field("Без ручной проверки", inputs.skipReview)),
+  readOnly() ? null : Toolbar([save, remove], { after: true }));
 }
 
 async function resumes() {
@@ -707,8 +599,7 @@ async function resumes() {
   const list = items.map((r) => resumeForm(r));
   if (!readOnly()) list.push(resumeForm(null));
   return [
-    el("h1", { textContent: "Резюме" }),
-    el("p", { className: "sub", textContent: "Профили резюме: «совпадение» — часть названия резюме на hh.ru, по ней расширение выбирает резюме. Описание и шаблон письма читает LLM." }),
+    PageHead("Резюме", "Профили резюме: «совпадение» — часть названия резюме на hh.ru, по ней расширение выбирает резюме. Описание и шаблон письма читает LLM."),
     candidateForm(profile),
     list,
   ];
@@ -721,8 +612,7 @@ function candidateForm(profile) {
     placeholder: "Уровень, стаж, формат работы, город, языки, пожелания" });
   // Для ответов на просьбы работодателя (#72): LLM их не получает, в письмо дописывает сервер
   const desiredSalary = el("input", { type: "number", min: "1", step: "1", value: profile.desiredSalaryRub ?? "", disabled: readOnly(), placeholder: "Например, 150000", "aria-label": "Желаемая зарплата на руки, ₽" });
-  const readyForTest = el("select", { disabled: readOnly(), "aria-label": "Готовность к тестовому заданию" },
-    el("option", { value: "", textContent: "не указано" }), el("option", { value: "true", textContent: "да" }), el("option", { value: "false", textContent: "нет" }));
+  const readyForTest = el("select", { disabled: readOnly(), "aria-label": "Готовность к тестовому заданию" }, options([["", "не указано"], ["true", "да"], ["false", "нет"]]));
   readyForTest.value = profile.readyForTestTask == null ? "" : String(profile.readyForTestTask);
   const rows = el("div");
 
@@ -730,11 +620,9 @@ function candidateForm(profile) {
     const skill = el("input", { value: s.skill, placeholder: "Навык, синонимы через «/»: EF Core / Entity Framework", "aria-label": "Навык", disabled: readOnly() });
     const facts = el("textarea", { value: s.facts, placeholder: "Где применял, сколько, что делал, цифры", "aria-label": "Факты", disabled: readOnly() });
     facts.style.minHeight = "70px";
-    const remove = el("button", { type: "button", className: "danger", textContent: "Убрать" });
-    const row = el("div", { className: "card", style: "padding:10px" }, skill, facts, readOnly() ? null : el("div", { className: "actions" }, remove));
     skill.style.width = "100%";
     skill.style.marginBottom = "6px";
-    remove.onclick = () => row.remove();
+    const row = Card({ tight: true }, skill, facts, readOnly() ? null : Actions([Button("Убрать", { kind: "danger", onClick: () => row.remove() })]));
     row.read = () => ({ skill: skill.value.trim(), facts: facts.value.trim() });
     return row;
   }
@@ -742,27 +630,20 @@ function candidateForm(profile) {
   rows.append(...profile.skills.map(skillRow));
   if (!readOnly() && profile.skills.length === 0) rows.append(skillRow());
 
-  const add = el("button", { type: "button", textContent: "+ Навык" });
-  add.onclick = () => rows.append(skillRow());
-  const save = el("button", { className: "primary", textContent: "Сохранить профиль" });
-  const form = el("form", { className: "card" },
-    el("h2", { textContent: "Профиль кандидата" }),
-    el("p", { className: "muted", textContent: "Общий для всех резюме. В письмо, оценку, ответы анкет и разбор ответов LLM получает общую часть и факты только по навыкам вакансии. Пишите только то, что было: это уходит работодателю от вашего имени." }),
-    el("label", { className: "field", textContent: "Общая часть" }), general,
-    el("label", { className: "field", textContent: "Желаемая зарплата на руки, ₽" }), desiredSalary,
-    el("label", { className: "field", textContent: "Готов к тестовому заданию" }), readyForTest,
-    el("p", { className: "muted", textContent: "Эти два поля LLM не получает: сервер дописывает их к письму, только если работодатель просит. Пусто — отклик с такой просьбой уйдёт на проверку." }),
-    el("label", { className: "field", textContent: `Факты по навыкам (${profile.skills.length})` }), rows,
-    readOnly() ? null : el("div", { className: "actions" }, add, save));
-
-  form.onsubmit = (e) => {
-    e.preventDefault();
-    run(save, () => put("/api/profile", { general: general.value.trim() || null, skills: [...rows.children].map((r) => r.read()),
-      desiredSalaryRub: desiredSalary.value ? Number(desiredSalary.value) : null,
-      readyForTestTask: readyForTest.value === "" ? null : readyForTest.value === "true" }),
-      (saved) => { render(); return `Профиль кандидата сохранён: навыков ${saved.skills.length}`; });
-  };
-  return form;
+  const add = Button("+ Навык", { onClick: () => rows.append(skillRow()) });
+  const save = Button("Сохранить профиль", { kind: "primary", type: "submit" });
+  return Form({ submit: save, onSubmit: () => act(() => put("/api/profile", { general: general.value.trim() || null, skills: [...rows.children].map((r) => r.read()),
+    desiredSalaryRub: desiredSalary.value ? Number(desiredSalary.value) : null,
+    readyForTestTask: readyForTest.value === "" ? null : readyForTest.value === "true" }),
+  (saved) => { render(); return `Профиль кандидата сохранён: навыков ${saved.skills.length}`; }) },
+  el("h2", { textContent: "Профиль кандидата" }),
+  el("p", { className: "muted", textContent: "Общий для всех резюме. В письмо, оценку, ответы анкет и разбор ответов LLM получает общую часть и факты только по навыкам вакансии. Пишите только то, что было: это уходит работодателю от вашего имени." }),
+  Field("Общая часть", general, { stacked: true }),
+  Field("Желаемая зарплата на руки, ₽", desiredSalary, { stacked: true }),
+  Field("Готов к тестовому заданию", readyForTest, { stacked: true }),
+  el("p", { className: "muted", textContent: "Эти два поля LLM не получает: сервер дописывает их к письму, только если работодатель просит. Пусто — отклик с такой просьбой уйдёт на проверку." }),
+  el("label", { className: "field", textContent: `Факты по навыкам (${profile.skills.length})` }), rows,
+  readOnly() ? null : Actions([add, save]));
 }
 
 function resumeForm(r) {
@@ -775,22 +656,16 @@ function resumeForm(r) {
   };
   if (readOnly()) Object.values(inputs).forEach((i) => (i.disabled = true));
 
-  const save = el("button", { className: "primary", textContent: r ? "Сохранить" : "Добавить" });
-  const form = el("form", { className: "card" },
-    el("h2", { textContent: r ? r.name : "Новый профиль резюме" }),
-    el("div", { className: "form" },
-      field("Название", inputs.name), field("Совпадение", inputs.match), field("Ключевые слова", inputs.keywords),
-      field("Описание для LLM", inputs.summary, true), field("Шаблон письма", inputs.letterTemplate, true)),
-    readOnly() ? null : el("div", { className: "bar", style: "margin:12px 0 0" }, save));
-
-  form.onsubmit = (e) => {
-    e.preventDefault();
-    run(save, () => put("/api/resumes", {
-      name: inputs.name.value.trim(), match: inputs.match.value.trim(), keywords: lines(inputs.keywords.value),
-      summary: inputs.summary.value.trim() || null, letterTemplate: inputs.letterTemplate.value.trim() || null,
-    }), (saved) => { render(); return `Резюме «${saved.name}» сохранено`; });
-  };
-  return form;
+  const save = Button(r ? "Сохранить" : "Добавить", { kind: "primary", type: "submit" });
+  return Form({ submit: save, onSubmit: () => act(() => put("/api/resumes", {
+    name: inputs.name.value.trim(), match: inputs.match.value.trim(), keywords: lines(inputs.keywords.value),
+    summary: inputs.summary.value.trim() || null, letterTemplate: inputs.letterTemplate.value.trim() || null,
+  }), (saved) => { render(); return `Резюме «${saved.name}» сохранено`; }) },
+  el("h2", { textContent: r ? r.name : "Новый профиль резюме" }),
+  FormGrid(
+    Field("Название", inputs.name), Field("Совпадение", inputs.match), Field("Ключевые слова", inputs.keywords),
+    Field("Описание для LLM", inputs.summary, { wide: true }), Field("Шаблон письма", inputs.letterTemplate, { wide: true })),
+  readOnly() ? null : Toolbar([save], { after: true }));
 }
 
 async function account() {
@@ -799,74 +674,63 @@ async function account() {
   // Пароль
   const current = el("input", { type: "password", autocomplete: "current-password", required: true });
   const fresh = el("input", { type: "password", autocomplete: "new-password", required: true, minLength: 10 });
-  const change = el("button", { className: "primary", textContent: "Сменить пароль" });
-  const passwordForm = el("form", { className: "card" }, el("h2", { textContent: "Пароль" }),
-    el("div", { className: "form" }, field("Текущий", current), field("Новый", fresh)),
-    el("div", { className: "bar", style: "margin:12px 0 0" }, change),
-    el("p", { className: "muted", textContent: "Остальные сессии будут завершены." }));
-  passwordForm.onsubmit = (e) => {
-    e.preventDefault();
-    run(change, () => post("/api/auth/password", { currentPassword: current.value, newPassword: fresh.value }),
-      () => { current.value = fresh.value = ""; return "Пароль изменён"; });
-  };
+  const change = Button("Сменить пароль", { kind: "primary", type: "submit" });
+  const passwordForm = Form({ submit: change, onSubmit: () => act(() => post("/api/auth/password", { currentPassword: current.value, newPassword: fresh.value }),
+    () => { current.value = fresh.value = ""; return "Пароль изменён"; }) },
+  el("h2", { textContent: "Пароль" }),
+  FormGrid(Field("Текущий", current), Field("Новый", fresh)),
+  Toolbar([change], { after: true }),
+  el("p", { className: "muted", textContent: "Остальные сессии будут завершены." }));
 
   // Персональные токены — для расширения
   const tokenName = el("input", { placeholder: "Название, например «ноутбук»", "aria-label": "Название токена", required: true });
-  const issue = el("button", { className: "primary", textContent: "Выпустить" });
+  const issue = Button("Выпустить", { kind: "primary", type: "submit" });
   const issued = el("div");
-  const tokenForm = el("form", { className: "bar" }, tokenName, issue);
-  tokenForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const token = await run(issue, () => post("/api/tokens", { name: tokenName.value.trim() }), "Токен выпущен");
+  const tokenForm = Form({ className: "bar", submit: issue, onSubmit: async () => {
+    const token = await act(() => post("/api/tokens", { name: tokenName.value.trim() }), "Токен выпущен");
     if (!token) return;
     tokenName.value = "";
     tokensTable.replaceWith(tokensTable = tokenRows(await api("/api/tokens")));
     issued.replaceChildren(el("p", { textContent: "Скопируйте токен в панель расширения — он показывается один раз:" }), el("div", { className: "secret", textContent: token.value }));
-  };
+  } }, tokenName, issue);
   let tokensTable = tokenRows(tokens);
 
   function tokenRows(items) {
     if (!items.length) return el("p", { className: "muted", textContent: "Токенов нет." });
-    return stackTable([{ title: "Название" }, { title: "Начало" }, { title: "Выпущен" }, { title: "" }],
+    return StackTable([{ title: "Название" }, { title: "Начало" }, { title: "Выпущен" }, { title: "" }],
       items.map((t) => {
-        const revoke = el("button", { className: "danger", textContent: "Отозвать" });
-        revoke.onclick = () => {
+        const revoke = Button("Отозвать", { kind: "danger", onClick: () => {
           if (confirm(`Отозвать токен «${t.name}»? Расширение с ним перестанет работать.`))
-            run(revoke, () => api(`/api/tokens/${t.id}`, { method: "DELETE" }), () => { render(); return `Токен «${t.name}» отозван`; });
-        };
+            return act(() => api(`/api/tokens/${t.id}`, { method: "DELETE" }), () => { render(); return `Токен «${t.name}» отозван`; });
+        } });
         return [t.name, el("span", { className: "mono", textContent: `${t.prefix}…` }), date(t.createdAt), t.revokedAt ? `отозван ${date(t.revokedAt)}` : revoke];
       }));
   }
 
   // Telegram
-  const tgBox = el("div");
   function telegramView(t) {
     if (!t.configured) return el("p", { className: "muted", textContent: "Бот не настроен на сервере (TELEGRAM_BOT_TOKEN)." });
     if (t.linked) {
-      const unlink = el("button", { className: "danger", textContent: "Отвязать" });
-      unlink.onclick = () => run(unlink, () => api("/api/telegram", { method: "DELETE" }), () => { render(); return "Telegram отвязан"; });
-      return el("div", { className: "bar" }, `Привязан${t.username ? ` к @${t.username}` : ""} ${date(t.linkedAt)}`, unlink);
+      const unlink = Button("Отвязать", { kind: "danger", onClick: () => act(() => api("/api/telegram", { method: "DELETE" }), () => { render(); return "Telegram отвязан"; }) });
+      return Toolbar([`Привязан${t.username ? ` к @${t.username}` : ""} ${date(t.linkedAt)}`, unlink]);
     }
-    const link = el("button", { className: "primary", textContent: "Получить ссылку привязки" });
     const out = el("div");
-    link.onclick = async () => {
-      const code = await run(link, () => post("/api/telegram/link"), "Код действует 15 минут");
+    const link = Button("Получить ссылку привязки", { kind: "primary", onClick: async () => {
+      const code = await act(() => post("/api/telegram/link"), "Код действует 15 минут");
       if (!code) return;
       out.replaceChildren(code.link
         ? el("p", {}, "Откройте ", el("a", { href: safeUrl(code.link), target: "_blank", rel: "noopener", textContent: "ссылку на бота" }), " и нажмите «Start».")
-        : el("p", {}, "Отправьте боту: ", el("span", { className: "secret", textContent: `/start ${code.code}` })));
-    };
-    return el("div", {}, el("div", { className: "bar" }, "Не привязан", link), out);
+        : el("p", {}, "Отправьте боту: ", Secret(`/start ${code.code}`)));
+    } });
+    return el("div", {}, Toolbar(["Не привязан", link]), out);
   }
-  tgBox.append(telegramView(telegram));
 
   return [
-    el("h1", { textContent: "Профиль" }),
-    el("p", { className: "sub", textContent: `${me.name}, роль ${me.role}` }),
+    PageHead("Профиль", `${me.name}, роль ${me.role}`),
     me.viaApiKey ? el("p", { className: "card", textContent: "Вход по токену: пароль, токены и Telegram меняются только после входа по паролю." }) : passwordForm,
-    el("div", { className: "card" }, el("h2", { textContent: "Токены расширения" }), tokenForm, issued, tokensTable),
-    el("div", { className: "card" }, el("h2", { textContent: "Telegram" }), tgBox),
-    el("div", { className: "card" }, el("h2", { textContent: "Отчёт" }), el("a", { href: "/api/report?format=csv", textContent: "Скачать отчёт по откликам (CSV)" })),
+    Card({ title: "Токены расширения" }, tokenForm, issued, tokensTable),
+    Card({ title: "Telegram" }, el("div", {}, telegramView(telegram))),
+    Card({ title: "Отчёт" }, el("a", { href: "/api/report?format=csv", textContent: "Скачать отчёт по откликам (CSV)" })),
   ];
 }
 
@@ -887,7 +751,6 @@ function collectionText(state) {
 function collectionCard() {
   const page = renders;
   const text = el("p", { textContent: "Загрузка состояния…" });
-  const button = el("button", { className: "primary", textContent: "Собрать вакансии", disabled: true });
   let timer;
 
   async function refresh() {
@@ -909,46 +772,43 @@ function collectionCard() {
     timer = setTimeout(refresh, state.current ? 2000 : 15000);
   }
 
-  button.onclick = async () => {
-    await run(button, () => post("/api/collect/start"), "Сбор запущен");
+  const button = Button("Собрать вакансии", { kind: "primary", disabled: true, onClick: async () => {
+    await act(() => post("/api/collect/start"), "Сбор запущен");
     refresh();
-  };
+  } });
   refresh();
 
-  return el("div", { className: "card" }, el("h2", { textContent: "Сбор вакансий" }),
+  return Card({ title: "Сбор вакансий" },
     el("p", { className: "muted", textContent: "Идёт сам раз в час. Запущенный сбор продолжается на сервере, страницу можно обновлять и закрывать." }),
-    text, el("div", { className: "bar", style: "margin:0" }, button));
+    text, Toolbar([button], { flush: true }));
 }
 
+const ROLES = [["User", "User"], ["Admin", "Admin"]];
+
 async function admin() {
-  if (me.role !== "Admin") return [el("p", { className: "empty", textContent: "Раздел только для администратора." })];
+  if (me.role !== "Admin") return [EmptyState("Раздел только для администратора.")];
   const users = await api("/api/users");
 
   const rows = users.map((u) => {
     const self = u.id === me.id;
-    const role = el("select", { disabled: self, "aria-label": "Роль" }, el("option", { value: "User", textContent: "User" }), el("option", { value: "Admin", textContent: "Admin" }));
+    const role = el("select", { disabled: self, "aria-label": "Роль" }, options(ROLES));
     role.value = u.role;
-    role.onchange = () => run(role, () => put(`/api/users/${u.id}/role`, { role: role.value }), `${u.email}: роль ${role.value}`);
-    const block = el("button", { textContent: u.blocked ? "Разблокировать" : "Заблокировать", className: u.blocked ? "" : "danger", disabled: self });
-    block.onclick = () => run(block, () => put(`/api/users/${u.id}/blocked`, { blocked: !u.blocked }), () => { render(); return `${u.email}: ${u.blocked ? "разблокирован" : "заблокирован"}`; });
-    const reset = el("button", { textContent: "Задать пароль" });
-    reset.onclick = () => {
+    role.onchange = () => busy(role, () => act(() => put(`/api/users/${u.id}/role`, { role: role.value }), `${u.email}: роль ${role.value}`));
+    const block = Button(u.blocked ? "Разблокировать" : "Заблокировать", { kind: u.blocked ? null : "danger", disabled: self,
+      onClick: () => act(() => put(`/api/users/${u.id}/blocked`, { blocked: !u.blocked }), () => { render(); return `${u.email}: ${u.blocked ? "разблокирован" : "заблокирован"}`; }) });
+    const reset = Button("Задать пароль", { onClick: () => {
       const password = prompt(`Новый пароль для ${u.email} (не короче 10 символов)`);
-      if (password) run(reset, () => put(`/api/users/${u.id}/password`, { password }), `${u.email}: пароль задан`);
-    };
-    return [u.email, role, date(u.createdAt), el("div", { className: "actions", style: "margin:0" }, block, reset)];
+      if (password) return act(() => put(`/api/users/${u.id}/password`, { password }), `${u.email}: пароль задан`);
+    } });
+    return [u.email, role, date(u.createdAt), Actions([block, reset], { flush: true })];
   });
 
   const email = el("input", { type: "email", placeholder: "Email", "aria-label": "Email", required: true });
   const password = el("input", { type: "password", placeholder: "Пароль", "aria-label": "Пароль", autocomplete: "new-password", required: true, minLength: 10 });
-  const newRole = el("select", { "aria-label": "Роль" }, el("option", { value: "User", textContent: "User" }), el("option", { value: "Admin", textContent: "Admin" }));
-  const create = el("button", { className: "primary", textContent: "Создать" });
-  const createForm = el("form", { className: "bar" }, email, password, newRole, create);
-  createForm.onsubmit = (e) => {
-    e.preventDefault();
-    run(create, () => post("/api/users", { email: email.value.trim(), password: password.value, role: newRole.value }),
-      () => { render(); loadUsers(); return `Пользователь ${email.value.trim()} создан`; });
-  };
+  const newRole = el("select", { "aria-label": "Роль" }, options(ROLES));
+  const create = Button("Создать", { kind: "primary", type: "submit" });
+  const createForm = Form({ className: "bar", submit: create, onSubmit: () => act(() => post("/api/users", { email: email.value.trim(), password: password.value, role: newRole.value }),
+    () => { render(); loadUsers(); return `Пользователь ${email.value.trim()} создан`; }) }, email, password, newRole, create);
 
   // Ручной запуск фоновых проходов: обычно они идут сами (сбор — раз в час, LLM — раз в минуту при наличии работы)
   const jobs = [
@@ -956,34 +816,31 @@ async function admin() {
     ["Оценить ожидающие", "/api/llm/evaluate", { limit: 20 }, (r) => `Оценено ${r.evaluated}: подходят ${r.fit}, сомнительных ${r.doubtful}, отклонено ${r.rejected}; осталось ${r.remaining}`],
     ["Ответить на анкеты", "/api/llm/answers", { limit: 20 }, (r) => `Анкеты: отвечено ${r.answered}, не вышло ${r.failed}; осталось ${r.remaining}`],
     ["Написать письма", "/api/llm/letters", { limit: 20 }, (r) => `Письма: написано ${r.written}, не вышло ${r.failed}; осталось ${r.remaining}`],
-  ].map(([text, path, body, done]) => {
-    const button = el("button", { textContent: text });
-    button.onclick = () => { setStatus(`${text}…`); run(button, () => post(path, body), done); };
-    return button;
-  });
+  ].map(([text, path, body, done]) => Button(text, { onClick: () => { setStatus(`${text}…`); return act(() => post(path, body), done); } }));
 
   return [
     el("h1", { textContent: "Администрирование" }),
-    el("div", { className: "card" }, el("h2", { textContent: "Пользователи" }),
-      stackTable([{ title: "Email" }, { title: "Роль" }, { title: "Создан" }, { title: "" }], rows),
+    Card({ title: "Пользователи" },
+      StackTable([{ title: "Email" }, { title: "Роль" }, { title: "Создан" }, { title: "" }], rows),
       el("h2", { textContent: "Новый пользователь", style: "margin-top:16px" }), createForm),
     collectionCard(),
-    el("div", { className: "card" }, el("h2", { textContent: "Запустить сейчас" }),
+    Card({ title: "Запустить сейчас" },
       el("p", { className: "muted", textContent: "Обычно не нужно: LLM работает раз в минуту, если есть работа. Тратит лимит LLM." }),
-      el("div", { className: "bar", style: "margin:0" }, jobs)),
+      Toolbar(jobs, { flush: true })),
   ];
 }
 
 // ── Каркас ───────────────────────────────────────────────────────────
 
-const routes = { dashboard, overview, vacancies, review, dialogs, searches, resumes, account, admin };
+const routes = { dashboard, overview, vacancies, review, dialogs, searches, resumes, account, admin, kit };
 
-// Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же
+// Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же.
+// Витрина #kit (#129) в навигации не показывается: только по адресу, только администратору
 const SECTIONS = [
-  { route: "dashboard", title: "Дашборд", icon: "◫", tab: true },
-  { route: "review", title: "Проверка", icon: "✎", tab: true, count: "review" },
-  { route: "dialogs", title: "Ответы", icon: "✉", tab: true, count: "dialogs" },
-  { route: "vacancies", title: "Вакансии", icon: "☰", tab: true },
+  { route: "dashboard", title: "Дашборд", icon: "dashboard", tab: true },
+  { route: "review", title: "Проверка", icon: "review", tab: true, count: "review" },
+  { route: "dialogs", title: "Ответы", icon: "dialogs", tab: true, count: "dialogs" },
+  { route: "vacancies", title: "Вакансии", icon: "vacancies", tab: true },
   { route: "overview", title: "Обзор" },
   { route: "searches", title: "Поиски" },
   { route: "resumes", title: "Резюме" },
@@ -992,24 +849,20 @@ const SECTIONS = [
 ];
 const counts = { review: 0, dialogs: 0 };
 const tabbar = document.getElementById("tabbar");
-const more = document.getElementById("more");
-
-function countBadge(s) {
-  const n = s.count ? counts[s.count] : 0;
-  return n ? el("span", { className: "count", textContent: n > 99 ? "99+" : n }) : null;
-}
+const more = Sheet([], { label: "Ещё разделы" });
+more.id = "more";
+document.body.append(more);
 
 function buildNav(route) {
   const visible = SECTIONS.filter((s) => !s.admin || me?.role === "Admin");
-  nav.replaceChildren(...visible.map((s) => el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, s.title, countBadge(s))));
+  const item = (s) => ({ href: `#${s.route}`, label: s.title, icon: s.icon, active: s.route === route, count: s.count ? counts[s.count] : 0 });
+  nav.replaceChildren(Tabs(visible.map(item)));
   const rest = visible.filter((s) => !s.tab);
-  const moreOn = rest.some((s) => s.route === route);
-  const moreButton = el("button", { type: "button", className: moreOn ? "active" : "", "aria-label": "Ещё разделы" }, el("b", { textContent: "⋯" }), "Ещё");
-  moreButton.onclick = (e) => { e.stopPropagation(); more.hidden = !more.hidden; };
-  tabbar.replaceChildren(...visible.filter((s) => s.tab).map((s) =>
-    el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, el("b", { textContent: s.icon }), s.title, countBadge(s))), moreButton);
-  more.replaceChildren(...rest.map((s) => el("a", { href: `#${s.route}`, className: s.route === route ? "active" : "" }, s.title)));
-  more.hidden = true;
+  const moreButton = el("button", { type: "button", className: rest.some((s) => s.route === route) ? "active" : "", "aria-label": "Ещё разделы" }, Icon("more"), "Ещё");
+  moreButton.onclick = (e) => { e.stopPropagation(); more.toggle(); };
+  tabbar.replaceChildren(...TabBar(visible.filter((s) => s.tab).map(item), moreButton));
+  more.replaceChildren(...SheetLinks(rest.map(item)));
+  more.close();
 }
 
 // Счётчики в навигации: на проверке и необработанные ответы (кроме отказов) — как в «Ответах работодателей»
@@ -1022,26 +875,144 @@ async function loadCounts() {
   counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
 }
 
-document.addEventListener("click", (e) => { if (!more.hidden && !more.contains(e.target)) more.hidden = true; });
-
 // Тема: системная → тёмная → светлая; выбор — в localStorage (может быть недоступен — тогда только на эту вкладку)
-const THEMES = [["system", "◐", "Тема: как в системе"], ["dark", "●", "Тема: тёмная"], ["light", "○", "Тема: светлая"]];
+const THEMES = [["system", "theme", "Тема: как в системе"], ["dark", "moon", "Тема: тёмная"], ["light", "sun", "Тема: светлая"]];
 const themeButton = document.getElementById("theme");
 function applyTheme(name) {
   if (name === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = name;
   const [, icon, title] = THEMES.find(([n]) => n === name);
-  themeButton.textContent = icon;
+  themeButton.replaceChildren(Icon(icon));
   themeButton.title = title;
   themeButton.setAttribute("aria-label", title);
 }
+function setTheme(name) {
+  try { name === "system" ? localStorage.removeItem("theme") : localStorage.setItem("theme", name); } catch {}
+  applyTheme(name);
+}
 themeButton.onclick = () => {
   const now = document.documentElement.dataset.theme ?? "system";
-  const next = THEMES[(THEMES.findIndex(([n]) => n === now) + 1) % THEMES.length][0];
-  try { next === "system" ? localStorage.removeItem("theme") : localStorage.setItem("theme", next); } catch {}
-  applyTheme(next);
+  setTheme(THEMES[(THEMES.findIndex(([n]) => n === now) + 1) % THEMES.length][0]);
 };
 applyTheme(document.documentElement.dataset.theme ?? "system");
+
+// ── Витрина UI kit (#129) ────────────────────────────────────────────
+// Все компоненты во всех состояниях на выдуманных данных: по ней проверяются тема и телефон, из неё собираются концепты.
+// #kit/frame — та же витрина без переключателей (для просмотра в рамке заданной ширины)
+const kitState = { themes: "one", width: "auto" };
+
+function kitGallery() {
+  const sec = (title, ...children) => el("section", { className: "kit-sec" }, el("h2", { textContent: title }), children);
+  const row = (label, ...children) => el("div", { className: "kit-row" }, el("span", { className: "muted", textContent: label }), children);
+  const wait = (ms = 1500) => () => new Promise((r) => setTimeout(r, ms));
+  const busyButton = Button("Сохраняю…", { kind: "primary" });
+  busyButton.disabled = true;
+  busyButton.setAttribute("aria-busy", "true");
+  const tokens = ["--bg", "--card", "--card2", "--text", "--muted", "--border", "--accent", "--accent-soft", "--ok", "--bad", "--warn", "--warn-bg", "--bar", "--track"];
+  const segValue = { v: 30 };
+  const chipValue = { v: "hh" };
+  const sheet = Sheet(SheetLinks([{ href: "#kit", label: "Обзор", icon: "overview", active: true }, { href: "#kit", label: "Поиски", icon: "search" }, { href: "#kit", label: "Резюме", icon: "resume" }]), { title: "Нижний лист" });
+  sheet.classList.add("kit-demo");
+  document.body.append(sheet);
+  const sheetButton = Button("Открыть лист", { icon: "more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
+
+  return el("div", {},
+    sec("Токены",
+      el("div", { className: "kit-swatches" }, tokens.map((t) => el("div", {}, el("i", { style: `background:var(${t})` }), t))),
+      el("p", { className: "muted small", textContent: "Шрифты: --sans (текст), --mono (числа, метки, логотип). Радиусы --r-xs…--r-xl, отступы --sp-1…--sp-6 (шаг 4px), касание --tap 44px." })),
+    sec("Иконки", el("div", { className: "kit-icons" }, ICONS.map((name) => el("div", {}, Icon(name), name)))),
+    sec("Button",
+      row("виды", Button("Обычная"), Button("Primary", { kind: "primary" }), Button("Ok", { kind: "ok" }), Button("Danger", { kind: "danger" }), Button("Ghost", { kind: "ghost" })),
+      row("размеры", Button("sm", { size: "sm" }), Button("обычная"), Button("lg", { size: "lg", kind: "primary" })),
+      row("с иконкой", Button("Скопировать", { icon: "copy" }), Button("Вернуть", { icon: "undo", kind: "ghost" }), Button("Тема", { icon: "theme", iconOnly: true }), Button("Ещё", { icon: "more", iconOnly: true })),
+      row("состояния", Button("Выключена", { disabled: true }), Button("Primary выкл.", { kind: "primary", disabled: true }), busyButton,
+        Button("Нажмите — занята 1,5 с", { kind: "primary", onClick: wait() }))),
+    sec("Pill, Badge, Count",
+      row("Pill", Pill("в очереди"), Pill("приглашение", { tone: "ok" }), Pill("ошибка", { tone: "bad" }), Pill("на проверке", { tone: "accent" }), Pill("hh.ru", { dot: "var(--src-hh)" }), Pill("hirify", { dot: "var(--src-hirify)" })),
+      row("Badge", Badge("Приглашение", { tone: "ok" }), Badge("Вопрос", { tone: "accent" }), Badge("Отказ", { tone: "bad" }), Badge("Прочее")),
+      row("Count", el("span", {}, "Проверка", Count(7)), el("span", {}, "Ответы", Count(120)))),
+    sec("Card",
+      el("div", { className: "cols" },
+        Card({ title: "C# разработчик (выдуманная)", href: "https://example.com/vacancy/1", meta: ["ООО «Пример»", "Москва", "от 250 000 RUR", "удалённо", "балл 82"],
+          actions: [Button("В очередь", { kind: "primary" }), Button("Скрыть"), Result()] },
+        Callout("LLM: стек совпадает, но в тексте — 5 лет опыта, у кандидата 3."), Disclosure("Описание вакансии", Pre("Описание вакансии с переносами строк.\nВторая строка."))),
+        Card({ title: "Решённая карточка", meta: "одобрено, в очереди", decided: true, actions: [Result("одобрено, в очереди")] }, Quote("Здравствуйте! Приглашаем на собеседование в четверг."))),
+      Card({ tight: true }, "Плотная карточка (tight) — строка навыка в профиле.")),
+    sec("Tabs, Segmented, Chips",
+      Tabs([{ href: "#kit", label: "Дашборд", active: true }, { href: "#kit", label: "Проверка", count: 7 }, { href: "#kit", label: "Ответы", count: 4 }, { href: "#kit", label: "Вакансии" }], { label: "Пример вкладок" }),
+      el("div", { style: "height:12px" }),
+      row("Segmented", Segmented(PERIODS.map((p) => ({ value: p, label: `${p} дн` })), segValue.v, (v) => { segValue.v = v; }, { label: "Период" })),
+      Chips(AGGREGATORS, chipValue.v, (v) => { chipValue.v = v; }, { label: "Агрегатор" })),
+    sec("Stat",
+      Stats([
+        Stat({ value: 128, label: "собрано вакансий", note: "+24% к прошлым 30 дн", trend: "up" }),
+        Stat({ value: 31, label: "откликов отправлено", note: "-12% к прошлым 30 дн", trend: "down" }),
+        Stat({ value: 9, unit: "%", label: "в приглашение", note: "3 приглашения за период" }),
+        Stat({ value: 0, label: "отказов", note: "—" }),
+      ]),
+      Stats([Stat({ value: 12, label: "в очереди", href: "#kit" }), Stat({ value: 3, label: "на проверке", href: "#kit" }), Stat({ value: 40, label: "пропущена", href: "#kit" })], { tiles: true })),
+    sec("Meter, Funnel, Bars",
+      el("div", { className: "cols" },
+        Card({}, Caption("Meter"), row("70%", Meter(70, 100)), row("ok", Meter(3, 10, { color: "var(--ok)" })), row("bad", Meter(1, 10, { color: "var(--bad)" })), row("0", Meter(0, 10)),
+          Caption("Funnel"), Funnel([{ label: "Собрано", value: 128, base: null }, { label: "Оценено LLM", value: 96, base: 128 }, { label: "Отправлено", value: 31, base: 96 },
+            { label: "Приглашение", value: 3, base: 31, color: "var(--ok)" }, { label: "Отказ", value: 7, base: 31, color: "var(--bad)" }], { note: "% — от предыдущего шага" })),
+        Card({}, Caption("Bars"), Bars(Array.from({ length: 14 }, (_, i) => {
+          const sent = [2, 4, 1, 0, 5, 3, 6, 2, 0, 1, 4, 7, 3, 2][i];
+          const answered = Math.min(sent, [1, 1, 0, 0, 2, 1, 3, 0, 0, 1, 2, 2, 1, 1][i]);
+          const inv = i % 5 === 0 ? Math.min(1, answered) : 0;
+          return { total: Math.max(sent, answered), title: `день ${i + 1}: отправлено ${sent}`, parts: [{ value: inv, tone: "ok" }, { value: answered - inv, tone: "accent" }] };
+        }), { from: "5 нояб.", to: "сегодня", legend: [{ label: "отправлено", color: "var(--bar)" }, { label: "ответили отказом", color: "var(--accent)" }, { label: "приглашение", color: "var(--ok)" }] }),
+        Caption("RankList"), RankList([["оценка N ниже N", 5], ["стоп-слово «…»", 3], ["LLM", 1]])))),
+    sec("StackTable",
+      Card({}, StackTable([{ title: "Поиск" }, { title: "Собрано", num: true }, { title: "Отправлено", num: true }, { title: "Конверсия", num: true }, { title: "" }],
+        [["dotnet-remote", 20, 3, "15%", Button("Открыть", { size: "sm" })], ["backend-msk", 3, 0, "0%", Button("Открыть", { size: "sm" })]]),
+      el("p", { className: "muted small", textContent: "На ширине ≤ 720px строки становятся карточками «поле: значение»." }))),
+    sec("Field, Form",
+      Form({ onSubmit: () => Toast("Форма отправлена (витрина: запроса нет)", { tone: "ok" }), submit: null },
+        FormGrid(Field("Название", el("input", { value: "dotnet-remote" })), Field("Запрос", el("input", { placeholder: "C# OR .NET" })),
+          Field("Включён", el("input", { type: "checkbox", checked: true })), Field("Выключено", el("input", { value: "только чтение", disabled: true })),
+          Field("Формат", el("select", {}, options([["", "любой"], ["remote", "удалённо"]]))), Field("Описание (wide)", el("textarea", { value: "Поле на всю ширину" }), { wide: true })),
+        Field("Подпись над полем (stacked)", el("textarea", { placeholder: "Черновик ответа" }), { stacked: true }),
+        Actions([el("input", { placeholder: "Причина (необязательно)", "aria-label": "Причина" }), Button("Сохранить", { kind: "primary", type: "submit" }), Result("сохранено")]))),
+    sec("Тексты",
+      Callout("Callout — вывод LLM или итог разбора."), Quote("Quote — сообщение работодателя как есть."), Note("Note — служебная пометка (демо, задел)."),
+      el("p", {}, "Secret: ", Secret("hh_pat_xxxxxxxx")),
+      Disclosure("Disclosure — раскрывающийся блок", Pre("Pre — длинный текст\nс переносами строк.")), Meta(["Meta", "части через точку", "пустые пропускаются", null])),
+    sec("Toast, Sheet",
+      row("Toast", Button("Итог", { onClick: () => { Toast("«C# разработчик»: в очереди", { tone: "ok" }); } }),
+        Button("С «Отменить»", { onClick: () => { Toast("Вакансия скрыта", { undo: () => Toast("Возвращена") }); } }),
+        Button("Ошибка", { kind: "danger", onClick: () => { Toast("Сервер ответил 500", { tone: "bad" }); } })),
+      row("Sheet", sheetButton)),
+    sec("EmptyState, Skeleton",
+      el("div", { className: "cols" },
+        Card({}, EmptyState("На проверке ничего нет.", { icon: "check" }), EmptyState("Без иконки — как в разделах.")),
+        Card({}, Skeleton({ block: true, lines: 3 })))));
+}
+
+async function kit(arg) {
+  if (me.role !== "Admin") return [EmptyState("Раздел только для администратора.")];
+  if (arg === "frame") return [PageHead("UI kit", "Витрина в рамке"), kitGallery()];
+
+  const body = el("div");
+  function draw() {
+    // Листы прошлой отрисовки витрины — прочь
+    document.querySelectorAll(".sheet.kit-demo").forEach((n) => n.remove());
+    if (kitState.width !== "auto") {
+      body.replaceChildren(el("iframe", { className: "kit-frame", src: "#kit/frame", title: `Витрина шириной ${kitState.width}px`, style: `max-width:${kitState.width}px` }));
+      return;
+    }
+    body.replaceChildren(kitState.themes === "both"
+      ? el("div", { className: "kit-themes" }, ["dark", "light"].map((t) => el("div", { "data-theme": t }, el("h3", { textContent: t === "dark" ? "Тёмная" : "Светлая" }), kitGallery())))
+      : kitGallery());
+  }
+  const aside = el("div", { className: "bar flush" },
+    Segmented([{ value: "system", label: "система" }, { value: "dark", label: "тёмная" }, { value: "light", label: "светлая" }],
+      document.documentElement.dataset.theme ?? "system", setTheme, { label: "Тема" }),
+    Segmented([{ value: "one", label: "одна" }, { value: "both", label: "обе рядом" }], kitState.themes, (v) => { kitState.themes = v; draw(); }, { label: "Темы" }),
+    Segmented([{ value: "auto", label: "окно" }, { value: 375, label: "375" }, { value: 720, label: "720" }], kitState.width, (v) => { kitState.width = v; draw(); }, { label: "Ширина" }));
+  draw();
+  return [PageHead("UI kit", "Компоненты ui/ui.js во всех состояниях · данные выдуманные · только для администратора", aside), body];
+}
 
 // Номер последней отрисовки: раздел, загрузившийся позже следующего перехода, не перерисовывает страницу
 let renders = 0;

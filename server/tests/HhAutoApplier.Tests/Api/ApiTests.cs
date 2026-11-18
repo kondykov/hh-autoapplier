@@ -519,8 +519,15 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         var client = factory.CreateClient();
         var page = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("app.js", await page.Content.ReadAsStringAsync());
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.Contains("app.js", html);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/app.js")).StatusCode);
+
+        // UI kit (#129): страница подключает токены, стили и компоненты, а они отдаются статикой (расширение возьмёт те же токены)
+        foreach (var file in new[] { "ui/tokens.css", "ui/ui.css", "ui/ui.js" })
+            Assert.Contains(file, html);
+        foreach (var file in new[] { "/ui/tokens.css", "/ui/ui.css", "/ui/ui.js", "/ui/icons.svg" })
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(file)).StatusCode);
     }
 
     [Fact]
