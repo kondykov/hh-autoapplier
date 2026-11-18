@@ -5,6 +5,7 @@ using HhAutoApplier.Domain.Applications;
 using HhAutoApplier.Domain.Searches;
 using HhAutoApplier.Domain.Vacancies;
 using HhAutoApplier.Infrastructure.Identity;
+using HhAutoApplier.Infrastructure.Links;
 using HhAutoApplier.Infrastructure.Llm;
 using HhAutoApplier.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -65,6 +66,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<ITelegramBot>(Telegram);
             // LLM-проходы тесты вызывают явно: фоновый проход раз в минуту забирал бы ответы FakeLlm
             services.Remove(services.Single(d => d.ImplementationType == typeof(LlmPipelineHostedService)));
+            // Проверку связи тесты подают в обработчик сами: настоящая ходила бы в интернет (#132)
+            services.Remove(services.Single(d => d.ImplementationType == typeof(LinkMonitorHostedService)));
             // Блокировка и смена пароля обрывают сессию сразу, а не через минуту
             services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.Zero);
         });
@@ -87,7 +90,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.ExecuteSqlRawAsync("""TRUNCATE "Vacancies", "Searches", "Resumes", "LlmCalls", "ApiTokens", "AspNetUsers", "AspNetRoles" RESTART IDENTITY CASCADE""");
+        await db.Database.ExecuteSqlRawAsync("""TRUNCATE "Vacancies", "Searches", "Resumes", "LlmCalls", "ApiTokens", "LinkOutages", "AspNetUsers", "AspNetRoles" RESTART IDENTITY CASCADE""");
         await DbSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider);
         Source.Reset();
