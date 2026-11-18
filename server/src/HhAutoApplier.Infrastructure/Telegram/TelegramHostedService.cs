@@ -1,4 +1,5 @@
 using System.Net;
+using HhAutoApplier.Application;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Telegram;
 using HhAutoApplier.Application.Dtos;
@@ -26,6 +27,7 @@ public class TelegramHostedService(
     TelegramBot bot,
     IServiceScopeFactory scopes,
     IOptions<TelegramOptions> options,
+    IOptions<StageOptions> stage,
     TimeProvider clock,
     ILogger<TelegramHostedService> logger
 ) : BackgroundService
@@ -145,7 +147,7 @@ public class TelegramHostedService(
 
         if (result.Screen is { } screen)
         {
-            var fitted = BotHtml.Fit(screen);
+            var fitted = BotHtml.Fit(Staged(screen));
             var edited = false;
             if (result.MoveScreen && result.ScreenMessageId is { } old)
                 await TryDeleteAsync(client, chatId, old, ct);
@@ -189,6 +191,15 @@ public class TelegramHostedService(
 
     private Task<bool> TryDeleteAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct) =>
         TryAsync(client.DeleteMessage(chatId, messageId, ct));
+
+    // Тестовый стенд (#124): экран и отдельные уведомления начинаются с метки, чтобы не спутать с боевым ботом
+    private BotMessage Staged(BotMessage message)
+    {
+        if (!stage.Value.Enabled)
+            return message;
+        var line = stage.Value.BotLine;
+        return message with { Text = $"{(message.Html ? BotHtml.E(line) : line)}\n{message.Text}" };
+    }
 
     private static async Task<Message> SendAsync(ITelegramBotClient client, long chatId, BotMessage message, CancellationToken ct)
     {
@@ -296,7 +307,7 @@ public class TelegramHostedService(
                 else
                 {
                     var buttons = BotTexts.NotificationButtons(notification.Kind, notification.Key, notification.VacancyId);
-                    await client.SendMessage(chatId, BotHtml.Fit(new BotMessage(notification.Text)).Text, replyMarkup: Keyboard(buttons),
+                    await client.SendMessage(chatId, BotHtml.Fit(Staged(new BotMessage(notification.Text))).Text, replyMarkup: Keyboard(buttons),
                         linkPreviewOptions: NoPreview, cancellationToken: ct);
                 }
 
