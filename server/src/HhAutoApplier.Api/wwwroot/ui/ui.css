@@ -33,10 +33,10 @@ button { border: 1px solid var(--border); background: var(--card); border-radius
 button:hover:not(:disabled) { border-color: var(--muted); }
 button:disabled { opacity: .5; cursor: default; }
 button[aria-busy="true"] { cursor: progress; }
-/* Button: виды */
-.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-.ok { background: var(--ok); border-color: var(--ok); color: var(--on-ok); font-weight: 600; }
-.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--border)); }
+/* Button: виды — только у кнопок: те же слова (ok, bad) — тоны тоста, метки и столбцов, а цвет текста кнопки на них нечитаем */
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.ok { background: var(--ok); border-color: var(--ok); color: var(--on-ok); font-weight: 600; }
+button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--border)); }
 button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
 /* Button: размер и иконка */
