@@ -1,16 +1,16 @@
-// Резюме и профиль кандидата
+// Кандидат (#128, бывший раздел «Резюме»): профиль кандидата и профили резюме
 import { api, put } from "../api/http";
 import type { Profile, Resume } from "../api/types";
 import { lines, options } from "../format";
 import { act, app, readOnly, scoped } from "../state";
 import { Actions, Button, Card, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "../ui/ui";
 
-export async function resumes(): Promise<Child> {
+export async function candidate(): Promise<Child> {
   const [items, profile] = await Promise.all([api<Resume[]>(scoped("/api/resumes")), api<Profile>(scoped("/api/profile"))]);
   const list = items.map((r) => resumeForm(r));
   if (!readOnly()) list.push(resumeForm(null));
   return [
-    PageHead("Резюме", "Профили резюме: «совпадение» — часть названия резюме на hh.ru, по ней расширение выбирает резюме. Описание и шаблон письма читает LLM."),
+    PageHead("Кандидат", "Профиль кандидата — общий для всех резюме. Профили резюме: «совпадение» — часть названия резюме на hh.ru, по ней расширение выбирает резюме. Описание и шаблон письма читает LLM."),
     candidateForm(profile),
     list,
   ];

@@ -6,8 +6,8 @@ import { me } from "../state";
 import { currentTheme, setTheme, type Theme } from "../theme";
 import {
   Actions, Badge, Bars, Button, Callout, Caption, Card, Chips, Count, Disclosure, el, EmptyState, Field, Form, FormGrid, Funnel, Icon, ICONS, Meta, Meter,
-  Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
-  type Child, type SheetElement,
+  Menu, Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
+  type Child, type MenuElement, type SheetElement,
 } from "../ui/ui";
 import { AGGREGATORS } from "./dashboard";
 import { PERIODS } from "./dashboard-data";
@@ -27,6 +27,10 @@ function kitGallery(): HTMLElement {
   const chipValue = { v: "hh" };
   const sheet = Sheet(SheetLinks([{ href: KIT, label: "Обзор", icon: "overview", active: true }, { href: KIT, label: "Поиски", icon: "search" }, { href: KIT, label: "Резюме", icon: "resume" }]), { title: "Нижний лист" });
   sheet.classList.add("kit-demo");
+  const menu = Menu("Анна", [{ label: "Аккаунт", icon: "user", href: KIT, active: true }, { label: "Отчёт CSV", icon: "download", href: KIT }, "sep",
+    { label: "Тема", icon: "theme", keepOpen: true, onClick: () => { Toast("Пункт с keepOpen: меню не закрылось"); } }, { label: "Выйти", icon: "logout", danger: true, onClick: () => { Toast("Выход"); } }],
+    { label: "Меню аккаунта", align: "start" });
+  menu.classList.add("kit-demo");
   document.body.append(sheet);
   const sheetButton = Button("Открыть лист", { icon: "more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
 
@@ -92,11 +96,12 @@ function kitGallery(): HTMLElement {
       Callout("Callout — вывод LLM или итог разбора."), Quote("Quote — сообщение работодателя как есть."), Note("Note — служебная пометка (демо, задел)."),
       el("p", {}, "Secret: ", Secret("hh_pat_xxxxxxxx")),
       Disclosure("Disclosure — раскрывающийся блок", Pre("Pre — длинный текст\nс переносами строк.")), Meta(["Meta", "части через точку", "пустые пропускаются", null])),
-    sec("Toast, Sheet",
+    sec("Toast, Sheet, Menu",
       row("Toast", Button("Итог", { onClick: () => { Toast("«C# разработчик»: в очереди", { tone: "ok" }); } }),
         Button("С «Отменить»", { onClick: () => { Toast("Вакансия скрыта", { undo: () => Toast("Возвращена") }); } }),
         Button("Ошибка", { kind: "danger", onClick: () => { Toast("Сервер ответил 500", { tone: "bad" }); } })),
-      row("Sheet", sheetButton)),
+      row("Sheet", sheetButton),
+      row("Menu", menu)),
     sec("EmptyState, Skeleton",
       el("div", { className: "cols" },
         Card({}, EmptyState("На проверке ничего нет.", { icon: "check" }), EmptyState("Без иконки — как в разделах.")),
@@ -111,6 +116,7 @@ export async function kit(route: Route): Promise<Child> {
   function draw() {
     // Листы прошлой отрисовки витрины — прочь
     document.querySelectorAll<SheetElement>(".sheet.kit-demo").forEach((n) => n.dispose());
+    document.querySelectorAll<MenuElement>(".menu.kit-demo").forEach((n) => n.dispose());
     if (kitState.width !== "auto") {
       body.replaceChildren(el("iframe", { className: "kit-frame", src: path("kit", {}, "frame"), title: `Витрина шириной ${kitState.width}px`, style: `max-width:${kitState.width}px` }));
       return;

@@ -1,4 +1,5 @@
-// Профиль: пароль, токены расширения, Telegram, отчёт
+// Аккаунт (#128 — из меню под именем, не из навигации): пароль, токены расширения, Telegram, отчёт.
+// ?section=password|tokens|telegram|report — прокрутить к блоку (пункты меню аккаунта)
 import { api, del, post } from "../api/http";
 import type { ApiToken, Telegram, TelegramLink } from "../api/types";
 import { date } from "../format";
@@ -19,6 +20,8 @@ export async function account(): Promise<Child> {
   FormGrid(Field("Текущий", current), Field("Новый", fresh)),
   Toolbar([change], { after: true }),
   el("p", { className: "muted", textContent: "Остальные сессии будут завершены." }));
+
+  passwordForm.id = "password";
 
   // Персональные токены — для расширения
   const tokenName = el("input", { placeholder: "Название, например «ноутбук»", "aria-label": "Название токена", required: true });
@@ -66,10 +69,10 @@ export async function account(): Promise<Child> {
   }
 
   return [
-    PageHead("Профиль", `${user.name}, роль ${user.role}`),
+    PageHead("Аккаунт", `${user.name}, роль ${user.role}`),
     user.viaApiKey ? el("p", { className: "card", textContent: "Вход по токену: пароль, токены и Telegram меняются только после входа по паролю." }) : passwordForm,
-    Card({ title: "Токены расширения" }, tokenForm, issued, tokensTable),
-    Card({ title: "Telegram" }, el("div", {}, telegramView(telegram))),
-    Card({ title: "Отчёт" }, el("a", { href: "/api/report?format=csv", textContent: "Скачать отчёт по откликам (CSV)" })),
+    Card({ title: "Токены расширения", id: "tokens" }, tokenForm, issued, tokensTable),
+    Card({ title: "Telegram", id: "telegram" }, el("div", {}, telegramView(telegram))),
+    Card({ title: "Отчёт", id: "report" }, el("a", { href: "/api/report?format=csv", textContent: "Скачать отчёт по откликам (CSV)" })),
   ];
 }

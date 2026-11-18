@@ -5,19 +5,19 @@ import iconsUrl from "./ui/icons.svg";
 import { api, post, Unauthorized } from "./api/http";
 import type { Dialog, Me, Stats, User } from "./api/types";
 import { account } from "./pages/account";
-import { admin } from "./pages/admin";
+import { candidate } from "./pages/candidate";
 import { dashboard } from "./pages/dashboard";
 import { dialogs } from "./pages/dialogs";
 import { kit } from "./pages/kit";
 import { overview } from "./pages/overview";
-import { resumes } from "./pages/resumes";
 import { review } from "./pages/review";
 import { searches } from "./pages/searches";
+import { system } from "./pages/system";
 import { vacancies } from "./pages/vacancies";
-import { isAppLink, legacyHashPath, parseRoute, path, type Route, type RouteName } from "./router";
+import { isAppLink, legacyHashPath, parseRoute, path, renamedPath, type Route, type RouteName } from "./router";
 import { app, page, scoped, session, setStatus } from "./state";
-import { initThemeButton } from "./theme";
-import { el, Icon, nodes, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child, type IconName, type NavItem } from "./ui/ui";
+import { cycleTheme, initThemeButton, themeLabel } from "./theme";
+import { Caption, el, Icon, Menu, MenuItems, nodes, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child, type IconName, type MenuElement, type MenuEntry, type NavItem } from "./ui/ui";
 
 setIconSprite(iconsUrl);
 
@@ -29,10 +29,11 @@ const nav = byId<HTMLElement>("nav");
 const tabbar = byId<HTMLElement>("tabbar");
 const viewAs = byId<HTMLSelectElement>("view-as");
 
-const routes: Record<RouteName, (route: Route) => Promise<Child>> = { dashboard, overview, vacancies, review, dialogs, searches, resumes, account, admin, kit };
+const routes: Record<RouteName, (route: Route) => Promise<Child>> = { dashboard, overview, vacancies, review, dialogs, searches, candidate, account, system, kit };
 
 // Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же.
-// Витрина /kit (#129) в навигации не показывается: только по адресу, только администратору
+// Разделы после ревизии (#128): «Обзор» (/overview) и витрина /kit (#129) — только по адресу; аккаунт (/account) — из меню
+// под именем (на телефоне — в «Ещё»); «Система» — только администратору
 interface Section {
   route: RouteName;
   title: string;
@@ -46,11 +47,9 @@ const SECTIONS: Section[] = [
   { route: "review", title: "Проверка", icon: "review", tab: true, count: "review" },
   { route: "dialogs", title: "Ответы", icon: "dialogs", tab: true, count: "dialogs" },
   { route: "vacancies", title: "Вакансии", icon: "vacancies", tab: true },
-  { route: "overview", title: "Обзор" },
-  { route: "searches", title: "Поиски" },
-  { route: "resumes", title: "Резюме" },
-  { route: "account", title: "Профиль" },
-  { route: "admin", title: "Администрирование", admin: true },
+  { route: "searches", title: "Поиски", icon: "search" },
+  { route: "candidate", title: "Кандидат", icon: "resume" },
+  { route: "system", title: "Система", icon: "admin", admin: true },
 ];
 const counts = { review: 0, dialogs: 0 };
 const more = Sheet([], { label: "Ещё разделы" });
@@ -65,8 +64,42 @@ function buildNav(route: RouteName) {
   const moreButton = el("button", { type: "button", className: rest.some((s) => s.route === route) ? "active" : "", "aria-label": "Ещё разделы" }, Icon("more"), "Ещё");
   moreButton.onclick = (e) => { e.stopPropagation(); more.toggle(); };
   tabbar.replaceChildren(...TabBar(visible.filter((s) => s.tab).map(item), moreButton));
-  more.replaceChildren(...SheetLinks(rest.map(item)));
+  more.replaceChildren(...SheetLinks(rest.map(item)), el("hr", { className: "menu-sep" }),
+    Caption(session.me?.name ?? "Аккаунт"), ...MenuItems(accountItems(route), () => more.close()));
   more.close();
+}
+
+// Меню аккаунта (#128): под именем в шапке, на телефоне — в листе «Ещё». Пункты страницы /account ведут к её блокам
+function accountItems(route?: RouteName): MenuEntry[] {
+  const account = (section?: string) => path("account", { section });
+  const theme = themeLabel();
+  return [
+    { label: "Аккаунт", icon: "user", href: account(), active: route === "account" },
+    { label: "Пароль", href: account("password") },
+    { label: "Токены расширения", href: account("tokens") },
+    { label: "Telegram", href: account("telegram") },
+    { label: "Отчёт CSV", icon: "download", href: scoped("/api/report?format=csv"), download: true },
+    "sep",
+    { label: theme.label, icon: theme.icon, keepOpen: true, onClick: (node) => {
+      cycleTheme();
+      const next = themeLabel();
+      node.replaceChildren(Icon(next.icon), el("span", { textContent: next.label }));
+    } },
+    { label: "Выйти", icon: "logout", danger: true, onClick: logout },
+  ];
+}
+
+let accountMenu: MenuElement | null = null;
+function buildAccountMenu(user: Me) {
+  accountMenu?.dispose();
+  accountMenu = Menu(el("span", { id: "who", textContent: user.name }), accountItems(), { label: "Меню аккаунта" });
+  byId("account").replaceChildren(accountMenu);
+}
+
+async function logout() {
+  await post("/api/auth/logout").catch(() => null);
+  setStatus("");
+  showLogin();
 }
 
 // Счётчики в навигации: на проверке и необработанные ответы (кроме отказов) — как в «Ответах работодателей»
@@ -82,12 +115,18 @@ async function loadCounts() {
 async function render() {
   if (!session.me) return;
   const current = ++page.renders;
+  // Старые адреса переименованных разделов (#128): /resumes → /candidate, /admin → /system
+  const renamed = renamedPath(location.pathname, location.search);
+  if (renamed) history.replaceState(null, "", renamed);
   const route = parseRoute(location.pathname, location.search);
   buildNav(route.name);
   try {
     const content = await routes[route.name](route);
     if (current !== page.renders) return;
     view.replaceChildren(...nodes(content));
+    // ?section= — блок раздела (пункты меню аккаунта)
+    const section = route.query.get("section");
+    if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
   } catch (e) {
     if (current !== page.renders) return;
     view.replaceChildren();
@@ -122,9 +161,10 @@ function showLogin() {
   session.me = null;
   view.replaceChildren();
   nav.hidden = tabbar.hidden = more.hidden = true;
-  byId("logout").hidden = true;
+  accountMenu?.dispose();
+  accountMenu = null;
+  byId("theme").hidden = false;
   byId("viewing").hidden = true;
-  byId("who").textContent = "";
   loginForm.hidden = false;
   byId("email").focus();
 }
@@ -133,8 +173,8 @@ async function showSession(user: Me) {
   session.me = user;
   loginForm.hidden = true;
   nav.hidden = tabbar.hidden = false;
-  byId("logout").hidden = false;
-  byId("who").textContent = user.name;
+  byId("theme").hidden = true;
+  buildAccountMenu(user);
   await Promise.all([loadUsers(), loadCounts()]);
   await render();
 }
@@ -154,12 +194,6 @@ loginForm.onsubmit = async (e) => {
   } catch (err) {
     setStatus((err as Error).message, true);
   }
-};
-
-byId("logout").onclick = async () => {
-  await post("/api/auth/logout").catch(() => null);
-  setStatus("");
-  showLogin();
 };
 
 viewAs.onchange = () => {

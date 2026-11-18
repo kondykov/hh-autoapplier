@@ -1,5 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { isAppLink, legacyHashPath, parseRoute, path } from "../src/router";
+import { isAppLink, legacyHashPath, parseRoute, path, renamedPath } from "../src/router";
+
+describe("переименованные разделы (#128)", () => {
+  it("новые пути — свои разделы", () => {
+    expect(parseRoute("/candidate").name).toBe("candidate");
+    expect(parseRoute("/system").name).toBe("system");
+    expect(parseRoute("/overview").name).toBe("overview");
+  });
+
+  it.each([
+    ["/resumes", "", "/candidate"],
+    ["/admin", "?tab=users", "/system?tab=users"],
+    ["/resumes/x", "", "/candidate/x"],
+  ])("%s%s → %s", (p, q, target) => expect(renamedPath(p, q)).toBe(target));
+
+  it("остальные пути не переадресуются", () => {
+    expect(renamedPath("/review")).toBeNull();
+    expect(renamedPath("/")).toBeNull();
+    expect(renamedPath("/administrator")).toBeNull();
+  });
+
+  it.each([["#resumes", "/candidate"], ["#admin", "/system"], ["#account", "/account"], ["#overview", "/overview"]])(
+    "старый якорь %s → %s", (hash, target) => expect(legacyHashPath(hash)).toBe(target));
+});
 
 describe("parseRoute", () => {
   it("раздел, подраздел и параметры из адреса", () => {

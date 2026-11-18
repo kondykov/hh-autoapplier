@@ -7,6 +7,8 @@ header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, v
 .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font-weight: 600; text-decoration: none; color: inherit; }
 .brand .name { font-family: var(--mono); font-size: var(--fs-sm); color: var(--muted); }
 #who { font: var(--fs-sm) var(--mono); color: var(--muted); }
+.attention { margin: 0; padding-left: 20px; }
+.attention li { margin: 4px 0; }
 nav#nav { max-width: var(--page); margin: 0 auto; padding: 0 var(--sp-4) var(--sp-2); }
 main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 64px; }
 #status { color: var(--muted); min-height: 1.5em; }
@@ -15,6 +17,8 @@ main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 
 
 @media (max-width: 720px) {
   nav#nav { display: none; }
+  /* Меню аккаунта на телефоне — в листе «Ещё» (#128) */
+  .account { display: none; }
   .brand .name { display: none; }
   main { padding: 14px var(--sp-3) calc(96px + env(safe-area-inset-bottom)); }
 }

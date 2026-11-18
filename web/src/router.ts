@@ -2,8 +2,11 @@
 // Backend отдаёт index.html на любой путь, кроме /api, /health и файлов (WebInterface.cs), поэтому обновление страницы
 // открывает тот же раздел. Старые адреса на якорях (/#review, /#vacancies/Queued) переводятся на пути
 
-export const ROUTES = ["dashboard", "overview", "vacancies", "review", "dialogs", "searches", "resumes", "account", "admin", "kit"] as const;
+export const ROUTES = ["dashboard", "overview", "vacancies", "review", "dialogs", "searches", "candidate", "account", "system", "kit"] as const;
 export type RouteName = (typeof ROUTES)[number];
+
+// Переименованные разделы (#128): старый адрес → новый раздел (параметры и подраздел сохраняются)
+const RENAMED: Record<string, RouteName> = { resumes: "candidate", admin: "system" };
 
 export interface Route {
   name: RouteName;
@@ -21,6 +24,13 @@ export function parseRoute(pathname: string, search = ""): Route {
   return { name, sub: sub ? decodeURIComponent(sub) : undefined, query: new URLSearchParams(search) };
 }
 
+// Старый адрес переименованного раздела → новый: /resumes → /candidate, /admin?x=1 → /system?x=1; остальные — null
+export function renamedPath(pathname: string, search = ""): string | null {
+  const [, first = "", ...rest] = pathname.split("/");
+  const target = RENAMED[first];
+  return target ? ["", target, ...rest].join("/") + search : null;
+}
+
 // Адрес раздела: path("vacancies", { status: "Queued" }) → /vacancies?status=Queued; пустые параметры пропускаются
 export function path(name: RouteName, params: Record<string, string | null | undefined> = {}, sub?: string): string {
   const query = new URLSearchParams();
@@ -34,7 +44,8 @@ export function path(name: RouteName, params: Record<string, string | null | und
 export function legacyHashPath(hash: string): string | null {
   const value = hash.replace(/^#/, "");
   if (!value) return null;
-  const [name, arg] = value.split("/");
+  const [raw, arg] = value.split("/");
+  const name = RENAMED[raw] ?? raw;
   if (!isRoute(name)) return path("dashboard");
   if (!arg) return path(name);
   if (name === "vacancies") return path(name, { status: decodeURIComponent(arg) });

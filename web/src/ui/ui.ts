@@ -66,7 +66,7 @@ export function injectStyles(root: Document | ShadowRoot, cssTexts: string | str
 // setIconSprite(chrome.runtime.getURL(...))). В shadow root на чужом сайте внешний спрайт другого источника не грузится —
 // тогда injectIcons(root, svgText) встраивает спрайт в root, и Icon ссылается на #имя внутри него
 export const ICONS = ["dashboard", "review", "dialogs", "vacancies", "overview", "llm", "search", "resume", "user", "admin", "link", "external",
-  "clock", "check", "x", "undo", "more", "plus", "copy", "alert", "hash", "theme", "moon", "sun", "logout", "kit"] as const;
+  "clock", "check", "x", "undo", "more", "plus", "copy", "alert", "hash", "theme", "moon", "sun", "logout", "kit", "chevron", "download"] as const;
 export type IconName = (typeof ICONS)[number];
 let sprite = "/ui/icons.svg";
 export function setIconSprite(url: string): void { sprite = url; }
@@ -425,3 +425,54 @@ export function Sheet(children: Child, { title, label }: { title?: string; label
 }
 // Пункты листа-меню
 export const SheetLinks = (items: NavItem[]) => items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "" }, i.icon ? Icon(i.icon) : null, i.label));
+
+// ── Menu ──────────────────────────────────────────────────────────────
+// Пункт меню: ссылка (href) или действие (onClick). keepOpen — меню не закрывается после действия (переключатель темы).
+// "sep" — разделитель
+export interface MenuItem {
+  label: string;
+  icon?: IconName;
+  href?: string;
+  download?: boolean;
+  onClick?: (item: HTMLElement) => unknown;
+  keepOpen?: boolean;
+  active?: boolean;
+  danger?: boolean;
+}
+export type MenuEntry = MenuItem | "sep";
+
+// Пункты меню — и для Menu, и для Sheet (на телефоне меню аккаунта — в листе «Ещё»); onPick — после выбора пункта
+export function MenuItems(items: MenuEntry[], onPick: () => void = () => {}): Node[] {
+  return items.map((i) => {
+    if (i === "sep") return el("hr", { className: "menu-sep" });
+    const body = [i.icon ? Icon(i.icon) : null, el("span", { textContent: i.label })];
+    const className = cls("item", i.active && "active", i.danger && "danger");
+    if (i.href) {
+      const a = el("a", { href: i.href, className, download: i.download ? "" : undefined, role: "menuitem" }, body);
+      a.addEventListener("click", () => onPick());
+      return a;
+    }
+    const button: HTMLButtonElement = el("button", { type: "button", className, role: "menuitem" }, body);
+    button.onclick = async (e) => { e.stopPropagation(); await i.onClick?.(button); if (!i.keepOpen) onPick(); };
+    return button;
+  });
+}
+
+export type MenuElement = HTMLDivElement & { open(): void; close(): void; dispose(): void };
+
+// Menu — выпадающее меню под кнопкой (меню аккаунта под именем в шапке). Закрывается выбором пункта, кликом мимо и Esc
+export function Menu(trigger: Child, items: MenuEntry[], { label, align = "end" }: { label?: string; align?: "start" | "end" } = {}): MenuElement {
+  const button = el("button", { type: "button", className: "menu-trigger", "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": label }, trigger, Icon("chevron"));
+  const list = el("div", { className: cls("menu-list", align), role: "menu", hidden: true });
+  const menu = el("div", { className: "menu" }, button, list) as MenuElement;
+  menu.open = () => { list.hidden = false; button.setAttribute("aria-expanded", "true"); };
+  menu.close = () => { list.hidden = true; button.setAttribute("aria-expanded", "false"); };
+  list.append(...MenuItems(items, menu.close));
+  button.onclick = (e) => { e.stopPropagation(); if (list.hidden) menu.open(); else menu.close(); };
+  const outside = (e: MouseEvent) => { if (!list.hidden && !e.composedPath().includes(menu)) menu.close(); };
+  const escape = (e: KeyboardEvent) => { if (e.key === "Escape" && !list.hidden) { menu.close(); button.focus(); } };
+  document.addEventListener("click", outside);
+  document.addEventListener("keydown", escape);
+  menu.dispose = () => { document.removeEventListener("click", outside); document.removeEventListener("keydown", escape); menu.remove(); };
+  return menu;
+}

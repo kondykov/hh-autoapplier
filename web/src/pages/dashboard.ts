@@ -1,8 +1,9 @@
 // Дашборд (#121): разметка; числа — dashboard-data.ts
 import { api } from "../api/http";
-import type { CollectState, Dialog, Search, Vacancy } from "../api/types";
+import type { CollectState, Dialog, Search, Stats as StatusStats, Telegram, Vacancy } from "../api/types";
 import { date } from "../format";
-import { scoped } from "../state";
+import { readOnly, scoped } from "../state";
+import { AttentionCard, attentionItems } from "./attention";
 import { Bars, Caption, Card, Chips, el, EmptyState, Funnel, nodes, Note, PageHead, pct, RankList, Segmented, StackTable, Stat, Stats, type ChoiceOption } from "../ui/ui";
 import { dashboardData, delta, PERIODS } from "./dashboard-data";
 
@@ -24,13 +25,18 @@ async function allApplications(): Promise<Vacancy[]> {
 }
 
 export async function dashboard(): Promise<HTMLElement> {
-  const [apps, searchList, chats, collect] = await Promise.all([
+  const [apps, searchList, chats, collect, stats, telegram] = await Promise.all([
     allApplications(),
     api<Search[]>(scoped("/api/searches")).catch(() => [] as Search[]),
     api<Dialog[]>(scoped("/api/dialogs?take=200")).catch(() => [] as Dialog[]),
     api<CollectState>("/api/collect/status").catch(() => null),
+    api<StatusStats>(scoped("/api/stats")).catch(() => ({} as StatusStats)),
+    readOnly() ? null : api<Telegram>("/api/telegram").catch(() => null),
   ]);
   const root = el("div");
+  // «Требует внимания» (#128) — от периода и агрегатора не зависит: что ждёт решения сейчас
+  const openDialogs = chats.filter((m) => !m.handledAt && m.kind !== "Rejection").length;
+  const attention = AttentionCard(attentionItems(stats, telegram, readOnly(), openDialogs));
 
   const lastChat = chats.reduce((max, m) => Math.max(max, new Date(m.at).getTime() || 0), 0);
   const lastCollect = collect?.current ? "идёт сбор" : collect?.last?.finishedAt ? `сбор ${date(collect.last.finishedAt)}` : null;
@@ -62,6 +68,7 @@ export async function dashboard(): Promise<HTMLElement> {
       ].filter(Boolean).join(" · "),
       Segmented(PERIODS.map((p) => ({ value: p as number, label: `${p} дн` })), state.period, (p) => { state.period = p; draw(); }, { label: "Период" })),
       Chips(AGGREGATORS, state.source, (s) => { state.source = s; draw(); }, { label: "Агрегатор" }),
+      attention,
       Note("Демо #121: числа считаются в браузере по истории откликов. Ответы работодателей — на момент последней синхронизации чатов в расширении."),
       Stats([
         Stat({ value: d.cohort, label: "собрано вакансий", ...delta(d.cohort, d.prevCohort, state.period) }),

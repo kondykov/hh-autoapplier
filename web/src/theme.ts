@@ -26,12 +26,21 @@ export function setTheme(name: Theme): void {
   applyTheme(name);
 }
 
-// Кнопка в шапке перебирает темы по кругу
+// Следующая тема по кругу
+export function cycleTheme(): void {
+  const now = currentTheme();
+  setTheme(THEMES[(THEMES.findIndex(([n]) => n === now) + 1) % THEMES.length][0]);
+}
+
+// Подпись и значок текущей темы — для пункта меню аккаунта (#128)
+export function themeLabel(): { label: string; icon: IconName } {
+  const [, icon, label] = THEMES.find(([n]) => n === currentTheme()) ?? THEMES[0];
+  return { label, icon };
+}
+
+// Кнопка в шапке (на странице входа; после входа тема — в меню аккаунта) перебирает темы по кругу
 export function initThemeButton(node: HTMLButtonElement): void {
   button = node;
-  node.onclick = () => {
-    const now = currentTheme();
-    setTheme(THEMES[(THEMES.findIndex(([n]) => n === now) + 1) % THEMES.length][0]);
-  };
+  node.onclick = cycleTheme;
   applyTheme(currentTheme());
 }

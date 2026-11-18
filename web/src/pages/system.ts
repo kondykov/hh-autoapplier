@@ -1,4 +1,4 @@
-// Администрирование: пользователи, сбор вакансий, ручной запуск фоновых проходов
+// Система (#128, бывшее «Администрирование»): пользователи, сбор вакансий, ручной запуск фоновых проходов (до вкладки LLM, #127)
 import { api, post, put, Unauthorized } from "../api/http";
 import type { CollectCounts, CollectState, User } from "../api/types";
 import { date, options } from "../format";
@@ -58,7 +58,7 @@ const ROLES: [string, string][] = [["User", "User"], ["Admin", "Admin"]];
 
 type JobResult = Record<string, string | number>;
 
-export async function admin(): Promise<Child> {
+export async function system(): Promise<Child> {
   const user = me();
   if (user.role !== "Admin") return [EmptyState("Раздел только для администратора.")];
   const users = await api<User[]>("/api/users");
@@ -94,7 +94,7 @@ export async function admin(): Promise<Child> {
   const jobButtons = jobs.map(([text, path, body, done]) => Button(text, { onClick: () => { setStatus(`${text}…`); return act(() => post<JobResult>(path, body), done); } }));
 
   return [
-    el("h1", { textContent: "Администрирование" }),
+    el("h1", { textContent: "Система" }),
     Card({ title: "Пользователи" },
       StackTable([{ title: "Email" }, { title: "Роль" }, { title: "Создан" }, { title: "" }], rows),
       el("h2", { textContent: "Новый пользователь", style: "margin-top:16px" }), createForm),
