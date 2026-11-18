@@ -221,7 +221,7 @@ td.n, th.n { text-align: right; font-family: var(--mono); }
   .bar > select, .bar > input:not([type=checkbox]) { flex: 1 1 100%; }
   .actions > button, .actions > input { flex: 1 1 100%; }
   .actions > .result { flex: 1 1 100%; text-align: center; }
-  .seg button { min-height: 36px; }
+  .seg button { min-height: 44px; min-width: 44px; }
   .toasts { bottom: calc(80px + env(safe-area-inset-bottom)); }
   /* StackTable → карточки «поле: значение» */
   table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
