@@ -1,4 +1,5 @@
 using System.Net;
+using HhAutoApplier.Application;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Collecting;
 using HhAutoApplier.Application.Llm;
@@ -23,6 +24,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<CollectorOptions>(config.GetSection(CollectorOptions.Section));
+        services.Configure<StageOptions>(config.GetSection(StageOptions.Section));
         services.AddDbContext<AppDbContext>(o => o.UseNpgsql(config.GetConnectionString("Default")));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 

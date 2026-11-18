@@ -1,10 +1,11 @@
 using System.Reflection;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
+using Microsoft.Extensions.Options;
 
 namespace HhAutoApplier.Application.Queries.About;
 
-public class GetVersionQueryHandler : IQueryHandler<GetVersionQuery, BuildVersionDto>
+public class GetVersionQueryHandler(IOptions<StageOptions> stage) : IQueryHandler<GetVersionQuery, BuildVersionDto>
 {
     private const int ShortCommitLength = 7;
 
@@ -15,6 +16,7 @@ public class GetVersionQueryHandler : IQueryHandler<GetVersionQuery, BuildVersio
         var parts = informational.Split('+', 2);
         var commit = parts.Length > 1 ? parts[1][..Math.Min(ShortCommitLength, parts[1].Length)] : "unknown";
 
-        return Task.FromResult(new BuildVersionDto(parts[0], commit, ApiContract.Version));
+        var label = stage.Value.Enabled ? stage.Value.Label!.Trim() : null;
+        return Task.FromResult(new BuildVersionDto(parts[0], commit, ApiContract.Version, label));
     }
 }
