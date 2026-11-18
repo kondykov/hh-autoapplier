@@ -7,8 +7,8 @@ using HhAutoApplier.Domain.Links;
 namespace HhAutoApplier.Infrastructure.Links;
 
 // Проверка направления без запросов к API (#132): подключение (через прокси — CONNECT host:443) и TLS-рукопожатие с сервисом.
-// Ключи и токены не нужны и не передаются; сертификат сервиса проверяется, как у обычного запроса. certificates — подмена
-// проверки сертификата для тестов
+// Ключи и токены не нужны и не передаются; сертификат сервиса проверяется, как у HTTP-клиента этого сервиса: своя проверка
+// направления (LinkTarget.Certificates, ГигаЧат — #138) или системная. certificates — подмена проверки для всех направлений в тестах
 public class LinkProber(TimeSpan timeout, RemoteCertificateValidationCallback? certificates = null)
 {
     // Ответ прокси на CONNECT — заголовки, тело не ждём
@@ -79,7 +79,7 @@ public class LinkProber(TimeSpan timeout, RemoteCertificateValidationCallback? c
             await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
             {
                 TargetHost = target.Host,
-                RemoteCertificateValidationCallback = certificates,
+                RemoteCertificateValidationCallback = certificates ?? target.Certificates,
             }, deadline.Token);
             return Result(LinkState.Ok);
         }
