@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg">
   <!-- Иконки UI kit (#129): свои, 24×24, контур 1.75 (толщину и цвет задаёт .ic в ui.css), в духе моноширинного логотипа «hh=#».
-       Подключение: Icon("name") в ui.js → <svg class="ic"><use href="ui/icons.svg#name"/></svg> -->
+       Подключение: Icon("name") в ui.ts → <svg class="ic"><use href="/icons.[hash].svg#name"/></svg> (адрес задаёт setIconSprite) -->
   <symbol id="dashboard" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="9" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="5" rx="1.5"/><rect x="13.5" y="11.5" width="7" height="9" rx="1.5"/><rect x="3.5" y="15.5" width="7" height="5" rx="1.5"/></symbol>
   <symbol id="review" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
   <symbol id="dialogs" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5 12 13l8.5-6.5"/></symbol>

@@ -509,26 +509,58 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
     {
         var page = await factory.CreateClient().GetAsync("/review.html");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("url=/#review", await page.Content.ReadAsStringAsync());
-        Assert.Contains("url=/#dialogs", await (await factory.CreateClient().GetAsync("/dialogs.html")).Content.ReadAsStringAsync());
+        Assert.Contains("url=/review", await page.Content.ReadAsStringAsync());
+        Assert.Contains("url=/dialogs", await (await factory.CreateClient().GetAsync("/dialogs.html")).Content.ReadAsStringAsync());
     }
 
+    // Сборка веба (#130, npm run build:web) — в wwwroot: без неё страницы нет, и тесты ниже падают
     [Fact]
     public async Task WebInterface_AtRoot_WithoutKey()
     {
         var client = factory.CreateClient();
         var page = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Equal("no-cache", page.Headers.CacheControl?.ToString());
         var html = await page.Content.ReadAsStringAsync();
-        Assert.Contains("app.js", html);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/app.js")).StatusCode);
 
-        // UI kit (#129): страница подключает токены, стили и модуль компонентов, а они отдаются статикой (расширение возьмёт те же файлы)
-        foreach (var file in new[] { "ui/tokens.css", "ui/ui.css", "ui/ui.js", "app.css" })
-            Assert.Contains(file, html);
-        Assert.Contains("type=\"module\"", html);
-        foreach (var file in new[] { "/ui/tokens.css", "/ui/ui.css", "/ui/ui.js", "/ui/icons.svg", "/app.css" })
-            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(file)).StatusCode);
+        // Скрипт и стили — с отпечатком в имени: новая сборка — новые имена, их можно кэшировать надолго
+        var script = System.Text.RegularExpressions.Regex.Match(html, "<script type=\"module\" src=\"(/app\\.[A-Z0-9]{8}\\.js)\"").Groups[1].Value;
+        var styles = System.Text.RegularExpressions.Regex.Match(html, "<link rel=\"stylesheet\" href=\"(/app\\.[A-Z0-9]{8}\\.css)\"").Groups[1].Value;
+        Assert.NotEmpty(script);
+        Assert.NotEmpty(styles);
+        foreach (var file in new[] { script, styles })
+        {
+            var response = await client.GetAsync(file);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("immutable", response.Headers.CacheControl?.ToString());
+        }
+    }
+
+    // Разделы — на путях (#130): обновление страницы на разделе отдаёт ту же страницу, а неизвестный путь API остаётся 404
+    [Theory]
+    [InlineData("/vacancies")]
+    [InlineData("/vacancies?status=Queued")]
+    [InlineData("/kit/frame")]
+    [InlineData("/review")]
+    public async Task WebInterface_SectionPath_ServesPage(string path)
+    {
+        var page = await factory.CreateClient().GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Equal("text/html", page.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("<script type=\"module\"", await page.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("/api/неизвестное")]
+    [InlineData("/api")]
+    [InlineData("/API/unknown")]
+    [InlineData("/health/x")]
+    [InlineData("/app.00000000.js")]
+    public async Task WebInterface_ServerPathsAndFiles_NotPage(string path)
+    {
+        var response = await factory.CreateClient().GetAsync(path);
+        Assert.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized, $"{path}: {response.StatusCode}");
+        Assert.NotEqual("text/html", response.Content.Headers.ContentType?.MediaType);
     }
 
     [Fact]

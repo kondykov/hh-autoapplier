@@ -10,16 +10,14 @@
     // Тема (#120): system | dark | light, выбор в localStorage; до отрисовки, чтобы не мигало
     try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
   </script>
-  <!-- UI kit (#129): токены и компоненты — ui/ (общие с расширением), каркас веба — app.css -->
-  <link rel="stylesheet" href="ui/tokens.css">
-  <link rel="stylesheet" href="ui/ui.css">
-  <link rel="stylesheet" href="app.css">
-  <link rel="modulepreload" href="ui/ui.js">
+  <!-- Шаблон (#130): scripts/build-web.mjs подставляет файлы сборки с отпечатком в имени (app.[hash].css / .js) — новая сборка
+       меняет имена, и браузер берёт новые файлы без сброса кэша. Стили — UI kit (ui/) и каркас (app.css) одним файлом -->
+  <link rel="stylesheet" href="{{css}}">
 </head>
 <body>
 <header>
   <div class="top">
-    <a class="brand" href="#dashboard"><span class="mark">hh<b>=#</b></span><span class="name">autoapplier</span></a>
+    <a class="brand" href="/dashboard"><span class="mark">hh<b>=#</b></span><span class="name">autoapplier</span></a>
     <span id="viewing" hidden><label class="muted" for="view-as">Данные:</label> <select id="view-as"></select></span>
     <span id="who"></span>
     <button id="theme" class="icon" type="button" title="Тема" aria-label="Тема"></button>
@@ -45,7 +43,6 @@
 
 <nav id="tabbar" class="tabbar" hidden aria-label="Разделы"></nav>
 
-<!-- Модуль: компоненты импортирует из ui/ui.js -->
-<script type="module" src="app.js"></script>
+<script type="module" src="{{js}}"></script>
 </body>
 </html>

@@ -125,7 +125,7 @@ public class VacanciesController : ApiController
     /// <summary>
     /// Ручная проверка вакансии в статусе Review: одобрить — в очередь (coverLetter — поправленное письмо, пусто — письмо LLM;
     /// answers — поправленные ответы анкеты, все по порядку вопросов, пусто — ответы LLM),
-    /// отклонить — Skipped с причиной. Список на проверке — GET /api/vacancies?status=Review, страница — веб-интерфейс, «Проверка» (/#review).
+    /// отклонить — Skipped с причиной. Список на проверке — GET /api/vacancies?status=Review, страница — веб-интерфейс, «Проверка» (/review).
     /// </summary>
     /// <response code="404">Вакансия не найдена.</response>
     /// <response code="409">Вакансия не на проверке.</response>

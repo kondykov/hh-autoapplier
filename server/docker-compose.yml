@@ -18,7 +18,9 @@ services:
 
   api:
     build:
-      context: .
+      # Контекст — корень репозитория: образ собирает и веб из web/ (#130)
+      context: ..
+      dockerfile: server/Dockerfile
       args:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     restart: unless-stopped

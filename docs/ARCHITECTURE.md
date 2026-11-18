@@ -87,6 +87,8 @@ node scripts/dev-browser.mjs   # Chromium с расширением, профи�
 
 Браузер читает расширение только при старте, поэтому после сборки его перезапускают.
 
+Веб-интерфейс backend — отдельный проект `web/` в том же `package.json` (#130): `npm run typecheck:web`, `npm run build:web`, тесты — в общем `npm test`. Описание — [BACKEND.md](BACKEND.md), компоненты — [design/ui-kit.md](design/ui-kit.md). До реорганизации репозитория (#131) расширение остаётся в корне.
+
 ## Не сделано
 
 - Работа без присмотра

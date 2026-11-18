@@ -1,4 +1,4 @@
-# Проверка расширения и backend на каждый push и pull request
+# Проверка расширения, веба (web/, #130) и backend на каждый push и pull request
 name: CI
 
 on:
@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   extension:
-    name: Расширение (typecheck, test, build)
+    name: Расширение и веб (typecheck, test, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +27,12 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
       - run: npm run typecheck
+      - run: npm run typecheck:web
+      # tests/ — расширение, web/tests/ — веб
       - run: npm test
       # Без letter.local.txt сборка берёт письмо по умолчанию
       - run: npm run build
+      - run: npm run build:web
 
   server:
     name: Backend (build, test)
@@ -39,6 +42,17 @@ jobs:
         working-directory: server
     steps:
       - uses: actions/checkout@v4
+
+      # Тесты API открывают веб-интерфейс: нужна сборка web/ в wwwroot (npm run build:web в корне)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci && npm run build:web
+        working-directory: .
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
       - uses: actions/setup-dotnet@v4
         with:

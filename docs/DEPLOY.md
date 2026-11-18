@@ -19,6 +19,8 @@ Workflow — [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), 
 - выполняет checkout в `/opt/hh-autoapplier`, `docker compose up -d --build` с `GIT_COMMIT` выкатываемого коммита (его показывает `GET /api/version`) и ждёт `/health` (до 3 минут); затем сверяет `commit` из `GET /api/version` с выкатываемым коммитом (#116): другой коммит — сбой и откат, 401 — сборка до #116, версия в Summary «нет»;
 - при сбое сохраняет логи API в `/var/backups/hh-autoapplier/deploy-failed-*.log`, возвращает предыдущий коммит, задача становится красной. GitHub присылает письмо о сбое; уведомление в Telegram — после #28.
 
+Образ собирается из корня репозитория (#130): сначала шаг Node (`node:22-alpine`, `npm ci` и `npm run build:web`) собирает веб, затем `dotnet publish`. Сборке нужен доступ к Docker Hub и registry.npmjs.org; `HTTPS_PROXY` из `server/.env` действует только на работающий контейнер, не на сборку. Сам `deploy.sh` не менялся: compose по-прежнему запускается из `server/`.
+
 Одновременно идёт только один деплой. Логи Actions в публичном репозитории видны всем, поэтому логи приложения в них не выводятся.
 
 ## Как откатить

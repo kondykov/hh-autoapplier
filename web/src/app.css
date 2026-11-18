@@ -1,4 +1,4 @@
-/* Каркас веба (#46, #120): шапка, навигация, main, строка статуса и витрина #kit. Компоненты — ui/ui.css, токены — ui/tokens.css */
+/* Каркас веба (#46, #120): шапка, навигация, main, строка статуса и витрина /kit. Компоненты — ui/ui.css, токены — ui/tokens.css */
 
 header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
 .top { max-width: var(--page); margin: 0 auto; padding: 10px var(--sp-4); display: flex; flex-wrap: wrap; gap: var(--sp-2) 14px; align-items: center; }
@@ -19,7 +19,7 @@ main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 
   main { padding: 14px var(--sp-3) calc(96px + env(safe-area-inset-bottom)); }
 }
 
-/* Витрина #kit (#129) */
+/* Витрина /kit (#129) */
 .kit-sec { margin-bottom: var(--sp-6); }
 .kit-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
 .kit-row > .muted { font: var(--fs-2xs) var(--mono); min-width: 90px; }

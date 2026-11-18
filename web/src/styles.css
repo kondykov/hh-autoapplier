@@ -1,0 +1,4 @@
+/* Стили веба одним файлом (#130): сборка склеивает их в app.[hash].css. Токены и компоненты — UI kit (ui/), каркас — app.css */
+@import "./ui/tokens.css";
+@import "./ui/ui.css";
+@import "./app.css";

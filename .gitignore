@@ -10,3 +10,5 @@ server/**/obj/
 server/.env
 .tools/
 server/.idea/
+# Сборка веба (#130, npm run build:web): wwwroot целиком генерируется из web/
+server/src/HhAutoApplier.Api/wwwroot/
