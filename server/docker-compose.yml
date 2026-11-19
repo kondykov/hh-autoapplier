@@ -33,6 +33,8 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:-}
       Cors__Origins: ${CORS_ORIGINS:-}
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      # Метка тестового стенда (#124): пусто — боевой сервер; задана — плашка в вебе и строка в боте
+      Stage__Label: ${STAGE_LABEL:-}
       Hh__Enabled: ${HH_ENABLED:-true}
       Collector__IntervalMinutes: ${COLLECT_INTERVAL_MINUTES:-60}
       Collector__MaxPages: ${COLLECT_MAX_PAGES:-20}

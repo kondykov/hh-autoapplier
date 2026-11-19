@@ -64,6 +64,8 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         var version = await Json(response);
         Assert.Matches(@"^\d+\.\d+\.\d+(-rc\.\d+)?$", version.GetProperty("version").GetString()!);
         Assert.Equal(HhAutoApplier.Application.ApiContract.Version, version.GetProperty("apiVersion").GetInt32());
+        // Боевой сервер без STAGE_LABEL (#124): метки нет
+        Assert.Equal(JsonValueKind.Null, version.GetProperty("stage").ValueKind);
     }
 
     // CORS выключен по умолчанию (#20): чужой сайт не получает разрешения ни на preflight, ни на обычный запрос

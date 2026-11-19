@@ -1,10 +1,13 @@
 using System.Net;
+using System.Net.Security;
+using HhAutoApplier.Application;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Collecting;
 using HhAutoApplier.Application.Llm;
 using HhAutoApplier.Domain.Llm;
 using HhAutoApplier.Infrastructure.Collecting;
 using HhAutoApplier.Infrastructure.Identity;
+using HhAutoApplier.Infrastructure.Links;
 using HhAutoApplier.Infrastructure.Llm;
 using HhAutoApplier.Infrastructure.Persistence;
 using HhAutoApplier.Infrastructure.Sources.Hh;
@@ -23,6 +26,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<CollectorOptions>(config.GetSection(CollectorOptions.Section));
+        services.Configure<StageOptions>(config.GetSection(StageOptions.Section));
         services.AddDbContext<AppDbContext>(o => o.UseNpgsql(config.GetConnectionString("Default")));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
@@ -118,6 +122,23 @@ public static class DependencyInjection
         services.AddSingleton<TelegramBot>();
         services.AddSingleton<ITelegramBot>(sp => sp.GetRequiredService<TelegramBot>());
         services.AddHostedService<TelegramHostedService>();
+
+        // Проверка связи по направлениям (#132): Bot API и провайдеры LLM с ключом — тем же прокси, что у HTTP-клиентов
+        services.Configure<LinkOptions>(config.GetSection(LinkOptions.Section));
+        var telegramOn = !string.IsNullOrWhiteSpace(config.GetSection(TelegramOptions.Section).Get<TelegramOptions>()?.BotToken);
+        var llmWithKey = new[] { llmOptions }.Concat(llmRoutes.Values).Where(o => !string.IsNullOrWhiteSpace(o.ApiKey)).ToList();
+        // ГигаЧат — с тем же доверием к корню Минцифры, что у его HTTP-клиентов: иначе проверка видит «недоверенный сертификат» (#138)
+        Dictionary<string, RemoteCertificateValidationCallback>? gigaChatCertificates = null;
+        if (root is not null)
+        {
+            RemoteCertificateValidationCallback minTsifry = (_, certificate, chain, errors) => GigaChatTls.Validate(root, certificate, chain, errors);
+            gigaChatCertificates = llmWithKey.Where(o => o.GetProfile().Name == LlmOptions.GigaChatProvider)
+                .Select(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out var u) ? u.Host : null)
+                .OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(h => h, _ => minTsifry, StringComparer.OrdinalIgnoreCase);
+        }
+        services.AddSingleton(new LinkTargets(LinkTargets.Endpoints(telegramOn, llmWithKey.Select(o => o.BaseUrl)), HttpClient.DefaultProxy, gigaChatCertificates));
+        services.AddHostedService<LinkMonitorHostedService>();
 
         services.AddSingleton<CollectionProgress>();
         services.AddSingleton<ICollectionBackground, CollectionBackground>();

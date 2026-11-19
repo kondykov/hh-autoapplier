@@ -238,6 +238,52 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.ToTable("EmployerMessages");
                 });
 
+            modelBuilder.Entity("HhAutoApplier.Domain.Links.LinkOutage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndedAt")
+                        .HasFilter("\"EndedAt\" IS NULL");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("LinkOutages");
+                });
+
             modelBuilder.Entity("HhAutoApplier.Domain.Llm.LlmCall", b =>
                 {
                     b.Property<long>("Id")
@@ -335,10 +381,16 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<DateTimeOffset?>("WaitingSince")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SentAt")
                         .HasFilter("\"SentAt\" IS NULL");
+
+                    b.HasIndex("WaitingSince")
+                        .HasFilter("\"WaitingSince\" IS NOT NULL");
 
                     b.HasIndex("UserId", "Key")
                         .IsUnique();
