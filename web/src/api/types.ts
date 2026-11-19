@@ -227,3 +227,89 @@ export interface BulkResult {
   done: string[];
   failed: { id: string; error: string }[];
 }
+
+// GET /api/llm/calls (#127): count > 1 — свёрнутые повторы одной ошибки подряд (since — первый из них)
+export interface LlmCallEntry {
+  id: number;
+  at: string;
+  since: string;
+  count: number;
+  purposes: string[];
+  model: string;
+  connection: string | null;
+  outcome: "ok" | "rejected" | "error";
+  detail: string | null;
+  errorKind: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  // Только администратору
+  user: string | null;
+  vacancyId: string | null;
+  vacancy: string | null;
+}
+
+export interface LlmCalls {
+  total: number;
+  errors: number;
+  items: LlmCallEntry[];
+  matched: number;
+  purposes: { id: string; count: number }[];
+  models: { id: string; count: number }[];
+}
+
+// GET /api/llm/calls/{id}: промпт и ответ — только текстом
+export interface LlmCall {
+  id: number;
+  at: string;
+  purpose: string;
+  model: string;
+  connection: string | null;
+  error: string | null;
+  prompt: string;
+  response: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  vacancyId: string | null;
+}
+
+// GET /api/llm/letters: rewritten — письмо уже переписано и ждёт одобрения в «Проверке»
+export interface LlmLetter {
+  vacancyId: string;
+  title: string;
+  company: string;
+  url: string | null;
+  reason: string;
+  letter: string | null;
+  model: string | null;
+  rewritten: boolean;
+  at: string | null;
+}
+
+// GET /api/llm/connections (администратор): key — маска «…abcd» или «задан», null — не задан
+export interface LlmServerConnections {
+  connections: { kind: "main" | "route" | "named"; connection: LlmConnection; host: string | null; key: string | null }[];
+  defaults: { task: string; connection: LlmConnection }[];
+  proxy: string | null;
+}
+
+// GET /api/health/links (#132)
+export interface LinkOutage {
+  id: number;
+  subject: string;
+  scope: string;
+  reason: string;
+  detail: string | null;
+  startedAt: string;
+  lastSeenAt: string;
+  endedAt: string | null;
+}
+
+export interface Links {
+  enabled: boolean;
+  proxy: string | null;
+  checkedAt: string | null;
+  links: { link: string; viaProxy: boolean; state: string; detail: string | null; checkedAt: string; lastOkAt: string | null }[];
+  open: LinkOutage[];
+  recent: LinkOutage[];
+  waitingNotifications: number;
+}

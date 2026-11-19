@@ -1,8 +1,9 @@
-// Система (#128, бывшее «Администрирование»): пользователи, сбор вакансий, ручной запуск фоновых проходов (до вкладки LLM, #127)
+// Система (#128, бывшее «Администрирование»): пользователи и сбор вакансий; подключения и запуск задач LLM — во вкладке LLM (#127)
 import { api, post, put, Unauthorized } from "../api/http";
 import type { CollectCounts, CollectState, User } from "../api/types";
 import { date, options } from "../format";
-import { act, app, me, page as pageState, setStatus } from "../state";
+import { path } from "../router";
+import { act, app, me, page as pageState } from "../state";
 import { undoable } from "../undo";
 import { Actions, busy, Button, Card, Confirm, el, EmptyState, Form, StackTable, Toolbar, type Child } from "../ui/ui";
 
@@ -57,7 +58,6 @@ function collectionCard(): HTMLElement {
 
 const ROLES: [string, string][] = [["User", "User"], ["Admin", "Admin"]];
 
-type JobResult = Record<string, string | number>;
 
 export async function system(): Promise<Child> {
   const user = me();
@@ -99,23 +99,13 @@ export async function system(): Promise<Child> {
   const createForm = Form({ className: "bar", submit: create, onSubmit: () => act(() => post("/api/users", { email: email.value.trim(), password: password.value, role: newRole.value }),
     () => { app.render(); app.loadUsers(); return `Пользователь ${email.value.trim()} создан`; }) }, email, password, newRole, create);
 
-  // Ручной запуск фоновых проходов: обычно они идут сами (сбор — раз в час, LLM — раз в минуту при наличии работы)
-  const jobs: [string, string, object | undefined, (r: JobResult) => string][] = [
-    ["Проверить LLM", "/api/llm/check", undefined, (r) => `LLM ${r.model}: ответ за ${r.latencyMs} мс`],
-    ["Оценить ожидающие", "/api/llm/evaluate", { limit: 20 }, (r) => `Оценено ${r.evaluated}: подходят ${r.fit}, сомнительных ${r.doubtful}, отклонено ${r.rejected}; осталось ${r.remaining}`],
-    ["Ответить на анкеты", "/api/llm/answers", { limit: 20 }, (r) => `Анкеты: отвечено ${r.answered}, не вышло ${r.failed}; осталось ${r.remaining}`],
-    ["Написать письма", "/api/llm/letters", { limit: 20 }, (r) => `Письма: написано ${r.written}, не вышло ${r.failed}; осталось ${r.remaining}`],
-  ];
-  const jobButtons = jobs.map(([text, path, body, done]) => Button(text, { onClick: () => { setStatus(`${text}…`); return act(() => post<JobResult>(path, body), done); } }));
-
   return [
     el("h1", { textContent: "Система" }),
     Card({ title: "Пользователи" },
       StackTable([{ title: "Email" }, { title: "Роль" }, { title: "Создан" }, { title: "" }], rows),
       el("h2", { textContent: "Новый пользователь", style: "margin-top:16px" }), createForm),
     collectionCard(),
-    Card({ title: "Запустить сейчас" },
-      el("p", { className: "muted", textContent: "Обычно не нужно: LLM работает раз в минуту, если есть работа. Тратит лимит LLM." }),
-      Toolbar(jobButtons, { flush: true })),
+    Card({ title: "LLM" },
+      el("p", { className: "muted" }, "Подключения, «Проверить» и ручной запуск задач LLM — в ", el("a", { href: path("llm", {}, "connections"), textContent: "«LLM → Подключения»" }), ".")),
   ];
 }

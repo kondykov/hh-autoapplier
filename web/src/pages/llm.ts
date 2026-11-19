@@ -1,7 +1,9 @@
 // LLM (#127): подвкладки Обзор · Отсев · Журнал · Письма · Мои модели · Подключения (администратор).
-// Работают «Обзор» и «Отсев» (#127) и «Мои модели» (#107); остальные — «скоро»
+// «Мои модели» — #107, остальные — #127; «Подключения» — только администратору
 import { api, put } from "../api/http";
 import type { LlmConnection, LlmProviders, UserLlmSettings } from "../api/types";
+import { connections } from "./llm-connections";
+import { journal, letters } from "./llm-log";
 import { overview, rejects } from "./llm-tab";
 import { path, type Route } from "../router";
 import { act, app, me, readOnly, scoped, session } from "../state";
@@ -21,10 +23,10 @@ interface Sub {
 const SUBS: Sub[] = [
   { id: "overview", label: "Обзор" },
   { id: "rejects", label: "Отсев" },
-  { id: "log", label: "Журнал", soon: "Вызовы LLM: модель, итог, токены" },
-  { id: "letters", label: "Письма", soon: "Письма, отклонённые проверкой" },
+  { id: "journal", label: "Журнал" },
+  { id: "letters", label: "Письма" },
   { id: "models", label: "Мои модели" },
-  { id: "connections", label: "Подключения", admin: true, soon: "Подключения сервера: проверка и остатки лимитов" },
+  { id: "connections", label: "Подключения", admin: true },
 ];
 const DEFAULT_SUB = "overview";
 
@@ -52,9 +54,15 @@ export async function llm(route: Route): Promise<Child> {
   const tabs = Tabs(subs.map((s) => ({ href: path("llm", {}, s.id), label: s.label, active: s.id === sub.id })), { label: "Подвкладки LLM" });
   tabs.classList.add("views");
   const head = PageHead("LLM", "Оценка вакансий, анкеты, письма и разбор ответов работодателей");
+  // Подвкладка администратора по адресу у пользователя — объяснение, а не молча «Обзор»
+  if (route.sub && !subs.some((s) => s.id === route.sub) && SUBS.some((s) => s.id === route.sub && s.admin))
+    return [head, tabs, Card({}, EmptyState("Раздел только для администратора.", { icon: "admin" }))];
   if (sub.soon) return [head, tabs, Card({}, EmptyState(`Скоро: ${sub.soon}.`, { icon: "llm" }))];
   if (sub.id === "overview") return [head, tabs, await overview()];
   if (sub.id === "rejects") return [head, tabs, await rejects(route)];
+  if (sub.id === "journal") return [head, tabs, await journal(route)];
+  if (sub.id === "letters") return [head, tabs, await letters()];
+  if (sub.id === "connections") return [head, tabs, await connections()];
   return [head, tabs, await models()];
 }
 
