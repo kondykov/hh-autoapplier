@@ -42,6 +42,8 @@ docker compose start api
 
 Секреты (`POSTGRES_PASSWORD`, ключ LLM, токен Telegram) лежат только в `server/.env` на сервере. В секреты GitHub их не добавлять.
 
+**Подключения LLM для выбора пользователем** (#107) — файл `server/llm-providers.env` рядом с `.env` (образец — `server/llm-providers.env.example`, в git и в образ не попадает). Строка — `Llm__Providers__<имя>__<поле>=значение`, поля как у маршрута #104: `Provider`, `BaseUrl`, `ApiKey`, `Model`, `DailyRequestLimit` и др.; другой провайдер или адрес — свой `ApiKey`. Например, ГигаЧат: `Llm__Providers__gigachat__Provider=gigachat`, `…__BaseUrl=https://gigachat.devices.sberbank.ru/api/v1`, `…__ApiKey=<ключ>`, `…__Model=GigaChat-2-Max`. Файла нет — подключений нет, задачи идут маршрутами `.env`. Ошибка в подключении (неизвестный провайдер, чужой адрес без ключа, имя не латиницей) не даёт API стартовать — смотреть `docker compose logs api`. Другой путь к файлу — `LLM_PROVIDERS_FILE` в `.env`. После правки — `docker compose up -d` (пересборка не нужна). Миграция `UserLlmSettings` (таблица выбора и колонка `LlmCalls.Connection`) применяется при старте сама.
+
 ### Исходящий прокси и бэкапы (сервер, root)
 
 С российского IP Groq и Telegram напрямую не работают, hh.ru работает. VPN — окружение машины (#84): на home-server это Happ, его HTTP-прокси слушает только `127.0.0.1:10809`, и контейнеру он не виден. Relay `hh-proxy-relay` принимает соединения на `172.17.0.1:10810` (адрес хоста в docker0) и передаёт их в Happ. API получает `HTTPS_PROXY` из `server/.env`, hh.ru идёт напрямую через `NO_PROXY`. Ежедневный бэкап базы — `hh-backup.timer`, хранится 7 дней.

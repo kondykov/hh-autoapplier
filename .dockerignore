@@ -13,6 +13,7 @@ tests/
 deploy/
 letter.local.txt
 **/.env
+**/llm-providers.env
 server/.tools/
 server/.idea/
 server/tests/

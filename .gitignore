@@ -8,6 +8,7 @@ server/.tools/
 server/**/bin/
 server/**/obj/
 server/.env
+server/llm-providers.env
 .tools/
 server/.idea/
 # Сборка веба (#130, npm run build:web): wwwroot целиком генерируется из web/

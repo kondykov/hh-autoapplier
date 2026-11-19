@@ -27,6 +27,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Подключения LLM для выбора пользователем (#107): строки Llm__Providers__<имя>__<поле>=… — имена произвольные,
+    # поэтому отдельным файлом рядом с .env, а не переменными. Нет файла — подключений нет, всё идёт маршрутами сервера
+    env_file:
+      - path: ${LLM_PROVIDERS_FILE:-llm-providers.env}
+        required: false
     environment:
       ConnectionStrings__Default: Host=db;Port=5432;Database=hhapplier;Username=hhapplier;Password=${POSTGRES_PASSWORD:-hhapplier}
       Admin__Email: ${ADMIN_EMAIL:-}
