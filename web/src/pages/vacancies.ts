@@ -17,6 +17,7 @@ export const VIEWS = [
   { id: "queued", label: "В очереди", status: "Queued" },
   { id: "applied", label: "Отправлено", status: "Applied" },
   { id: "invited", label: "Приглашения", status: "Invited" },
+  { id: "interview", label: "Собеседования", status: "Interview" },
   { id: "rejected", label: "Отказы", status: "Rejected" },
   { id: "all", label: "Все", status: "" },
 ] as const;

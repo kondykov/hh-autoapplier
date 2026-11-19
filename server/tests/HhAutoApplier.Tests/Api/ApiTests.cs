@@ -579,8 +579,9 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         var bytes = await csv.Content.ReadAsByteArrayAsync();
         Assert.Equal(Encoding.UTF8.GetPreamble(), bytes[..3]);
         var lines = Encoding.UTF8.GetString(bytes[3..]).Split("\r\n");
-        Assert.Equal("Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме", lines[0]);
+        Assert.Equal("Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус", lines[0]);
         Assert.Contains("\"от 250000 RUR\"", lines[1]);
+        Assert.EndsWith(";\"отклик отправлен\"", lines[1]);
         Assert.Equal(2, lines.Length);
     }
 

@@ -423,10 +423,10 @@ public class JobApplication
         MoveTo(VacancyStatus.Failed, reason ?? StatusReason, at);
     }
 
-    // Работодатель отказал после отклика или после приглашения
+    // Работодатель отказал после отклика, приглашения или собеседования
     public void Reject(string? reason, DateTimeOffset at)
     {
-        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited))
+        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview))
             throw new DomainException("Отказ возможен только после отклика");
 
         MoveTo(VacancyStatus.Rejected, reason ?? StatusReason, at);
@@ -441,8 +441,19 @@ public class JobApplication
         MoveTo(VacancyStatus.Invited, reason, at);
     }
 
+    // Работодатель назначил собеседование (из чата hh.ru, #122): после отклика или приглашения.
+    // at раньше последнего перехода (пересчёт по старому сообщению) сдвигается к нему: история идёт по порядку
+    public void ScheduleInterview(string? reason, DateTimeOffset at)
+    {
+        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited))
+            throw new DomainException($"Собеседование возможно только после отклика или приглашения, сейчас {Status}");
+
+        var last = History.Count > 0 ? History[^1].At : at;
+        MoveTo(VacancyStatus.Interview, reason, at < last ? last : at);
+    }
+
     // Отклик уже у работодателя: письмо, анкету и статус до отклика не поменять
-    public bool Sent => Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Rejected;
+    public bool Sent => Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview or VacancyStatus.Rejected;
 
     // Вернуть в очередь пропущенный или упавший отклик. С незакрытыми просьбами — на проверку: из очереди он бы не вышел
     public void Requeue(DateTimeOffset at)

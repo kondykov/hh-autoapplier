@@ -74,8 +74,8 @@ public class GetLlmRejectsQueryHandler(IAppDbContext db, ICurrentUser current, T
         var returned = await mine.Where(a => a.Status != VacancyStatus.Skipped).GroupBy(a => a.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() }).ToListAsync(ct);
         var summary = new LlmReturnedDto(returned.Sum(r => r.Count),
-            returned.Where(r => r.Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Rejected).Sum(r => r.Count),
-            returned.Where(r => r.Status == VacancyStatus.Invited).Sum(r => r.Count));
+            returned.Where(r => r.Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview or VacancyStatus.Rejected).Sum(r => r.Count),
+            returned.Where(r => r.Status is VacancyStatus.Invited or VacancyStatus.Interview).Sum(r => r.Count));
         return new LlmRejectsDto(total, borderline, groups, page, items.Count, summary);
     }
 

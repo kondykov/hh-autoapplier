@@ -1,7 +1,7 @@
 // Ответы API, которые читает веб (#130). У расширения свой клиент (src/api) с типами только своих запросов:
 // общий пакет типов — при реорганизации репозитория (#131). Поля — как в JSON контроллеров backend (camelCase, enum строкой)
 
-export type VacancyStatus = "New" | "Pending" | "Review" | "Questionnaire" | "Queued" | "Applied" | "Invited" | "Rejected" | "Skipped" | "Failed";
+export type VacancyStatus = "New" | "Pending" | "Review" | "Questionnaire" | "Queued" | "Applied" | "Invited" | "Interview" | "Rejected" | "Skipped" | "Failed";
 
 export interface StatusChange {
   at: string;
@@ -312,4 +312,73 @@ export interface Links {
   open: LinkOutage[];
   recent: LinkOutage[];
   waitingNotifications: number;
+}
+
+// Дашборд (#121): GET /api/dashboard?period=&source=&userId=
+export interface DashboardFunnelStep {
+  key: string;
+  label: string;
+  count: number;
+  // От какого шага процент; null — 100%
+  base: string | null;
+}
+
+export interface DashboardPoint {
+  at: string;
+  sent: number;
+  answered: number;
+  invited: number;
+  interviews: number;
+}
+
+export interface DashboardSearch {
+  name: string;
+  collected: number;
+  sent: number;
+  answered: number;
+  invited: number;
+  interviews: number;
+}
+
+export interface Dashboard {
+  period: number;
+  source: string;
+  from: string;
+  to: string;
+  totals: {
+    collected: number; prevCollected: number; sent: number; prevSent: number; invited: number; prevInvited: number;
+    interviews: number; prevInterviews: number; rejected: number; prevRejected: number;
+  };
+  funnel: DashboardFunnelStep[];
+  series: { bucket: number; points: DashboardPoint[] };
+  bySearch: DashboardSearch[];
+  reasons: { reason: string; count: number }[];
+  sources: { source: string; collected: number; sent: number; invited: number; interviews: number }[];
+  llm: { requests: number; errors: number; limit: number };
+  // syncedAt — когда пришло последнее новое сообщение работодателя (время синхронизации сервер не хранит)
+  chats: { syncedAt: string | null; messages: number };
+}
+
+// GET /api/dashboard/system — только администратору
+export interface SystemUser {
+  id: string;
+  email: string;
+  role: string;
+  blocked: boolean;
+  collected: number;
+  sent: number;
+  llmRequests: number;
+  llmErrors: number;
+  llmTokens: number;
+  lastSentAt: string | null;
+  chatsSyncedAt: string | null;
+}
+
+export interface SystemDashboard {
+  period: number;
+  version: { version: string; commit: string; apiVersion: number; stage?: string | null };
+  collection: CollectState;
+  llm: LlmOverview;
+  users: SystemUser[];
+  notifications: { unsent: number; failed: number; oldestUnsentAt: string | null };
 }

@@ -26,7 +26,7 @@ public class OverviewSection(
     private static readonly VacancyStatus[] Order =
     [
         VacancyStatus.Queued, VacancyStatus.Review, VacancyStatus.Questionnaire, VacancyStatus.Pending, VacancyStatus.Applied,
-        VacancyStatus.Invited, VacancyStatus.Rejected, VacancyStatus.Skipped, VacancyStatus.Failed, VacancyStatus.New,
+        VacancyStatus.Invited, VacancyStatus.Interview, VacancyStatus.Rejected, VacancyStatus.Skipped, VacancyStatus.Failed, VacancyStatus.New,
     ];
 
     public IReadOnlyCollection<string> Actions => [Show, Report];
