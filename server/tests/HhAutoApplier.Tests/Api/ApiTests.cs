@@ -309,6 +309,22 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal([true, true, false], calls);
     }
 
+    // #113: пауза LLM или дневной лимит — запрос не ушёл, в журнал не пишется (раньше — строка с промптом каждую минуту)
+    [Fact]
+    public async Task LlmEvaluate_RefusedBeforeSend_NotLogged()
+    {
+        factory.Llm.Configured = true;
+        factory.Llm.UnsentWhenEmpty = true;
+        await SaveSearch();
+        await Json(await Import("dotnet", Card("1", "C# разработчик")));
+
+        var res = await Json(await _api.PostAsJsonAsync("/api/llm/evaluate", new { limit = 10 }));
+        Assert.Contains("лимит", res.GetProperty("stoppedBy").GetString());
+        Assert.Equal(1, res.GetProperty("remaining").GetInt32());
+
+        Assert.Equal(0, await factory.WithDbAsync(db => Task.FromResult(db.LlmCalls.Count())));
+    }
+
     [Fact]
     public async Task LlmLetters_ForQueuedWithoutLetter_ByResumeTemplate()
     {

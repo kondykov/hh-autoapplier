@@ -71,7 +71,8 @@ public class AnalyzeDialogsCommandHandler(
             catch (LlmUnavailableException e)
             {
                 // Лимит или провайдер недоступен: остальные ждут следующего прохода
-                db.LlmCalls.Add(LlmCall.Failed(DialogAnalysis.Purpose, subject, "", prompt, e.Message, clock.GetUtcNow()).For(message.UserId));
+                if (!e.NotSent)
+                    db.LlmCalls.Add(LlmCall.Failed(DialogAnalysis.Purpose, subject, "", prompt, e.Message, clock.GetUtcNow()).For(message.UserId));
                 await db.SaveChangesAsync(ct);
                 stoppedBy = e.Message;
                 break;

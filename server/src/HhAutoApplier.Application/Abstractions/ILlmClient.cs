@@ -26,4 +26,9 @@ public record LlmRequest(IReadOnlyList<LlmMessage> Messages, double Temperature 
 // Модель — та, что ответила (провайдер может подставить версию), токены — для учёта расходов
 public record LlmResult(string Content, string Model, int PromptTokens, int CompletionTokens);
 
-public class LlmUnavailableException(string reason) : Exception($"LLM недоступна: {reason}");
+// NotSent — запрос не ушёл к провайдеру (нет ключа, пауза, дневной лимит): конвейер не пишет такую попытку в журнал
+// LlmCalls — во время паузы это были бы строки с полным промптом каждую минуту (#113)
+public class LlmUnavailableException(string reason, bool notSent = false) : Exception($"LLM недоступна: {reason}")
+{
+    public bool NotSent { get; } = notSent;
+}
