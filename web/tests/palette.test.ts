@@ -1,8 +1,10 @@
 // Шапка и палитра команд (#128): фильтр, права, флаг поиска вакансий, Ctrl+K / Esc, знак «!» у LLM
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Vacancy } from "../src/api/types";
-import { llmAlert, paletteGroups, vacancySource, type CommandActions } from "../src/commands";
-import { CommandPalette, filterPalette, Tabs, type PaletteGroup } from "../src/ui/ui";
+import { llmAlert, paletteGroups, vacancyHref, vacancySource, type CommandActions } from "../src/commands";
+import { features } from "../src/config";
+import { parseVacancyFilter, vacancyApiQuery } from "../src/pages/vacancies";
+import { CommandPalette, filterPalette, Tabs, type PaletteGroup, type PaletteItem } from "../src/ui/ui";
 
 const actions: CommandActions = { theme: { label: "Тема: тёмная", icon: "moon", run: () => {} }, logout: () => {}, collect: () => {}, checkLlm: () => {} };
 const labels = (groups: PaletteGroup[]) => groups.flatMap((g) => g.items.map((i) => i.label));
@@ -42,19 +44,101 @@ describe("paletteGroups — права", () => {
   });
 });
 
-describe("vacancySource — за флагом", () => {
-  const list = [{ title: "C# разработчик", company: "Облако-9", url: "https://hh.ru/vacancy/1" }, { title: "PHP-разработчик", company: "Диджитал", url: "https://hh.ru/vacancy/2" }] as Vacancy[];
+describe("vacancySource — серверный поиск (#141)", () => {
+  const list = [
+    { id: "1", title: "C# разработчик", company: "Облако-9", url: "https://hh.ru/vacancy/1", status: "Applied" },
+    { id: "2", title: "PHP-разработчик", company: "Диджитал", url: "https://hh.ru/vacancy/2", status: "Review" },
+    { id: "3", title: "Тестировщик", company: "Облако-9", url: "https://hh.ru/vacancy/3", status: "Skipped", hiddenAt: "2026-11-01T00:00:00Z" },
+  ] as Vacancy[];
+  const signal = new AbortController().signal;
 
-  it("флаг выключен (по умолчанию) — источника нет, группа «Вакансии» не появится", () => {
-    expect(vacancySource(async () => list)).toEqual([]);
+  it("флаг включён по умолчанию; выключен — источника нет", () => {
+    expect(features.vacancySearch).toBe(true);
+    expect(vacancySource(async () => list)).toHaveLength(1);
+    expect(vacancySource(async () => list, false)).toEqual([]);
   });
-  it("флаг включён — фильтр по названию и компании, загрузка одна на палитру", async () => {
-    const load = vi.fn(async () => list);
-    const [source] = vacancySource(load, true);
+  it("запрос — серверу как есть, с signal; пункт ведёт в «Вакансии» или в «Проверку»", async () => {
+    const find = vi.fn(async () => list);
+    const [source] = vacancySource(find, true);
     expect(source.title).toBe("Вакансии");
-    expect((await source.search("c# облако")).map((i) => i.label)).toEqual(["C# разработчик"]);
-    expect((await source.search("php")).map((i) => i.href)).toEqual(["https://hh.ru/vacancy/2"]);
-    expect(load).toHaveBeenCalledTimes(1);
+    const items = await source.search("облако", signal);
+    expect(find).toHaveBeenCalledWith("облако", signal);
+    expect(items.map((i) => i.label)).toEqual(["C# разработчик", "PHP-разработчик", "Тестировщик"]);
+    expect(items[0].hint).toBe("Облако-9 · отклик отправлен");
+    expect(items.map((i) => i.href)).toEqual([
+      "/vacancies?view=all&status=Applied&q=C%23+%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%87%D0%B8%D0%BA",
+      "/review",
+      `/vacancies?view=all&status=Skipped&q=${encodeURIComponent("Тестировщик")}&hidden=1`,
+    ]);
+    expect(items.every((i) => !i.external)).toBe(true);
+  });
+  it("ссылка из палитры открывает «Вакансии» с тем же текстом и статусом", () => {
+    const href = vacancyHref(list[0]);
+    expect(parseVacancyFilter(new URL(href, "http://x").searchParams)).toMatchObject({ view: "all", status: "Applied", q: "C# разработчик", hidden: false });
+    expect(Object.fromEntries(vacancyApiQuery(parseVacancyFilter(new URL(href, "http://x").searchParams)))).toMatchObject({ status: "Applied", q: "C# разработчик" });
+  });
+  it("не больше 8 пунктов; пустой ответ — пусто", async () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ ...list[0], id: String(i) }));
+    expect(await vacancySource(async () => many, true)[0].search("c#", signal)).toHaveLength(8);
+    expect(await vacancySource(async () => [], true)[0].search("нет", signal)).toEqual([]);
+  });
+});
+
+describe("CommandPalette — источник с запросом", () => {
+  afterEach(() => vi.useRealTimers());
+  const type = (input: HTMLInputElement, value: string) => { input.value = value; input.dispatchEvent(new Event("input")); };
+
+  it("запрос — после паузы ввода 200 мс, короче 2 символов — без запроса; прошлый запрос отменяется", async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const search = vi.fn((q: string, signal: AbortSignal) => { signals.push(signal); return new Promise<PaletteItem[]>(() => {}); });
+    const palette = CommandPalette({ groups: () => [], sources: [{ title: "Вакансии", search }] });
+    palette.open();
+    const input = palette.querySelector("input")!;
+    type(input, "c");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(search).not.toHaveBeenCalled();
+    type(input, "c#");
+    type(input, "c# р");
+    await vi.advanceTimersByTimeAsync(199);
+    expect(search).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenLastCalledWith("c# р", expect.anything());
+    // Новый ввод — прошлый запрос отменён, новый — после паузы
+    type(input, "c# ра");
+    expect(signals[0].aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(search).toHaveBeenCalledTimes(2);
+    // Закрытие отменяет идущий запрос
+    palette.close();
+    expect(signals[1].aborted).toBe(true);
+    palette.dispose();
+  });
+
+  it("найденное — группой «Вакансии»; пустой ответ — «Ничего не найдено»; ответ на устаревший запрос не рисуется", async () => {
+    vi.useFakeTimers();
+    let answer: (items: PaletteItem[]) => void = () => {};
+    const search = vi.fn((q: string) => q === "пусто" ? Promise.resolve([]) : new Promise<PaletteItem[]>((r) => { answer = r; }));
+    const palette = CommandPalette({ groups: () => [], sources: [{ title: "Вакансии", search }] });
+    palette.open();
+    const input = palette.querySelector("input")!;
+    type(input, "разработчик");
+    await vi.advanceTimersByTimeAsync(200);
+    const stale = answer;
+    type(input, "тестировщик");
+    await vi.advanceTimersByTimeAsync(200);
+    answer([{ label: "Тестировщик", href: "/vacancies?q=x" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    stale([{ label: "Устаревшее", href: "/vacancies" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(palette.querySelector(".palette-caption")?.textContent).toBe("Вакансии");
+    expect([...palette.querySelectorAll("[role=option]")].map((o) => o.textContent)).toEqual(["Тестировщик"]);
+    type(input, "пусто");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(palette.querySelector("[role=option]")).toBeNull();
+    expect(palette.querySelector(".palette-empty")?.textContent).toBe("Ничего не найдено");
+    palette.dispose();
   });
 });
 

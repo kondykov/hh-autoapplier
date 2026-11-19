@@ -2,6 +2,7 @@
 // каркас (main.ts) передаёт сюда права, счётчики и действия, тесты — свои
 import type { LlmOverview, Vacancy } from "./api/types";
 import { features } from "./config";
+import { STATUSES } from "./format";
 import { LLM_SUBS } from "./pages/llm";
 import { path, type RouteName } from "./router";
 import type { IconName, NavAlert, PaletteGroup, PaletteItem, PaletteSource } from "./ui/ui";
@@ -70,24 +71,23 @@ export function paletteGroups(isAdmin: boolean, actions: CommandActions): Palett
   return [{ title: "Разделы", items: sections }, { title: "Команды", items: commands }];
 }
 
-// Поиск по вакансиям в палитре — за флагом features.vacancySearch (по умолчанию выключен).
-// ВРЕМЕННО: в GET /api/vacancies нет поиска по названию (search — имя поиска hh.ru), поэтому источник берёт одну страницу
-// вакансий (load) и фильтрует её на клиенте — дальше первых take вакансий не ищет. Для релиза: серверный поиск по названию
-// и компании (#128) или флаг остаётся выключенным
-export const VACANCY_SEARCH_TAKE = 200;
-export function vacancySource(load: () => Promise<Vacancy[]>, enabled = features.vacancySearch): PaletteSource[] {
+// Куда ведёт вакансия из палитры: на проверке — в «Проверку», остальные — в «Вакансии», вид «Все» с её статусом
+// и текстом-названием (q), скрытая — со скрытыми
+export function vacancyHref(v: Pick<Vacancy, "title" | "status" | "hiddenAt">): string {
+  if (v.status === "Review") return path("review");
+  return path("vacancies", { view: "all", status: v.status, q: v.title, hidden: v.hiddenAt ? "1" : null });
+}
+
+// Поиск по вакансиям в палитре (#141) — за флагом features.vacancySearch. Ищет сервер: GET /api/vacancies?q= — слова
+// в названии или компании, свои отклики, до 20 самых свежих. Палитра зовёт источник после паузы ввода и отменяет устаревший
+// запрос (signal). find — запрос к API (каркас добавляет права администратора и includeHidden)
+export const VACANCY_SEARCH_SHOWN = 8;
+export function vacancySource(find: (query: string, signal: AbortSignal) => Promise<Vacancy[]>, enabled = features.vacancySearch): PaletteSource[] {
   if (!enabled) return [];
-  let cache: Promise<Vacancy[]> | null = null;
   return [{
     title: "Вакансии",
     min: 2,
-    search: async (query) => {
-      cache ??= load().catch((e) => { cache = null; throw e; });
-      const words = query.toLocaleLowerCase("ru-RU").split(/\s+/).filter(Boolean);
-      return (await cache)
-        .filter((v) => { const hay = `${v.title} ${v.company}`.toLocaleLowerCase("ru-RU"); return words.every((w) => hay.includes(w)); })
-        .slice(0, 8)
-        .map((v): PaletteItem => ({ label: v.title, hint: v.company, icon: "external", href: v.url, external: true }));
-    },
+    search: async (query, signal) => (await find(query, signal)).slice(0, VACANCY_SEARCH_SHOWN)
+      .map((v): PaletteItem => ({ label: v.title, hint: [v.company, STATUSES[v.status] ?? v.status].filter(Boolean).join(" · "), icon: "vacancies", href: vacancyHref(v) })),
   }];
 }

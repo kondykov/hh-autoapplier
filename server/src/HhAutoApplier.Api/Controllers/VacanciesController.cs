@@ -28,6 +28,7 @@ public class VacanciesController : ApiController
 
     /// <summary>
     /// Список вакансий с фильтром по статусу и поиску, новые сверху.
+    /// ?q=текст — слова в названии или компании (без учёта регистра); не короче 2 символов, не больше 20 вакансий.
     /// </summary>
     [HttpGet("vacancies")]
     [ProducesResponseType(typeof(IReadOnlyList<VacancyDto>), StatusCodes.Status200OK)]

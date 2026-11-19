@@ -4,7 +4,7 @@ import "./styles.css";
 import iconsUrl from "./ui/icons.svg";
 import { api, post, Unauthorized } from "./api/http";
 import type { Dialog, LlmOverview, Me, Stats, User, Vacancy } from "./api/types";
-import { llmAlert, paletteGroups, VACANCY_SEARCH_TAKE, vacancySource, visibleSections, type Section } from "./commands";
+import { llmAlert, paletteGroups, vacancySource, visibleSections, type Section } from "./commands";
 import { account } from "./pages/account";
 import { candidate } from "./pages/candidate";
 import { dashboard } from "./pages/dashboard";
@@ -102,7 +102,7 @@ function buildPalette() {
         checkLlm: () => { setStatus("Проверяем LLM…"); return act(() => post<{ model: string; latencyMs: number }>("/api/llm/check"), (r) => `LLM: ${r.model} ответила за ${r.latencyMs} мс`); },
       });
     },
-    sources: vacancySource(() => api<Vacancy[]>(scoped(`/api/vacancies?take=${VACANCY_SEARCH_TAKE}&includeHidden=true`))),
+    sources: vacancySource((q, signal) => api<Vacancy[]>(scoped(`/api/vacancies?${new URLSearchParams({ q, includeHidden: "true" })}`), { signal })),
   });
   const open = () => palette?.open();
   byId("find").replaceChildren(SearchButton("Найти вакансию, команду…", { keys: /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K", onClick: open }));

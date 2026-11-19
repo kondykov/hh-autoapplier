@@ -1,6 +1,5 @@
 // Флаги веба (#128): функции, которые собраны, но без готового backend в релизе не включаются
 export const features = {
-  // Поиск по вакансиям в палитре Ctrl+K. Выключен: в GET /api/vacancies нет поиска по названию (см. vacancySource в commands.ts).
-  // Включать — когда на сервере появится поиск по названию и компании
-  vacancySearch: false,
+  // Поиск по вакансиям в палитре Ctrl+K — серверный, GET /api/vacancies?q= (#141). Выключить — если backend без q
+  vacancySearch: true,
 };

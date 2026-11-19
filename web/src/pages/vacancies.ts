@@ -30,6 +30,8 @@ export interface VacancyFilter {
   search: string;
   hidden: boolean;
   skip: number;
+  // Текст в названии или компании (#141; переход из палитры Ctrl+K); нет — не ищем
+  q?: string;
 }
 
 export const VACANCY_PAGE = 50;
@@ -43,7 +45,8 @@ export function parseVacancyFilter(query: URLSearchParams): VacancyFilter {
   const viewParam = query.get("view");
   const view: ViewId = isView(viewParam) ? viewParam : status ? (VIEWS.find((v) => v.status === status)?.id ?? "all") : "queued";
   const skip = Math.max(0, Math.floor(Number(query.get("skip")) || 0));
-  return { view, status: view === "all" ? status : "", search: query.get("search") ?? "", hidden: ["1", "true"].includes(query.get("hidden") ?? ""), skip };
+  return { view, status: view === "all" ? status : "", search: query.get("search") ?? "", hidden: ["1", "true"].includes(query.get("hidden") ?? ""), skip,
+    q: query.get("q")?.trim() || undefined };
 }
 
 // Фильтр → адрес раздела: только непустые части, статус — только в виде «Все»
@@ -52,6 +55,7 @@ export function vacancyFilterPath(f: VacancyFilter): string {
   if (f.view === "all" && f.status) query.set("status", f.status);
   if (f.search) query.set("search", f.search);
   if (f.hidden) query.set("hidden", "1");
+  if (f.q) query.set("q", f.q);
   if (f.skip > 0) query.set("skip", String(f.skip));
   return `/vacancies?${query}`;
 }
@@ -63,6 +67,7 @@ export function vacancyApiQuery(f: VacancyFilter, take = VACANCY_PAGE): URLSearc
   if (status) query.set("status", status);
   if (f.search) query.set("search", f.search);
   if (f.hidden) query.set("includeHidden", "true");
+  if (f.q) query.set("q", f.q);
   return query;
 }
 
@@ -85,7 +90,9 @@ export async function vacancies(route: Route): Promise<Child> {
       (status) => go({ status }), { label: "Статус" }) : null,
     searches.length ? Chips([{ value: "", label: "все" }, ...searches.map((s) => ({ value: s.name, label: s.name }))], f.search,
       (search) => go({ search }), { label: "Поиск" }) : null,
-    Chips([{ value: false, label: "без скрытых" }, { value: true, label: "со скрытыми" }], f.hidden, (hidden) => go({ hidden }), { label: "Скрытые" }));
+    Chips([{ value: false, label: "без скрытых" }, { value: true, label: "со скрытыми" }], f.hidden, (hidden) => go({ hidden }), { label: "Скрытые" }),
+    // Текст из палитры: снять — чип «любой»
+    f.q ? Chips([{ value: "", label: "любой" }, { value: f.q, label: `«${f.q}»` }], f.q, (q) => go({ q: q || undefined }), { label: "Текст" }) : null);
 
   const pager = items.length || f.skip ? Toolbar([
     Button("← Назад", { disabled: f.skip === 0, onClick: () => go({ skip: Math.max(0, f.skip - VACANCY_PAGE) }, false) }),

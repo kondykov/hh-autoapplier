@@ -645,11 +645,12 @@ export interface PaletteGroup {
   title: string;
   items: PaletteItem[];
 }
-// Источник с запросом (поиск по вакансиям): зовётся с введённым текстом не короче min символов, после паузы ввода
+// Источник с запросом (поиск по вакансиям): зовётся с введённым текстом не короче min символов, после паузы ввода.
+// signal отменяется, когда запрос устарел (новый ввод, закрытие палитры)
 export interface PaletteSource {
   title: string;
   min?: number;
-  search: (query: string) => Promise<PaletteItem[]>;
+  search: (query: string, signal: AbortSignal) => Promise<PaletteItem[]>;
 }
 
 const norm = (s: string) => s.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
@@ -685,7 +686,7 @@ let paletteIds = 0;
 // Enter выполняет, Esc и клик мимо закрывают; при открытии фокус в поле, при закрытии — туда, где был.
 // Ссылка выбирается кликом по <a> — переход делает тот же обработчик ссылок, что у остальной страницы. Данные — только текстом
 export function CommandPalette({ groups, sources = [], placeholder = "Найти раздел или команду…", label = "Палитра команд",
-  hotkey = true, root = document.body, delay = 250 }: PaletteOptions): PaletteElement {
+  hotkey = true, root = document.body, delay = 200 }: PaletteOptions): PaletteElement {
   const id = `pal-${++paletteIds}`;
   const input = el("input", { type: "text", className: "palette-input", placeholder, autocomplete: "off", spellcheck: false,
     role: "combobox", "aria-label": label, "aria-expanded": "true", "aria-controls": `${id}-list`, "aria-autocomplete": "list" });
@@ -701,6 +702,9 @@ export function CommandPalette({ groups, sources = [], placeholder = "Найти
   let found: PaletteGroup[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let asked = 0;
+  let pending: AbortController | null = null;
+  // Отменить запрос к источникам, если он ещё идёт
+  const cancel = () => { pending?.abort(); pending = null; };
 
   const setActive = (i: number) => {
     if (!options.length) { input.removeAttribute("aria-activedescendant"); return; }
@@ -740,13 +744,16 @@ export function CommandPalette({ groups, sources = [], placeholder = "Найти
   // Источники с запросом: после паузы ввода; ответ на устаревший запрос не рисуется
   const ask = () => {
     clearTimeout(timer);
+    cancel();
     found = [];
     const query = input.value.trim();
     const ready = sources.filter((s) => query.length >= (s.min ?? 2));
     const ticket = ++asked;
     if (!ready.length) return;
     timer = setTimeout(async () => {
-      const results = await Promise.all(ready.map(async (s) => ({ title: s.title, items: await s.search(query).catch(() => [] as PaletteItem[]) })));
+      const controller = pending = new AbortController();
+      const results = await Promise.all(ready.map(async (s) => ({ title: s.title, items: await s.search(query, controller.signal).catch(() => [] as PaletteItem[]) })));
+      if (pending === controller) pending = null;
       if (ticket !== asked || backdrop.hidden) return;
       found = results.filter((g) => g.items.length);
       draw();
@@ -775,6 +782,7 @@ export function CommandPalette({ groups, sources = [], placeholder = "Найти
   backdrop.close = () => {
     if (backdrop.hidden) return;
     clearTimeout(timer);
+    cancel();
     asked++;
     backdrop.hidden = true;
     before?.focus?.();
@@ -792,7 +800,7 @@ export function CommandPalette({ groups, sources = [], placeholder = "Найти
     }
   };
   document.addEventListener("keydown", keys, true);
-  backdrop.dispose = () => { document.removeEventListener("keydown", keys, true); clearTimeout(timer); backdrop.remove(); };
+  backdrop.dispose = () => { document.removeEventListener("keydown", keys, true); clearTimeout(timer); cancel(); backdrop.remove(); };
   root.append(backdrop);
   return backdrop;
 }

@@ -204,7 +204,7 @@ ASP.NET Core Identity (таблицы `AspNet*` в той же БД, мигра�
 | PUT | `/api/users/{id}/blocked` | `{blocked}`: заблокировать / разблокировать (только `Admin`) |
 | PUT | `/api/users/{id}/password` | `{password}`: задать пароль пользователю (только `Admin`) |
 | GET | `/api/queue?search=&resume=&limit=` | своя очередь на отклик (лучшие сверху; `userId` не принимает) |
-| GET | `/api/vacancies?status=&search=&includeHidden=&skip=&take=&userId=` | список: карточка и отклик, с историей статусов `history`, `hiddenAt` и `dismissed`; скрытые — только с `includeHidden=true` |
+| GET | `/api/vacancies?status=&search=&q=&includeHidden=&skip=&take=&userId=` | список: карточка и отклик, с историей статусов `history`, `hiddenAt` и `dismissed`; скрытые — только с `includeHidden=true`; `search` — имя поиска; `q` (#141) — текст: каждое слово в названии или компании, без учёта регистра, «ё» = «е», не короче 2 символов (короче — пустой список), не больше 20 самых свежих (палитра Ctrl+K) |
 | POST | `/api/vacancies/{id}/status` | `{status, reason?, resume?}`: Applied, Skipped, Failed... — меняет статус своего отклика |
 | POST | `/api/vacancies/{id}/reevaluate` | оценить заново свой отсеянный отклик `Skipped` (#71): письмо LLM и анкета сбрасываются (404 — не найден или чужой; 409 — не отсеян; 503 — LLM не настроена, статус не меняется) |
 | POST | `/api/vacancies/{id}/hide` | скрыть свой отсеянный отклик из списка (#71; 404, 409 — не отсеян) |
