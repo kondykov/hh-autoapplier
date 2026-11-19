@@ -152,7 +152,8 @@ export const Result = (text = "") => el("span", { className: "result", textConte
 export type Tone = "ok" | "bad" | "accent";
 // Pill — статус моноширинной меткой; tone: ok | bad | accent; dot — цвет точки (например, источник)
 export function Pill(text: string, { tone, dot, title }: { tone?: Tone; dot?: string; title?: string } = {}): HTMLSpanElement {
-  return el("span", { className: cls("pill", dot && "src", tone), title },
+  // Метка одной строкой: длинная (имя модели) обрезается многоточием по ширине — полный текст в подсказке
+  return el("span", { className: cls("pill", dot && "src", tone), title: title ?? text },
     dot ? el("i", { style: `background:${dot}` }) : null, text);
 }
 // Badge — залитая метка; tone: ok | accent | bad
@@ -423,15 +424,16 @@ export interface Column {
 export type Cell = Node | string | number | null | undefined | false;
 
 // Таблица, которая на телефоне становится карточками «поле: значение»: подпись поля — из заголовка столбца.
-// rows: массивы ячеек (текст или узлы)
-export function StackTable(columns: Column[], rows: Cell[][]): HTMLTableElement {
-  return el("table", { className: "stack" },
+// rows: массивы ячеек (текст или узлы). Обёртка .table-scroll: на средних ширинах широкая таблица прокручивается внутри карточки,
+// а не вылезает за неё (кнопки и метки не переносятся)
+export function StackTable(columns: Column[], rows: Cell[][]): HTMLDivElement {
+  return el("div", { className: "table-scroll" }, el("table", { className: "stack" },
     el("thead", {}, el("tr", {}, columns.map((c) => el("th", { className: c.num ? "n" : "", textContent: c.title })))),
     el("tbody", {}, rows.map((cells) => el("tr", {}, cells.map((cell, i) => {
       const td = el("td", { className: columns[i]?.num ? "n" : "", "data-label": columns[i]?.title ?? "" });
       if (cell != null && cell !== false) td.append(typeof cell === "number" ? String(cell) : cell);
       return td;
-    })))));
+    }))))));
 }
 
 // ── Field, Form ───────────────────────────────────────────────────────

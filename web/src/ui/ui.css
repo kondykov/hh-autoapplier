@@ -7,12 +7,19 @@
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 /* В shadow root (панель расширения) — то же, что body в документе, без фоновой сетки */
-:host { font: var(--fs-body)/1.5 var(--sans); color: var(--text); overflow-wrap: anywhere; }
+/* Перенос: слово рвётся, только если само не помещается в строку (break-word не уменьшает минимальную ширину — колонки таблиц
+   не сжимаются до «зада/н», «Провер/ить»). Длинные адреса и коды — класс .url, им можно рваться где угодно */
+:host { font: var(--fs-body)/1.5 var(--sans); color: var(--text); overflow-wrap: break-word; }
 body {
   margin: 0; background: var(--bg); color: var(--text); font: var(--fs-body)/1.5 var(--sans);
   background-image: radial-gradient(var(--grid) 1.2px, transparent 1.2px); background-size: 22px 22px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
+.url { overflow-wrap: anywhere; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+/* Кнопки, метки и бейджи — одной строкой */
+button, .pill, .kind, .count { white-space: nowrap; }
+.pill, .kind { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .mono, .num { font-family: var(--mono); }
 h1 { font-size: var(--fs-h1); margin: 0 0 var(--sp-1); }
 h2 { font-size: var(--fs-h2); margin: 0 0 var(--sp-2); }

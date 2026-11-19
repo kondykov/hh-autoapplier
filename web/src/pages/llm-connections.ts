@@ -5,7 +5,7 @@ import type { LlmConnection, LlmServerConnections, Links } from "../api/types";
 import { date } from "../format";
 import { path } from "../router";
 import { act, setStatus } from "../state";
-import { Badge, Button, Card, el, EmptyState, Meter, Pill, Secret, StackTable, Toolbar, type Child } from "../ui/ui";
+import { Badge, Button, Card, el, EmptyState, Meter, Pill, StackTable, Toolbar, type Child } from "../ui/ui";
 import { connectionState, LLM_TASKS } from "./llm";
 
 const KINDS: Record<string, string> = { main: "основной", route: "маршрут задачи", named: "для выбора" };
@@ -38,8 +38,9 @@ export async function connections(): Promise<Child> {
         data.connections.map(({ kind, connection: c, host, key }) => [
           el("span", {}, el("b", { textContent: c.name }), " ", Badge(KINDS[kind] ?? kind)),
           el("span", {}, c.provider, " · ", el("span", { textContent: c.model })),
-          host ?? "—",
-          key ? Secret(key) : el("span", { className: "muted", textContent: "не задан" }),
+          host ? el("span", { className: "url", textContent: host }) : "—",
+          // Маска ключа («задан» или «••••7f2c») — метка одной строкой, не Secret: тот для длинных токенов и рвёт текст где угодно
+          key ? Pill(key) : el("span", { className: "muted", textContent: "не задан" }),
           usage(c),
           state(c),
           Button("Проверить", { size: "sm", onClick: () => { setStatus(`Проверяем ${c.name}…`);
