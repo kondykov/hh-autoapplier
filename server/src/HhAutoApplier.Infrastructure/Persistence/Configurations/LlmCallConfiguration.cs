@@ -12,6 +12,7 @@ public class LlmCallConfiguration : IEntityTypeConfiguration<LlmCall>
         builder.ToTable("LlmCalls");
         builder.Property(x => x.Purpose).HasMaxLength(32);
         builder.Property(x => x.Model).HasMaxLength(128);
+        builder.Property(x => x.Connection).HasMaxLength(64);
         // Дневной лимит считается по времени запросов
         builder.HasIndex(x => x.CreatedAt);
         builder.HasIndex(x => x.VacancyId);

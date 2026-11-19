@@ -33,6 +33,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<LlmCall> LlmCalls => Set<LlmCall>();
 
+    public DbSet<UserLlmSettings> UserLlmSettings => Set<UserLlmSettings>();
+
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
 
     public DbSet<TelegramChat> TelegramChats => Set<TelegramChat>();

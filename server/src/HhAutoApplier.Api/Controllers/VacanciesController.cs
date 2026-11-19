@@ -70,22 +70,27 @@ public class VacanciesController : ApiController
     /// <summary>
     /// Оценить заново отсеянную вакансию (Skipped): правила и затем LLM, импортная карточка — через подтверждение при сборе.
     /// Письмо LLM и ответы анкеты сбрасываются, письмо, поправленное человеком, остаётся.
+    /// ?provider=имя — разовый прогон (#107): прошедшая правила вакансия сразу оценивается этим подключением сервера
+    /// (GET /api/llm/providers), письмо потом пишет конвейер обычным выбором. Провайдер не ответил — вакансия ждёт обычной оценки.
     /// </summary>
+    /// <response code="400">Нет такого подключения LLM.</response>
     /// <response code="404">Вакансия не найдена.</response>
     /// <response code="409">Вакансия не отсеяна: оценить заново нельзя.</response>
     /// <response code="503">LLM не настроена, статус не меняется.</response>
     [HttpPost("vacancies/{id}/reevaluate")]
     [ProducesResponseType(typeof(VacancyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(NotFoundError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ConflictError), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(LlmUnavailableError), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Reevaluate(
         string id,
+        [FromQuery] string? provider,
         [FromServices] ReevaluateVacancyCommandHandler handler,
         CancellationToken ct
     )
     {
-        return FromResult((await handler.Handle(new ReevaluateVacancyCommand { VacancyId = id }, ct)).Value);
+        return FromResult((await handler.Handle(new ReevaluateVacancyCommand { VacancyId = id, Provider = provider }, ct)).Value);
     }
 
     /// <summary>

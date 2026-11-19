@@ -42,6 +42,8 @@ public class AnswerQuestionnairesCommandHandler(
         var resumes = await db.ResumesOf(waiting).ToDictionaryAsync(r => (r.UserId, r.Name), ct);
         // Профиль кандидата (#35) — владельца отклика
         var profiles = await db.ProfilesOf(waiting).ToListAsync(ct);
+        // Модели владельцев откликов (#107)
+        var choices = await LlmChoices.LoadAsync(db, waiting.Select(a => a.UserId), ct);
 
         int answered = 0, failed = 0;
         string? stoppedBy = null;
@@ -72,7 +74,7 @@ public class AnswerQuestionnairesCommandHandler(
                 LlmResult result;
                 try
                 {
-                    result = await llm.CompleteAsync(request with { Purpose = QuestionnaireAnswering.Purpose }, ct);
+                    result = await llm.CompleteAsync(request with { Purpose = QuestionnaireAnswering.Purpose, Provider = choices.For(application.UserId, QuestionnaireAnswering.Purpose) }, ct);
                 }
                 catch (LlmUnavailableException e)
                 {
@@ -94,7 +96,7 @@ public class AnswerQuestionnairesCommandHandler(
                     ? LlmCall.Rejected(QuestionnaireAnswering.Purpose, application.VacancyId, result.Model, prompt, result.Content,
                         error, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())
                     : LlmCall.Succeeded(QuestionnaireAnswering.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                        result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId));
+                        result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId).Via(result.Connection));
                 if (answers is null || (incomplete is null && problems.Count == 0))
                     break;
 

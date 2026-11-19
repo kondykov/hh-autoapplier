@@ -51,6 +51,8 @@ public class WriteCoverLettersCommandHandler(
         var resumes = await db.ResumesOf(queued).ToDictionaryAsync(r => (r.UserId, r.Name), ct);
         // Профиль кандидата (#35) — владельца отклика
         var profiles = await db.ProfilesOf(queued).ToListAsync(ct);
+        // Модели владельцев откликов (#107)
+        var choices = await LlmChoices.LoadAsync(db, queued.Select(a => a.UserId), ct);
 
         int written = 0, failed = 0;
         string? stoppedBy = null;
@@ -76,7 +78,7 @@ public class WriteCoverLettersCommandHandler(
                 LlmResult result;
                 try
                 {
-                    result = await llm.CompleteAsync(request with { Purpose = CoverLetterWriting.Purpose }, ct);
+                    result = await llm.CompleteAsync(request with { Purpose = CoverLetterWriting.Purpose, Provider = choices.For(application.UserId, CoverLetterWriting.Purpose) }, ct);
                 }
                 catch (LlmUnavailableException e)
                 {
@@ -91,7 +93,7 @@ public class WriteCoverLettersCommandHandler(
                 if (CoverLetterWriting.Parse(result.Content) is not { } letter)
                 {
                     db.LlmCalls.Add(LlmCall.Rejected(CoverLetterWriting.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                        LlmCall.Unparsed, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId));
+                        LlmCall.Unparsed, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId).Via(result.Connection));
                     // С открытыми просьбами шаблон расширения не подходит: письмо пишет человек, иначе отклик завис бы вне очереди
                     if (application.AwaitsClosingLetter)
                         rejected = LlmCall.Unparsed;
@@ -107,13 +109,13 @@ public class WriteCoverLettersCommandHandler(
                 {
                     rejected = CoverLetterWriting.Problem(figures, placeholders, promises, technologies);
                     db.LlmCalls.Add(LlmCall.Rejected(CoverLetterWriting.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                        rejected, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId));
+                        rejected, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId).Via(result.Connection));
                     request = CoverLetterWriting.Retry(first, letter, figures, placeholders, promises, technologies);
                     continue;
                 }
 
                 db.LlmCalls.Add(LlmCall.Succeeded(CoverLetterWriting.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId));
+                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow()).For(application.UserId).Via(result.Connection));
                 application.SetCoverLetter(letter, result.Model, clock.GetUtcNow());
                 // Просьбы к письму (#72): проверки выше видели письмо модели, значения дописывает сервер
                 application.CloseLetterRequests(profile, resume?.LetterTemplate, clock.GetUtcNow());

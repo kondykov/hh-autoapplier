@@ -58,6 +58,9 @@ public class LlmOptions
         ? GetProfile().SupportsJsonObject
         : string.Equals(JsonMode, JsonObjectMode, StringComparison.OrdinalIgnoreCase);
 
+    // Именованные подключения (#107): пользователь выбирает их по задачам в «LLM → Мои модели» — см. LlmConnections
+    public Dictionary<string, LlmRouteOptions> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public void EnsureValid() => EnsureValid(LlmProviders.All);
 
     // Ошибка конфигурации видна при старте: опечатка в провайдере не должна молча включать другой способ входа,

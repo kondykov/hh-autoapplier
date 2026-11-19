@@ -20,10 +20,13 @@ public record LlmMessage(string Role, string Content)
     public static LlmMessage Assistant(string content) => new("assistant", content);
 }
 
-// Json — попросить модель ответить JSON-объектом (response_format). Purpose — назначение запроса: по нему выбирается маршрут (#104)
-public record LlmRequest(IReadOnlyList<LlmMessage> Messages, double Temperature = 0.2, int MaxTokens = 800, bool Json = false, string? Purpose = null);
+// Json — попросить модель ответить JSON-объектом (response_format). Purpose — назначение запроса: по нему выбирается маршрут (#104).
+// Provider — подключение, выбранное владельцем отклика (#107, Llm:Providers:<имя>); null или неизвестное — маршрут по умолчанию
+public record LlmRequest(IReadOnlyList<LlmMessage> Messages, double Temperature = 0.2, int MaxTokens = 800, bool Json = false, string? Purpose = null,
+    string? Provider = null);
 
-// Модель — та, что ответила (провайдер может подставить версию), токены — для учёта расходов
-public record LlmResult(string Content, string Model, int PromptTokens, int CompletionTokens);
+// Модель — та, что ответила (провайдер может подставить версию), токены — для учёта расходов.
+// Connection — подключение пользователя, которое ответило (#107); null — маршрут по умолчанию
+public record LlmResult(string Content, string Model, int PromptTokens, int CompletionTokens, string? Connection = null);
 
 public class LlmUnavailableException(string reason) : Exception($"LLM недоступна: {reason}");

@@ -160,7 +160,7 @@ public class LlmRoutesTests
             ["Llm:Routes:Dialogs:Model"] = "",
         }).Build());
         services.AddSingleton(new LlmBudget(TimeProvider.System));
-        services.AddKeyedSingleton(LlmRoutes.Letters, new LlmBudget(TimeProvider.System));
+        services.AddKeyedSingleton("llm:Letters", new LlmBudget(TimeProvider.System));
         services.AddHttpClient(nameof(ILlmClient)).ConfigurePrimaryHttpMessageHandler(() => main);
         services.AddHttpClient("llm:Letters").ConfigurePrimaryHttpMessageHandler(() => letters);
         await using var sp = services.BuildServiceProvider();

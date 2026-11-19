@@ -28,6 +28,8 @@ public interface IAppDbContext
 
     DbSet<LlmCall> LlmCalls { get; }
 
+    DbSet<UserLlmSettings> UserLlmSettings { get; }
+
     DbSet<ApiToken> ApiTokens { get; }
 
     DbSet<TelegramChat> TelegramChats { get; }
