@@ -128,6 +128,17 @@ public class VacanciesController : ApiController
     }
 
     /// <summary>
+    /// Массовое действие над своими откликами (#127): Requeue — в очередь, Skip — обратно в отсев с причиной LLM, Reevaluate — оценить заново
+    /// (provider — разовый прогон через подключение, #107), Hide / Unhide. До 500 id; что не вышло — в failed с причиной, чужие id — «не найдена».
+    /// </summary>
+    [HttpPost("vacancies/bulk")]
+    [ProducesResponseType(typeof(BulkVacanciesResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Bulk([FromBody] BulkVacanciesCommand command, [FromServices] BulkVacanciesCommandHandler handler, CancellationToken ct)
+    {
+        return Ok(await handler.Handle(command, ct));
+    }
+
+    /// <summary>
     /// Ручная проверка вакансии в статусе Review: одобрить — в очередь (coverLetter — поправленное письмо, пусто — письмо LLM;
     /// answers — поправленные ответы анкеты, все по порядку вопросов, пусто — ответы LLM),
     /// отклонить — Skipped с причиной. Список на проверке — GET /api/vacancies?status=Review, страница — веб-интерфейс, «Проверка» (/review).
