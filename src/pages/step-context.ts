@@ -9,7 +9,7 @@ import { detectPageType, type PageType } from "../dom/page-type";
 import type { KeyValueStorage } from "../infra/storage";
 import type { Logger } from "../infra/logger";
 import type { TabInfo } from "../infra/tab";
-import type { Panel } from "../ui/panel";
+import type { PanelStore } from "../shared/panel/store";
 
 // Переходы между страницами hh.ru; в тестах подменяется, чтобы шаги не трогали window.location
 export interface Navigator {
@@ -24,8 +24,8 @@ export const browserNavigator: Navigator = {
   },
 };
 
-// То, что шагам нужно от панели; полная панель — в ui/panel.ts
-export type StepPanel = Pick<Panel, "setStep" | "setQueueActive" | "setRejectActive">;
+// То, что шагам нужно от панели; полное состояние панели — shared/panel/store.ts
+export type StepPanel = Pick<PanelStore, "setStep" | "setQueueActive" | "setRejectActive">;
 
 // Общее для всех шагов: состояние, настройки, панель, конвейер отклика и служебные действия
 export interface StepContext {

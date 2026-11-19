@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 // Один проход режима «из очереди» в пробном режиме через CDP запущенного dev-браузера (scripts/dev-browser.mjs).
 // Отказывается работать, если пробный режим выключен или очередь уже идёт.
 // Печатает журнал панели и снимок формы (резюме, анкета, письмо) на каждом «готов к отправке».
-// «Отправить» не нажимает расширение; скрипт сам ничего на hh.ru не нажимает, кроме кнопки панели «Из очереди».
+// «Отправить» не нажимает расширение; скрипт сам ничего на hh.ru не нажимает, кроме запуска очереди командой панели.
 const TIMEOUT_MS = 6 * 60 * 1000;
 
 const browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
@@ -48,9 +48,27 @@ const watch = (page) =>
 ctx.pages().forEach(watch);
 ctx.on("page", watch);
 
+// Старт очереди — командой во вкладку hh.ru тем же сообщением, что шлёт боковая панель (#123): панель на странице
+// в закрытом shadow root, а в боковом режиме её на странице нет вовсе
 const page = ctx.pages().find((p) => p.url().includes("hh.ru")) ?? ctx.pages()[0];
-await page.waitForSelector("#hh-btn-queue", { state: "attached", timeout: 30000 });
-await page.evaluate(() => document.getElementById("hh-btn-queue").click());
+await page.waitForLoadState("domcontentloaded");
+const state = await sw.evaluate(async () => {
+  const [tab] = await chrome.tabs.query({ url: ["*://hh.ru/*", "*://*.hh.ru/*"] });
+  if (!tab?.id) return null;
+  // Content script может ещё грузиться — несколько попыток
+  for (let i = 0; i < 15; i++) {
+    try {
+      return await chrome.tabs.sendMessage(tab.id, { type: "panel-request", command: { kind: "queue.toggle" } });
+    } catch {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  return null;
+});
+if (!state) {
+  console.log("Отмена: нет вкладки hh.ru с расширением");
+  process.exit(1);
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isRunning = async () => (await flags().catch(() => ({ queueRunning: true }))).queueRunning;

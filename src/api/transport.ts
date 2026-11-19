@@ -6,6 +6,8 @@ export interface ApiRequest {
   path: string;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
+  // Фоновая проверка (индикатор связи в панели, #123): без разрешения на адрес не открывать страницу настроек
+  quiet?: boolean;
 }
 
 // status 0 — сервер не ответил (недоступен, таймаут, неверный адрес).
