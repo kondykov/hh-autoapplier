@@ -7,8 +7,8 @@ import { currentTheme, setTheme, type Theme } from "../theme";
 import {
   Actions, Badge, Bars, Button, Callout, Caption, Card, Chips, Confirm, Count, Disclosure, el, EmptyState, Field, Form, FormGrid, Funnel, Icon, ICONS, KeyHints, Meta, Meter,
   Menu, Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
-  FilterList, PickRow, SelectionBar, type PickElement,
-  type Child, type MenuElement, type SelectionBarElement, type SheetElement,
+  FilterList, PickRow, SelectionBar, type PickElement, Alert, CommandPalette, SearchButton,
+  type Child, type MenuElement, type PaletteElement, type SelectionBarElement, type SheetElement,
 } from "../ui/ui";
 import { AGGREGATORS } from "./dashboard";
 import { PERIODS } from "./dashboard-data";
@@ -50,6 +50,21 @@ function kitGallery(): HTMLElement {
   const picks = el("div", {}, pickRows);
   syncPicks();
   const sheetButton = Button("Открыть лист", { icon: "more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
+  // Палитра на выдуманных пунктах; «Вакансии» — источник с запросом, как за флагом features.vacancySearch
+  const demoVacancies = ["C# разработчик (выдуманная)", "Backend-разработчик C#/Go", "PHP-разработчик (Symfony)", "Разработчик .NET (поддержка)"];
+  const palette = CommandPalette({
+    hotkey: false,
+    groups: () => [
+      { title: "Разделы", items: [{ label: "Дашборд", icon: "dashboard", href: KIT }, { label: "LLM · Отсев", icon: "llm", href: KIT }, { label: "Система", icon: "admin", href: KIT }] },
+      { title: "Команды", items: [{ label: "Тема: тёмная", icon: "moon", hint: "сменить", onRun: () => { Toast("Тема"); } },
+        { label: "Запустить сбор вакансий", icon: "download", hint: "администратор", onRun: () => { Toast("Сбор запущен"); } }] },
+    ],
+    sources: [{ title: "Вакансии", search: async (q) => demoVacancies.filter((v) => v.toLowerCase().includes(q.toLowerCase()))
+      .map((v) => ({ label: v, hint: "ООО «Пример»", icon: "external" as const, href: "https://example.com/vacancy/1", external: true })) }],
+  });
+  palette.classList.add("kit-demo");
+  const compactSearch = SearchButton("Найти", { onClick: () => palette.open() });
+  compactSearch.classList.add("compact");
 
   return el("div", {},
     sec("Токены",
@@ -131,6 +146,11 @@ function kitGallery(): HTMLElement {
       row("Menu", menu),
       row("Menu (button)", menuButton),
       row("KeyHints", KeyHints([["J/K", "карточки"], ["A", "одобрить"], ["R", "отклонить"], ["E", "письмо"]]))),
+    // Шапка и палитра команд (#128): поле поиска открывает палитру (в витрине — без Ctrl+K: он у палитры шапки)
+    sec("SearchButton, CommandPalette, Alert",
+      row("SearchButton", SearchButton("Найти вакансию, команду…", { onClick: () => palette.open() }), compactSearch),
+      row("Alert", el("span", {}, "LLM", Alert({ tone: "warn", title: "Groq на паузе до 15:20" })), el("span", {}, "LLM", Alert({ tone: "bad", title: "сбой связи через VPN" })),
+        Tabs([{ href: KIT, label: "Проверка", count: 2 }, { href: KIT, label: "LLM", active: true, alert: { tone: "warn", title: "пауза провайдера" } }], { label: "Разделы со знаком" }))),
     sec("EmptyState, Skeleton",
       el("div", { className: "cols" },
         Card({}, EmptyState("На проверке ничего нет.", { icon: "check" }), EmptyState("Без иконки — как в разделах.")),
@@ -147,6 +167,7 @@ export async function kit(route: Route): Promise<Child> {
     document.querySelectorAll<SheetElement>(".sheet.kit-demo").forEach((n) => n.dispose());
     document.querySelectorAll<MenuElement>(".menu.kit-demo").forEach((n) => n.dispose());
     document.querySelectorAll<SelectionBarElement>(".selbar.kit-demo").forEach((n) => n.dispose());
+    document.querySelectorAll<PaletteElement>(".palette-backdrop.kit-demo").forEach((n) => n.dispose());
     if (kitState.width !== "auto") {
       body.replaceChildren(el("iframe", { className: "kit-frame", src: path("kit", {}, "frame"), title: `Витрина шириной ${kitState.width}px`, style: `max-width:${kitState.width}px` }));
       return;

@@ -20,7 +20,7 @@ interface Sub {
   admin?: boolean;
   soon?: string;
 }
-const SUBS: Sub[] = [
+export const LLM_SUBS: Sub[] = [
   { id: "overview", label: "Обзор" },
   { id: "rejects", label: "Отсев" },
   { id: "journal", label: "Журнал" },
@@ -49,13 +49,13 @@ export function choiceOptions(providers: LlmConnection[], serverDefault: LlmConn
 
 export async function llm(route: Route): Promise<Child> {
   const isAdmin = session.me?.role === "Admin";
-  const subs = SUBS.filter((s) => !s.admin || isAdmin);
+  const subs = LLM_SUBS.filter((s) => !s.admin || isAdmin);
   const sub = subs.find((s) => s.id === route.sub) ?? subs.find((s) => s.id === DEFAULT_SUB)!;
   const tabs = Tabs(subs.map((s) => ({ href: path("llm", {}, s.id), label: s.label, active: s.id === sub.id })), { label: "Подвкладки LLM" });
   tabs.classList.add("views");
   const head = PageHead("LLM", "Оценка вакансий, анкеты, письма и разбор ответов работодателей");
   // Подвкладка администратора по адресу у пользователя — объяснение, а не молча «Обзор»
-  if (route.sub && !subs.some((s) => s.id === route.sub) && SUBS.some((s) => s.id === route.sub && s.admin))
+  if (route.sub && !subs.some((s) => s.id === route.sub) && LLM_SUBS.some((s) => s.id === route.sub && s.admin))
     return [head, tabs, Card({}, EmptyState("Раздел только для администратора.", { icon: "admin" }))];
   if (sub.soon) return [head, tabs, Card({}, EmptyState(`Скоро: ${sub.soon}.`, { icon: "llm" }))];
   if (sub.id === "overview") return [head, tabs, await overview()];

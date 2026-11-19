@@ -3,7 +3,8 @@
 import "./styles.css";
 import iconsUrl from "./ui/icons.svg";
 import { api, post, Unauthorized } from "./api/http";
-import type { Dialog, Me, Stats, User } from "./api/types";
+import type { Dialog, LlmOverview, Me, Stats, User, Vacancy } from "./api/types";
+import { llmAlert, paletteGroups, VACANCY_SEARCH_TAKE, vacancySource, visibleSections, type Section } from "./commands";
 import { account } from "./pages/account";
 import { candidate } from "./pages/candidate";
 import { dashboard } from "./pages/dashboard";
@@ -16,9 +17,10 @@ import { searches } from "./pages/searches";
 import { system } from "./pages/system";
 import { vacancies } from "./pages/vacancies";
 import { isAppLink, legacyHashPath, parseRoute, path, renamedPath, type Route, type RouteName } from "./router";
-import { app, page, scoped, session, setStatus } from "./state";
+import { act, app, page, scoped, session, setStatus } from "./state";
 import { cycleTheme, initThemeButton, themeLabel } from "./theme";
-import { Caption, Card, el, Icon, Menu, MenuItems, nodes, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child, type IconName, type MenuElement, type MenuEntry, type NavItem, Skeleton } from "./ui/ui";
+import { Alert, Caption, Card, CommandPalette, el, Icon, Menu, MenuItems, nodes, SearchButton, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child,
+  type MenuElement, type MenuEntry, type NavAlert, type NavItem, type PaletteElement, Skeleton } from "./ui/ui";
 
 setIconSprite(iconsUrl);
 
@@ -32,39 +34,25 @@ const viewAs = byId<HTMLSelectElement>("view-as");
 
 const routes: Record<RouteName, (route: Route) => Promise<Child>> = { dashboard, overview, vacancies, review, dialogs, searches, candidate, account, system, llm, kit };
 
-// Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же.
-// Разделы после ревизии (#128): «Обзор» (/overview) и витрина /kit (#129) — только по адресу; аккаунт (/account) — из меню
-// под именем (на телефоне — в «Ещё»); «Система» — только администратору
-interface Section {
-  route: RouteName;
-  title: string;
-  icon?: IconName;
-  tab?: boolean;
-  count?: keyof typeof counts;
-  admin?: boolean;
-}
-const SECTIONS: Section[] = [
-  { route: "dashboard", title: "Дашборд", icon: "dashboard", tab: true },
-  { route: "review", title: "Проверка", icon: "review", tab: true, count: "review" },
-  { route: "dialogs", title: "Ответы", icon: "dialogs", tab: true, count: "dialogs" },
-  { route: "vacancies", title: "Вакансии", icon: "vacancies", tab: true },
-  // LLM (#127) — по концепту после «Вакансий»; на телефоне — в «Ещё»
-  { route: "llm", title: "LLM", icon: "llm" },
-  { route: "searches", title: "Поиски", icon: "search" },
-  { route: "candidate", title: "Кандидат", icon: "resume" },
-  { route: "system", title: "Система", icon: "admin", admin: true },
-];
 const counts = { review: 0, dialogs: 0 };
+// «!» у LLM (#128) — по «Требует внимания» обзора LLM
+let alerts: Partial<Record<RouteName, NavAlert | null>> = {};
 const more = Sheet([], { label: "Ещё разделы" });
 more.id = "more";
 document.body.append(more);
 
 function buildNav(route: RouteName) {
-  const visible = SECTIONS.filter((s) => !s.admin || session.me?.role === "Admin");
-  const item = (s: Section): NavItem => ({ href: path(s.route), label: s.title, icon: s.icon, active: s.route === route, count: s.count ? counts[s.count] : 0 });
+  const visible = visibleSections(session.me?.role === "Admin");
+  const item = (s: Section): NavItem => ({ href: path(s.route), label: s.title, icon: s.icon, active: s.route === route,
+    count: s.count ? counts[s.count] : 0, alert: alerts[s.route] });
   nav.replaceChildren(Tabs(visible.map(item)));
+  // Узкий компьютер: ряд разделов прокручивается — активный держим в виду
+  const current = nav.querySelector<HTMLElement>("a.active");
+  if (current && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, current.offsetLeft - nav.offsetLeft - 40);
   const rest = visible.filter((s) => !s.tab);
-  const moreButton = el("button", { type: "button", className: rest.some((s) => s.route === route) ? "active" : "", "aria-label": "Ещё разделы" }, Icon("more"), "Ещё");
+  // Знак «!» раздела из «Ещё» (LLM) — и на самой кнопке «Ещё»
+  const moreAlert = rest.map((s) => alerts[s.route]).find(Boolean);
+  const moreButton = el("button", { type: "button", className: rest.some((s) => s.route === route) ? "active" : "", "aria-label": "Ещё разделы" }, Icon("more"), "Ещё", Alert(moreAlert));
   moreButton.onclick = (e) => { e.stopPropagation(); more.toggle(); };
   tabbar.replaceChildren(...TabBar(visible.filter((s) => s.tab).map(item), moreButton));
   more.replaceChildren(...SheetLinks(rest.map(item)), el("hr", { className: "menu-sep" }),
@@ -99,6 +87,27 @@ function buildAccountMenu(user: Me) {
   byId("account").replaceChildren(accountMenu);
 }
 
+// Палитра команд (#128): Ctrl+K / Cmd+K и поле поиска в шапке; живёт, пока выполнен вход
+let palette: PaletteElement | null = null;
+function buildPalette() {
+  palette?.dispose();
+  palette = CommandPalette({
+    placeholder: "Раздел, команда…",
+    groups: () => {
+      const theme = themeLabel();
+      return paletteGroups(session.me?.role === "Admin", {
+        theme: { label: theme.label, icon: theme.icon, run: cycleTheme },
+        logout,
+        collect: () => act(() => post("/api/collect/start"), "Сбор запущен — ход виден в «Системе»"),
+        checkLlm: () => { setStatus("Проверяем LLM…"); return act(() => post<{ model: string; latencyMs: number }>("/api/llm/check"), (r) => `LLM: ${r.model} ответила за ${r.latencyMs} мс`); },
+      });
+    },
+    sources: vacancySource(() => api<Vacancy[]>(scoped(`/api/vacancies?take=${VACANCY_SEARCH_TAKE}&includeHidden=true`))),
+  });
+  const open = () => palette?.open();
+  byId("find").replaceChildren(SearchButton("Найти вакансию, команду…", { keys: /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K", onClick: open }));
+}
+
 async function logout() {
   await post("/api/auth/logout").catch(() => null);
   setStatus("");
@@ -113,6 +122,8 @@ async function loadCounts() {
   ]);
   counts.review = stats.Review ?? 0;
   counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
+  const overview = await api<LlmOverview>(scoped("/api/llm/overview")).catch(() => null);
+  alerts = { llm: llmAlert(overview) };
 }
 
 // Скелетон (#128): пока раздел грузится, вместо пустого экрана — его каркас. Только при смене раздела:
@@ -178,7 +189,10 @@ function showLogin() {
   nav.hidden = tabbar.hidden = more.hidden = true;
   accountMenu?.dispose();
   accountMenu = null;
-  byId("theme").hidden = false;
+  palette?.dispose();
+  palette = null;
+  byId("find").replaceChildren();
+  document.body.classList.remove("signed-in");
   byId("viewing").hidden = true;
   loginForm.hidden = false;
   byId("email").focus();
@@ -188,8 +202,9 @@ async function showSession(user: Me) {
   session.me = user;
   loginForm.hidden = true;
   nav.hidden = tabbar.hidden = false;
-  byId("theme").hidden = true;
+  document.body.classList.add("signed-in");
   buildAccountMenu(user);
+  buildPalette();
   await Promise.all([loadUsers(), loadCounts()]);
   await render();
 }

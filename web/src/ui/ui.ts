@@ -227,16 +227,27 @@ export interface NavItem {
   icon?: IconName;
   active?: boolean;
   count?: number;
+  // Знак «!» у раздела (#128): что-то требует внимания; title — что именно (подсказка и подпись для чтения с экрана)
+  alert?: NavAlert | null;
 }
+export interface NavAlert {
+  tone: "warn" | "bad";
+  title: string;
+}
+
+// Alert — знак «!» у раздела: тон warn (пауза) или bad (сбой); текст причины — в title и aria-label
+export const Alert = (a: NavAlert | null | undefined) => a
+  ? el("span", { className: cls("alert", a.tone), title: a.title, role: "img", "aria-label": `Требует внимания: ${a.title}`, textContent: "!" })
+  : null;
 
 // Tabs — ссылки разделов
 export const Tabs = (items: NavItem[], { label }: { label?: string } = {}) => el("div", { className: "tabs", role: label ? "group" : undefined, "aria-label": label },
-  items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined }, t.label, Count(t.count))));
+  items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined }, t.label, Count(t.count), Alert(t.alert))));
 
 // TabBar — пункты нижней панели телефона и, последним, свой узел (кнопка «Ещё»)
 export const TabBar = (items: NavItem[], more?: Node | null): Node[] => [
   ...items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined },
-    t.icon ? Icon(t.icon) : null, t.label, Count(t.count))),
+    t.icon ? Icon(t.icon) : null, t.label, Count(t.count), Alert(t.alert))),
   ...(more ? [more] : []),
 ];
 
@@ -509,7 +520,7 @@ export function Sheet(children: Child, { title, label }: { title?: string; label
   return sheet;
 }
 // Пункты листа-меню
-export const SheetLinks = (items: NavItem[]) => items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "" }, i.icon ? Icon(i.icon) : null, i.label));
+export const SheetLinks = (items: NavItem[]) => items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "" }, i.icon ? Icon(i.icon) : null, i.label, Count(i.count), Alert(i.alert)));
 
 // ── Menu ──────────────────────────────────────────────────────────────
 // Пункт меню: ссылка (href) или действие (onClick). keepOpen — меню не закрывается после действия (переключатель темы).
@@ -609,3 +620,179 @@ export function Confirm({ title, text, confirm = "Подтвердить", cance
 export const KeyHints = (items: [string, string][], { label = "Клавиши" }: { label?: string } = {}) =>
   el("div", { className: "keys", role: "note", "aria-label": label },
     items.map(([keys, text]) => el("span", {}, keys.split("/").map((k) => el("kbd", { textContent: k })), " ", text)));
+
+// ── SearchButton, CommandPalette (#128) ──────────────────────────────
+// SearchButton — кнопка в виде поля поиска в шапке: значок, подсказка и клавиша; открывает палитру команд.
+// На узкой ширине подпись и клавиша прячутся (CSS), остаётся значок; подпись — и в aria-label
+export function SearchButton(text: string, { keys = "Ctrl K", onClick }: { keys?: string; onClick?: () => unknown } = {}): HTMLButtonElement {
+  const button = el("button", { type: "button", className: "search-button", "aria-label": `${text} (${keys})`, "aria-haspopup": "dialog", title: keys },
+    Icon("search"), el("span", { className: "search-text", textContent: text }), el("kbd", { textContent: keys }));
+  if (onClick) button.onclick = (e) => { e.stopPropagation(); onClick(); };
+  return button;
+}
+
+// Пункт палитры: ссылка (href; external — в новой вкладке) или действие (onRun). keywords — дополнительные слова для поиска
+export interface PaletteItem {
+  label: string;
+  hint?: string;
+  icon?: IconName;
+  href?: string;
+  external?: boolean;
+  onRun?: () => unknown;
+  keywords?: string;
+}
+export interface PaletteGroup {
+  title: string;
+  items: PaletteItem[];
+}
+// Источник с запросом (поиск по вакансиям): зовётся с введённым текстом не короче min символов, после паузы ввода
+export interface PaletteSource {
+  title: string;
+  min?: number;
+  search: (query: string) => Promise<PaletteItem[]>;
+}
+
+const norm = (s: string) => s.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+
+// Фильтр палитры: каждое слово запроса — подстрока подписи, подсказки или keywords (без учёта регистра, «ё» = «е»).
+// Пустые группы пропускаются; пустой запрос — всё как есть
+export function filterPalette(groups: PaletteGroup[], query: string): PaletteGroup[] {
+  const words = norm(query).split(/\s+/).filter(Boolean);
+  const match = (i: PaletteItem) => {
+    const hay = norm(`${i.label} ${i.hint ?? ""} ${i.keywords ?? ""}`);
+    return words.every((w) => hay.includes(w));
+  };
+  return groups.map((g) => ({ title: g.title, items: words.length ? g.items.filter(match) : g.items })).filter((g) => g.items.length);
+}
+
+export type PaletteElement = HTMLDivElement & { open(): void; close(): void; toggle(): void; readonly isOpen: boolean; dispose(): void };
+export interface PaletteOptions {
+  // Группы пунктов — функцией: права и подписи (текущая тема) берутся в момент открытия и ввода
+  groups: () => PaletteGroup[];
+  sources?: PaletteSource[];
+  placeholder?: string;
+  label?: string;
+  // Ctrl+K / Cmd+K открывает и закрывает палитру (по коду клавиши — работает и в русской раскладке)
+  hotkey?: boolean;
+  root?: ParentNode;
+  // Пауза ввода перед запросом к источникам, мс
+  delay?: number;
+}
+
+let paletteIds = 0;
+
+// CommandPalette — палитра команд: модальный диалог с полем и списком (combobox + listbox). Ввод фильтрует, ↑↓ выбирают,
+// Enter выполняет, Esc и клик мимо закрывают; при открытии фокус в поле, при закрытии — туда, где был.
+// Ссылка выбирается кликом по <a> — переход делает тот же обработчик ссылок, что у остальной страницы. Данные — только текстом
+export function CommandPalette({ groups, sources = [], placeholder = "Найти раздел или команду…", label = "Палитра команд",
+  hotkey = true, root = document.body, delay = 250 }: PaletteOptions): PaletteElement {
+  const id = `pal-${++paletteIds}`;
+  const input = el("input", { type: "text", className: "palette-input", placeholder, autocomplete: "off", spellcheck: false,
+    role: "combobox", "aria-label": label, "aria-expanded": "true", "aria-controls": `${id}-list`, "aria-autocomplete": "list" });
+  const list = el("div", { id: `${id}-list`, className: "palette-list", role: "listbox", "aria-label": "Результаты" });
+  const box = el("div", { className: "palette", role: "dialog", "aria-modal": "true", "aria-label": label },
+    el("div", { className: "palette-head" }, Icon("search"), input), list,
+    el("div", { className: "palette-foot" }, KeyHints([["↑/↓", "выбор"], ["Enter", "открыть"], ["Esc", "закрыть"]])));
+  const backdrop = el("div", { className: "palette-backdrop", hidden: true }, box) as unknown as PaletteElement;
+
+  let options: HTMLElement[] = [];
+  let active = 0;
+  let before: HTMLElement | null = null;
+  let found: PaletteGroup[] = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let asked = 0;
+
+  const setActive = (i: number) => {
+    if (!options.length) { input.removeAttribute("aria-activedescendant"); return; }
+    active = (i + options.length) % options.length;
+    options.forEach((o, n) => o.setAttribute("aria-selected", String(n === active)));
+    input.setAttribute("aria-activedescendant", options[active].id);
+    options[active].scrollIntoView?.({ block: "nearest" });
+  };
+
+  const option = (item: PaletteItem, n: number): HTMLElement => {
+    const body = [item.icon ? Icon(item.icon) : null, el("span", { className: "palette-label", textContent: item.label }),
+      item.hint ? el("span", { className: "palette-hint", textContent: item.hint }) : null];
+    const props = { id: `${id}-o${n}`, className: "palette-item", role: "option", "aria-selected": "false", tabIndex: -1 };
+    const node: HTMLElement = item.href
+      // Путь своего сайта (/llm/rejects) — как есть, остальное — только http(s)
+      ? el("a", { ...props, href: /^\/(?!\/)/.test(item.href) ? item.href : safeUrl(item.href), target: item.external ? "_blank" : undefined, rel: item.external ? "noopener" : undefined }, body)
+      : el("button", { ...props, type: "button" }, body);
+    node.addEventListener("click", async () => {
+      backdrop.close();
+      await item.onRun?.();
+    });
+    node.addEventListener("mousemove", () => { if (active !== n) setActive(n); });
+    return node;
+  };
+
+  const draw = () => {
+    const shown = [...filterPalette(groups(), input.value), ...found];
+    options = [];
+    list.replaceChildren(...(shown.length
+      ? shown.map((g) => el("div", { className: "palette-group", role: "group", "aria-label": g.title },
+        el("div", { className: "palette-caption", textContent: g.title, "aria-hidden": "true" }),
+        g.items.map((item) => { const node = option(item, options.length); options.push(node); return node; })))
+      : [el("p", { className: "palette-empty", textContent: "Ничего не найдено" })]));
+    setActive(0);
+  };
+
+  // Источники с запросом: после паузы ввода; ответ на устаревший запрос не рисуется
+  const ask = () => {
+    clearTimeout(timer);
+    found = [];
+    const query = input.value.trim();
+    const ready = sources.filter((s) => query.length >= (s.min ?? 2));
+    const ticket = ++asked;
+    if (!ready.length) return;
+    timer = setTimeout(async () => {
+      const results = await Promise.all(ready.map(async (s) => ({ title: s.title, items: await s.search(query).catch(() => [] as PaletteItem[]) })));
+      if (ticket !== asked || backdrop.hidden) return;
+      found = results.filter((g) => g.items.length);
+      draw();
+    }, delay);
+  };
+
+  input.addEventListener("input", () => { ask(); draw(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === "Enter") { e.preventDefault(); options[active]?.click(); }
+    // Фокус остаётся в поле: выбор — стрелками
+    else if (e.key === "Tab") e.preventDefault();
+  });
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.close(); });
+
+  backdrop.open = () => {
+    if (!backdrop.hidden) return;
+    before = document.activeElement as HTMLElement | null;
+    input.value = "";
+    found = [];
+    backdrop.hidden = false;
+    draw();
+    input.focus();
+  };
+  backdrop.close = () => {
+    if (backdrop.hidden) return;
+    clearTimeout(timer);
+    asked++;
+    backdrop.hidden = true;
+    before?.focus?.();
+    before = null;
+  };
+  backdrop.toggle = () => (backdrop.hidden ? backdrop.open() : backdrop.close());
+  Object.defineProperty(backdrop, "isOpen", { get: () => !backdrop.hidden });
+
+  // Esc — в фазе захвата, чтобы не закрыть заодно меню или лист под палитрой
+  const keys = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && !backdrop.hidden) { e.stopPropagation(); e.preventDefault(); backdrop.close(); return; }
+    if (hotkey && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.code === "KeyK" || e.key?.toLowerCase() === "k")) {
+      e.preventDefault();
+      backdrop.toggle();
+    }
+  };
+  document.addEventListener("keydown", keys, true);
+  backdrop.dispose = () => { document.removeEventListener("keydown", keys, true); clearTimeout(timer); backdrop.remove(); };
+  root.append(backdrop);
+  return backdrop;
+}

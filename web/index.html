@@ -17,13 +17,15 @@
 <body>
 <header>
   <div class="top">
-    <a class="brand" href="/dashboard"><span class="mark">hh<b>=#</b></span><span class="name">autoapplier</span></a>
+    <a class="brand" href="/dashboard" aria-label="hh-autoapplier — дашборд"><span class="mark">hh<b>=#</b></span><span class="name">autoapplier</span></a>
+    <!-- Шапка в одну строку (#128): логотип · разделы плашками · поиск Ctrl+K · данные · меню аккаунта · тема -->
+    <nav id="nav" hidden aria-label="Разделы"></nav>
+    <span id="find" class="find"></span>
     <span id="viewing" hidden><label class="muted" for="view-as">Данные:</label> <select id="view-as"></select></span>
-    <!-- Меню аккаунта под именем (#128); тема в шапке — только на странице входа, после входа — в меню -->
+    <!-- Меню аккаунта под именем (#128); на телефоне — в листе «Ещё», там же тема -->
     <span id="account" class="account"></span>
     <button id="theme" class="icon" type="button" title="Тема" aria-label="Тема"></button>
   </div>
-  <nav id="nav" hidden aria-label="Разделы"></nav>
 </header>
 
 <main>
