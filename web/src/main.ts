@@ -9,6 +9,7 @@ import { candidate } from "./pages/candidate";
 import { dashboard } from "./pages/dashboard";
 import { dialogs } from "./pages/dialogs";
 import { kit } from "./pages/kit";
+import { llm } from "./pages/llm";
 import { overview } from "./pages/overview";
 import { review } from "./pages/review";
 import { searches } from "./pages/searches";
@@ -29,7 +30,7 @@ const nav = byId<HTMLElement>("nav");
 const tabbar = byId<HTMLElement>("tabbar");
 const viewAs = byId<HTMLSelectElement>("view-as");
 
-const routes: Record<RouteName, (route: Route) => Promise<Child>> = { dashboard, overview, vacancies, review, dialogs, searches, candidate, account, system, kit };
+const routes: Record<RouteName, (route: Route) => Promise<Child>> = { dashboard, overview, vacancies, review, dialogs, searches, candidate, account, system, llm, kit };
 
 // Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же.
 // Разделы после ревизии (#128): «Обзор» (/overview) и витрина /kit (#129) — только по адресу; аккаунт (/account) — из меню
@@ -47,6 +48,8 @@ const SECTIONS: Section[] = [
   { route: "review", title: "Проверка", icon: "review", tab: true, count: "review" },
   { route: "dialogs", title: "Ответы", icon: "dialogs", tab: true, count: "dialogs" },
   { route: "vacancies", title: "Вакансии", icon: "vacancies", tab: true },
+  // LLM (#127) — по концепту после «Вакансий»; на телефоне — в «Ещё»
+  { route: "llm", title: "LLM", icon: "llm" },
   { route: "searches", title: "Поиски", icon: "search" },
   { route: "candidate", title: "Кандидат", icon: "resume" },
   { route: "system", title: "Система", icon: "admin", admin: true },
@@ -234,6 +237,13 @@ window.addEventListener("hashchange", () => {
   const target = legacyHashPath(location.hash);
   if (target) navigate(target, { replace: true });
 });
+
+// Тестовый стенд (#124): /api/version без входа отдаёт метку stage — плашка над шапкой на всех страницах, включая вход
+api<{ stage?: string | null }>("/api/version").then((v) => {
+  if (!v?.stage) return;
+  document.title = `[STAGE] ${document.title}`;
+  document.body.prepend(el("div", { className: "stage", role: "status" }, el("b", { textContent: "STAGE" }), ` · ${v.stage} · тестовая база, не боевой сервер`));
+}).catch(() => null);
 
 // Сессия могла остаться с прошлого раза
 api<Me>("/api/auth/me").then(showSession).catch(() => showLogin());

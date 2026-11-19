@@ -2,7 +2,7 @@
 // Backend отдаёт index.html на любой путь, кроме /api, /health и файлов (WebInterface.cs), поэтому обновление страницы
 // открывает тот же раздел. Старые адреса на якорях (/#review, /#vacancies/Queued) переводятся на пути
 
-export const ROUTES = ["dashboard", "overview", "vacancies", "review", "dialogs", "searches", "candidate", "account", "system", "kit"] as const;
+export const ROUTES = ["dashboard", "overview", "vacancies", "review", "dialogs", "searches", "candidate", "account", "system", "llm", "kit"] as const;
 export type RouteName = (typeof ROUTES)[number];
 
 // Переименованные разделы (#128): старый адрес → новый раздел (параметры и подраздел сохраняются)

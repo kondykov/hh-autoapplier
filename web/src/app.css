@@ -49,3 +49,6 @@ main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 
   .views { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--sp-3)); padding-inline: var(--sp-3); }
   .views a { white-space: nowrap; }
 }
+
+/* Тестовый стенд (#124): плашка над шапкой на всех страницах, включая вход */
+.stage { background: var(--warn-bg); color: var(--warn); border-bottom: 2px solid var(--warn); padding: 6px var(--sp-4); text-align: center; font-size: var(--fs-sm, 14px); }

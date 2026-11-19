@@ -1,11 +1,15 @@
 // Вакансии: виды-вкладки (В очереди · Отправлено · Приглашения · Отказы · Все), фильтры чипами и решения по вакансии
 // вне ручной проверки. Всё состояние списка — в адресе (/vacancies?view=queued&search=…): ссылку можно открыть с телефона (#128)
 import { api, post } from "../api/http";
-import type { LetterRequest, Search, Vacancy } from "../api/types";
+import type { LetterRequest, LlmConnection, LlmProviders, Search, Vacancy } from "../api/types";
+import { connectionState } from "./llm";
 import { date, salary, sourcePill, STATUSES } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped } from "../state";
-import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "../ui/ui";
+import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "../ui/ui";
+
+// Подключения LLM сервера — для «Оценить заново через» на карточках текущего списка
+let connections: LlmConnection[] = [];
 import { undoable } from "../undo";
 
 // Виды списка: статус вида — фильтр запроса; «Все» — любой статус, остальные статусы выбираются чипами
@@ -64,10 +68,13 @@ export function vacancyApiQuery(f: VacancyFilter, take = VACANCY_PAGE): URLSearc
 
 export async function vacancies(route: Route): Promise<Child> {
   const f = parseVacancyFilter(route.query);
-  const [searches, items] = await Promise.all([
+  const [searches, items, providers] = await Promise.all([
     api<Search[]>(scoped("/api/searches")),
     api<Vacancy[]>(scoped(`/api/vacancies?${vacancyApiQuery(f)}`)),
+    // Подключения для «Оценить заново через» (#107); недоступен список — кнопки нет, остальное работает
+    api<LlmProviders>("/api/llm/providers").catch(() => null),
   ]);
+  connections = providers?.providers ?? [];
   // Смена вида и страницы — новая запись в истории («назад» возвращает), фильтры — на месте текущей
   const go = (next: Partial<VacancyFilter>, replace = true) => app.navigate(vacancyFilterPath({ ...f, skip: 0, ...next }), { replace });
 
@@ -124,7 +131,7 @@ function vacancyActions(v: Vacancy, pill: HTMLElement): HTMLElement | null {
 
   if (REQUEUE.includes(v.status)) {
     // Оценить заново и скрыть — только отсеянные: у Failed отклик мог уйти на hh.ru
-    const clear = () => [requeue, reevaluate, hide].forEach((b) => b?.remove());
+    const clear = () => [requeue, reevaluate, through, hide].forEach((b) => b?.remove());
     const requeue = Button("В очередь", { kind: "primary", onClick: () => {
       const run = () => post(vacancyPath(v, "status"), { status: "Queued" });
       const done = () => { clear(); return finish("в очереди", "Queued"); };
@@ -132,15 +139,21 @@ function vacancyActions(v: Vacancy, pill: HTMLElement): HTMLElement | null {
       return undoable(run, { done, undo: () => post(vacancyPath(v, "status"), { status: "Skipped", reason: v.statusReason ?? "пропущено вручную" }),
         undone: undoTo("снова пропущена"), onUndone: restore });
     } });
+    const reevaluated = (r: Vacancy) => {
+      clear();
+      return finish(r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
+    };
     const reevaluate = v.dismissed ? Button("Оценить заново", {
-      onClick: () => act(() => post<Vacancy>(vacancyPath(v, "reevaluate")), (r) => {
-        clear();
-        return finish(r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
-      }) }) : null;
+      onClick: () => act(() => post<Vacancy>(vacancyPath(v, "reevaluate")), reevaluated) }) : null;
+    // Разовый прогон другой моделью (#107): оценка сразу выбранным подключением, настройка «Мои модели» не меняется
+    const through = v.dismissed && connections.length ? Menu("Оценить заново через", connections.map((c) => ({
+      label: `${c.name} · ${c.model}${c.available ? "" : ` — ${connectionState(c)}`}`,
+      onClick: () => act(() => post<Vacancy>(`${vacancyPath(v, "reevaluate")}?provider=${encodeURIComponent(c.name)}`), reevaluated),
+    })), { label: "Оценить заново через подключение", align: "start", button: true }) : null;
     const hide = v.dismissed ? Button("Скрыть", { onClick: () => undoable(() => post(vacancyPath(v, "hide")), {
       done: () => { clear(); return finish("скрыта"); },
       undo: () => post(vacancyPath(v, "unhide")), undone: undoTo("возвращена"), onUndone: restore }) }) : null;
-    return Actions([requeue, reevaluate, hide, result]);
+    return Actions([requeue, reevaluate, through, hide, result]);
   }
 
   if (SKIPPABLE.includes(v.status)) {

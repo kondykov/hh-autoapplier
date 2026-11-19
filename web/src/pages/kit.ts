@@ -31,6 +31,10 @@ function kitGallery(): HTMLElement {
     { label: "Тема", icon: "theme", keepOpen: true, onClick: () => { Toast("Пункт с keepOpen: меню не закрылось"); } }, { label: "Выйти", icon: "logout", danger: true, onClick: () => { Toast("Выход"); } }],
     { label: "Меню аккаунта", align: "start" });
   menu.classList.add("kit-demo");
+  // Menu с триггером-кнопкой (#107): действие с выбором варианта
+  const menuButton = Menu("Оценить заново через", [{ label: "gigachat · GigaChat-2-Max", onClick: () => { Toast("Оценка через gigachat"); } },
+    { label: "groq-fast · gpt-oss-20b — пауза", onClick: () => { Toast("Оценка через groq-fast"); } }], { label: "Оценить заново через подключение", align: "start", button: true });
+  menuButton.classList.add("kit-demo");
   document.body.append(sheet);
   const sheetButton = Button("Открыть лист", { icon: "more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
 
@@ -108,6 +112,7 @@ function kitGallery(): HTMLElement {
       } })),
       row("Sheet", sheetButton),
       row("Menu", menu),
+      row("Menu (button)", menuButton),
       row("KeyHints", KeyHints([["J/K", "карточки"], ["A", "одобрить"], ["R", "отклонить"], ["E", "письмо"]]))),
     sec("EmptyState, Skeleton",
       el("div", { className: "cols" },

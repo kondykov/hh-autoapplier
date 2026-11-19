@@ -468,8 +468,9 @@ export function MenuItems(items: MenuEntry[], onPick: () => void = () => {}): No
 export type MenuElement = HTMLDivElement & { open(): void; close(): void; dispose(): void };
 
 // Menu — выпадающее меню под кнопкой (меню аккаунта под именем в шапке). Закрывается выбором пункта, кликом мимо и Esc
-export function Menu(trigger: Child, items: MenuEntry[], { label, align = "end" }: { label?: string; align?: "start" | "end" } = {}): MenuElement {
-  const button = el("button", { type: "button", className: "menu-trigger", "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": label }, trigger, Icon("chevron"));
+// button — триггер в виде обычной кнопки (действие с выбором варианта: «Оценить заново через ▾», #107)
+export function Menu(trigger: Child, items: MenuEntry[], { label, align = "end", button: asButton }: { label?: string; align?: "start" | "end"; button?: boolean } = {}): MenuElement {
+  const button = el("button", { type: "button", className: cls("menu-trigger", asButton && "as-button"), "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": label }, trigger, Icon("chevron"));
   const list = el("div", { className: cls("menu-list", align), role: "menu", hidden: true });
   const menu = el("div", { className: "menu" }, button, list) as MenuElement;
   menu.open = () => { list.hidden = false; button.setAttribute("aria-expanded", "true"); };

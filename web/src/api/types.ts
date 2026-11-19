@@ -167,3 +167,26 @@ export interface CollectState {
   current?: (CollectCounts & { trigger: string; startedAt: string; search?: string | null; page?: number }) | null;
   last?: (CollectCounts & { trigger: string; finishedAt: string; error?: string | null; searches?: number }) | null;
 }
+
+// Подключения LLM сервера для выбора пользователем (#107): без ключей и адресов. dailyLimit 0 — без ограничения
+export interface LlmConnection {
+  name: string;
+  provider: string;
+  model: string;
+  available: boolean;
+  pausedUntil?: string | null;
+  pauseReason?: string | null;
+  usedToday: number;
+  dailyLimit: number;
+}
+
+export interface LlmProviders {
+  providers: LlmConnection[];
+  // Чем сервер выполняет задачу без выбора пользователя
+  defaults: { task: string; connection: LlmConnection }[];
+}
+
+// Задача → имя подключения; null — как на сервере
+export interface UserLlmSettings {
+  choices: Record<string, string | null>;
+}
