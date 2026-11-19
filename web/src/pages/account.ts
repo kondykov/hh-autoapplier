@@ -4,7 +4,7 @@ import { api, del, post } from "../api/http";
 import type { ApiToken, Telegram, TelegramLink } from "../api/types";
 import { date } from "../format";
 import { act, app, me } from "../state";
-import { Button, Card, el, Field, Form, FormGrid, PageHead, safeUrl, Secret, StackTable, Toolbar, type Child } from "../ui/ui";
+import { Button, Card, Confirm, el, Field, Form, FormGrid, PageHead, safeUrl, Secret, StackTable, Toolbar, type Child } from "../ui/ui";
 
 export async function account(): Promise<Child> {
   const user = me();
@@ -42,8 +42,8 @@ export async function account(): Promise<Child> {
     if (!items.length) return el("p", { className: "muted", textContent: "Токенов нет." });
     return StackTable([{ title: "Название" }, { title: "Начало" }, { title: "Выпущен" }, { title: "" }],
       items.map((t) => {
-        const revoke = Button("Отозвать", { kind: "danger", onClick: () => {
-          if (confirm(`Отозвать токен «${t.name}»? Расширение с ним перестанет работать.`))
+        const revoke = Button("Отозвать", { kind: "danger", onClick: async () => {
+          if (await Confirm({ title: `Отозвать токен «${t.name}»?`, text: "Расширение с ним перестанет работать. Вернуть нельзя — только выпустить новый.", confirm: "Отозвать", kind: "danger" }))
             return act(() => del(`/api/tokens/${t.id}`), () => { app.render(); return `Токен «${t.name}» отозван`; });
         } });
         return [t.name, el("span", { className: "mono", textContent: `${t.prefix}…` }), date(t.createdAt), t.revokedAt ? `отозван ${date(t.revokedAt)}` : revoke];
@@ -54,7 +54,10 @@ export async function account(): Promise<Child> {
   function telegramView(t: Telegram): HTMLElement {
     if (!t.configured) return el("p", { className: "muted", textContent: "Бот не настроен на сервере (TELEGRAM_BOT_TOKEN)." });
     if (t.linked) {
-      const unlink = Button("Отвязать", { kind: "danger", onClick: () => act(() => del("/api/telegram"), () => { app.render(); return "Telegram отвязан"; }) });
+      const unlink = Button("Отвязать", { kind: "danger", onClick: async () => {
+        if (await Confirm({ title: "Отвязать Telegram?", text: "Уведомления перестанут приходить. Привязать заново — по новой ссылке.", confirm: "Отвязать", kind: "danger" }))
+          return act(() => del("/api/telegram"), () => { app.render(); return "Telegram отвязан"; });
+      } });
       return Toolbar([`Привязан${t.username ? ` к @${t.username}` : ""} ${date(t.linkedAt)}`, unlink]);
     }
     const out = el("div");

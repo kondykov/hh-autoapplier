@@ -38,3 +38,14 @@ main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 
 .kit-themes > div { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-3); min-width: 0; }
 .kit-frame { width: 100%; height: 760px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg); display: block; margin: 0 auto; }
 @media (max-width: 900px) { .kit-themes { grid-template-columns: minmax(0, 1fr); } }
+
+/* Разделы (#128): скелетон загрузки, виды и фильтры «Вакансий» */
+.page-skel { max-width: 360px; margin-bottom: var(--sp-4); }
+.views { margin-bottom: var(--sp-3); }
+.filters .chips { margin-bottom: var(--sp-2); }
+.filters { margin-bottom: var(--sp-3); }
+@media (max-width: 720px) {
+  /* Виды — в одну строку с прокруткой, без переноса */
+  .views { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--sp-3)); padding-inline: var(--sp-3); }
+  .views a { white-space: nowrap; }
+}

@@ -5,7 +5,7 @@ import { path, type Route } from "../router";
 import { me } from "../state";
 import { currentTheme, setTheme, type Theme } from "../theme";
 import {
-  Actions, Badge, Bars, Button, Callout, Caption, Card, Chips, Count, Disclosure, el, EmptyState, Field, Form, FormGrid, Funnel, Icon, ICONS, Meta, Meter,
+  Actions, Badge, Bars, Button, Callout, Caption, Card, Chips, Confirm, Count, Disclosure, el, EmptyState, Field, Form, FormGrid, Funnel, Icon, ICONS, KeyHints, Meta, Meter,
   Menu, Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
   type Child, type MenuElement, type SheetElement,
 } from "../ui/ui";
@@ -96,12 +96,19 @@ function kitGallery(): HTMLElement {
       Callout("Callout — вывод LLM или итог разбора."), Quote("Quote — сообщение работодателя как есть."), Note("Note — служебная пометка (демо, задел)."),
       el("p", {}, "Secret: ", Secret("hh_pat_xxxxxxxx")),
       Disclosure("Disclosure — раскрывающийся блок", Pre("Pre — длинный текст\nс переносами строк.")), Meta(["Meta", "части через точку", "пустые пропускаются", null])),
-    sec("Toast, Sheet, Menu",
+    sec("Toast, Confirm, Sheet, Menu",
       row("Toast", Button("Итог", { onClick: () => { Toast("«C# разработчик»: в очереди", { tone: "ok" }); } }),
         Button("С «Отменить»", { onClick: () => { Toast("Вакансия скрыта", { undo: () => Toast("Возвращена") }); } }),
         Button("Ошибка", { kind: "danger", onClick: () => { Toast("Сервер ответил 500", { tone: "bad" }); } })),
+      row("Confirm", Button("Удалить поиск", { kind: "danger", onClick: async () => {
+        Toast(await Confirm({ title: "Удалить поиск «dotnet-remote»?", text: "Вакансии останутся, правила поиска — нет. Вернуть нельзя.", confirm: "Удалить", kind: "danger" }) ? "Подтверждено" : "Отменено");
+      } }), Button("Задать пароль", { onClick: async () => {
+        const field = el("input", { type: "password", required: true, minLength: 10, autocomplete: "new-password", "aria-label": "Новый пароль (не короче 10 символов)" });
+        Toast(await Confirm({ title: "Пароль для anna@example.com", confirm: "Задать", field }) ? `Пароль из ${field.value.length} символов` : "Отменено");
+      } })),
       row("Sheet", sheetButton),
-      row("Menu", menu)),
+      row("Menu", menu),
+      row("KeyHints", KeyHints([["J/K", "карточки"], ["A", "одобрить"], ["R", "отклонить"], ["E", "письмо"]]))),
     sec("EmptyState, Skeleton",
       el("div", { className: "cols" },
         Card({}, EmptyState("На проверке ничего нет.", { icon: "check" }), EmptyState("Без иконки — как в разделах.")),

@@ -66,7 +66,7 @@ export function injectStyles(root: Document | ShadowRoot, cssTexts: string | str
 // setIconSprite(chrome.runtime.getURL(...))). В shadow root на чужом сайте внешний спрайт другого источника не грузится —
 // тогда injectIcons(root, svgText) встраивает спрайт в root, и Icon ссылается на #имя внутри него
 export const ICONS = ["dashboard", "review", "dialogs", "vacancies", "overview", "llm", "search", "resume", "user", "admin", "link", "external",
-  "clock", "check", "x", "undo", "more", "plus", "copy", "alert", "hash", "theme", "moon", "sun", "logout", "kit", "chevron", "download"] as const;
+  "clock", "check", "x", "undo", "more", "plus", "copy", "alert", "hash", "theme", "moon", "sun", "logout", "kit", "chevron", "download", "lock", "key", "send"] as const;
 export type IconName = (typeof ICONS)[number];
 let sprite = "/ui/icons.svg";
 export function setIconSprite(url: string): void { sprite = url; }
@@ -397,8 +397,15 @@ export function Toast(text: string, { undo, tone, timeout = 6000, root = documen
   let box = [...root.children].find((c): c is HTMLDivElement => c.classList.contains("toasts"));
   if (!box) root.append(box = el("div", { className: "toasts", role: "status", "aria-live": "polite" }));
   const close = (): void => toast.remove();
+  // Отмена — ровно один раз: повторное нажатие (двойной клик, клавиатура) уже ничего не делает
+  let undone = false;
   const toast: HTMLDivElement = el("div", { className: cls("toast", tone) }, el("span", { textContent: text }),
-    undo ? Button(labels.undo ?? "Отменить", { kind: "ghost", size: "sm", icon: "undo", onClick: async () => { close(); await undo(); } }) : null,
+    undo ? Button(labels.undo ?? "Отменить", { kind: "ghost", size: "sm", icon: "undo", onClick: async () => {
+      if (undone) return;
+      undone = true;
+      close();
+      await undo();
+    } }) : null,
     Button(labels.close ?? "Закрыть", { kind: "ghost", size: "sm", icon: "x", iconOnly: true, onClick: close }));
   box.append(toast);
   if (timeout) setTimeout(close, timeout);
@@ -476,3 +483,50 @@ export function Menu(trigger: Child, items: MenuEntry[], { label, align = "end" 
   menu.dispose = () => { document.removeEventListener("click", outside); document.removeEventListener("keydown", escape); menu.remove(); };
   return menu;
 }
+
+// ── Confirm, KeyHints ─────────────────────────────────────────────────
+export interface ConfirmOptions {
+  title: string;
+  text?: string;
+  // Подпись кнопки подтверждения и её вид (danger — необратимое)
+  confirm?: string;
+  cancel?: string;
+  kind?: ButtonKind;
+  // Поле в диалоге (новый пароль): проверяется формой (required, minLength) до подтверждения
+  field?: HTMLInputElement | null;
+  root?: ParentNode;
+}
+
+// Confirm — подтверждение действия без обратного (удалить, отозвать) вместо confirm()/prompt() браузера.
+// Модальный диалог по центру, на телефоне — у нижнего края. Esc и клик мимо — отмена. Промис: true — подтвердили
+export function Confirm({ title, text, confirm = "Подтвердить", cancel = "Отмена", kind = "primary", field, root = document.body }: ConfirmOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    const before = document.activeElement as HTMLElement | null;
+    const titleId = `dlg-${++fieldIds}`;
+    const ok = Button(confirm, { kind, type: "submit" });
+    const no = Button(cancel, { kind: "ghost" });
+    const form = el("form", { className: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": titleId },
+      el("h2", { id: titleId, textContent: title }), text ? el("p", { textContent: text }) : null,
+      field ? Field(field.getAttribute("aria-label") ?? "", field, { stacked: true }) : null,
+      el("div", { className: "actions flush" }, no, ok));
+    const backdrop = el("div", { className: "dialog-backdrop" }, form);
+    const finish = (value: boolean) => {
+      document.removeEventListener("keydown", escape, true);
+      backdrop.remove();
+      before?.focus?.();
+      resolve(value);
+    };
+    const escape = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); finish(false); } };
+    form.onsubmit = (e) => { e.preventDefault(); finish(true); };
+    no.onclick = () => finish(false);
+    backdrop.onclick = (e) => { if (e.target === backdrop) finish(false); };
+    document.addEventListener("keydown", escape, true);
+    root.append(backdrop);
+    (field ?? ok).focus();
+  });
+}
+
+// KeyHints — подсказка клавиш в шапке раздела: [клавиши, что делают]; на телефоне скрыта
+export const KeyHints = (items: [string, string][], { label = "Клавиши" }: { label?: string } = {}) =>
+  el("div", { className: "keys", role: "note", "aria-label": label },
+    items.map(([keys, text]) => el("span", {}, keys.split("/").map((k) => el("kbd", { textContent: k })), " ", text)));

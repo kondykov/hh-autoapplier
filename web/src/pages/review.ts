@@ -4,14 +4,19 @@ import { api, post, Unauthorized } from "../api/http";
 import type { Question, Vacancy } from "../api/types";
 import { options, salary } from "../format";
 import { act, app, readOnly, scoped, setStatus } from "../state";
-import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, Meta, PageHead, Pre, Result, type Child } from "../ui/ui";
+import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, KeyHints, Meta, PageHead, Pre, Result, type Child } from "../ui/ui";
+import { bindReviewKeys, REVIEW_KEY_HINTS } from "./review-keys";
 import { letterRequestLine, letterRequestsBlock, vacancyPath } from "./vacancies";
 
 export async function review(): Promise<Child> {
   const items = (await api<Vacancy[]>(scoped("/api/vacancies?status=Review&take=200"))).sort((a, b) => b.score - a.score);
+  const keys = items.length > 0 && !readOnly();
+  const list = el("div", { className: "review-list" }, items.length ? items.map(reviewCard) : EmptyState("На проверке ничего нет."));
+  if (keys) bindReviewKeys(list);
   return [
-    PageHead("Проверка", `Вакансии, в которых LLM сомневается, и анкеты с ответами LLM: ${items.length}. Письмо и текстовые ответы можно поправить перед одобрением.`),
-    el("div", {}, items.length ? items.map(reviewCard) : EmptyState("На проверке ничего нет.")),
+    PageHead("Проверка", `Вакансии, в которых LLM сомневается, и анкеты с ответами LLM: ${items.length}. Письмо и текстовые ответы можно поправить перед одобрением.`,
+      keys ? KeyHints(REVIEW_KEY_HINTS, { label: "Клавиши проверки" }) : undefined),
+    list,
   ];
 }
 
@@ -56,6 +61,7 @@ function reviewCard(v: Vacancy): HTMLElement {
   const letter = el("textarea", { value: v.coverLetter ?? "", disabled: readOnly(),
     placeholder: awaitsLetter ? "LLM ещё не написала письмо. Без письма одобрить нельзя: шаблон расширения не ответит на просьбы работодателя." : "LLM ещё не написала письмо. Напишите своё или одобрите без письма — расширение возьмёт шаблон." });
   letter.id = `letter-${v.id}`;
+  letter.dataset.key = "letter";
   const reason = el("input", { placeholder: "Причина отказа (необязательно)", "aria-label": "Причина отказа" });
   const result = Result();
   // Ответы LLM на анкету (#58) — в полях: уходят работодателю от имени кандидата. Правится каждый вопрос (#115):
@@ -102,7 +108,10 @@ function reviewCard(v: Vacancy): HTMLElement {
   } });
   const decline = Button("Отклонить", { kind: "danger", onClick: () => { decide({ approve: false, reason: reason.value.trim() || null }, "отклонено"); } });
 
-  const node = Card({ as: "article", title: v.title, href: v.url,
+  approve.dataset.key = "approve";
+  decline.dataset.key = "decline";
+  // tabIndex -1 — карточку можно сделать текущей клавишами J/K и кликом
+  const node = Card({ as: "article", title: v.title, href: v.url, tabIndex: -1,
     meta: [v.company, v.area, salary(v) ?? "зарплата не указана", v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.hasTest && "есть тест"],
     actions: readOnly() ? null : [approve, reason, decline, result] },
   Callout(v.statusReason ?? v.llmReason ?? "LLM сомневается"),

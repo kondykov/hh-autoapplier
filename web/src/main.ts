@@ -17,7 +17,7 @@ import { vacancies } from "./pages/vacancies";
 import { isAppLink, legacyHashPath, parseRoute, path, renamedPath, type Route, type RouteName } from "./router";
 import { app, page, scoped, session, setStatus } from "./state";
 import { cycleTheme, initThemeButton, themeLabel } from "./theme";
-import { Caption, el, Icon, Menu, MenuItems, nodes, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child, type IconName, type MenuElement, type MenuEntry, type NavItem } from "./ui/ui";
+import { Caption, Card, el, Icon, Menu, MenuItems, nodes, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child, type IconName, type MenuElement, type MenuEntry, type NavItem, Skeleton } from "./ui/ui";
 
 setIconSprite(iconsUrl);
 
@@ -75,9 +75,9 @@ function accountItems(route?: RouteName): MenuEntry[] {
   const theme = themeLabel();
   return [
     { label: "Аккаунт", icon: "user", href: account(), active: route === "account" },
-    { label: "Пароль", href: account("password") },
-    { label: "Токены расширения", href: account("tokens") },
-    { label: "Telegram", href: account("telegram") },
+    { label: "Пароль", icon: "lock", href: account("password") },
+    { label: "Токены расширения", icon: "key", href: account("tokens") },
+    { label: "Telegram", icon: "send", href: account("telegram") },
     { label: "Отчёт CSV", icon: "download", href: scoped("/api/report?format=csv"), download: true },
     "sep",
     { label: theme.label, icon: theme.icon, keepOpen: true, onClick: (node) => {
@@ -112,6 +112,14 @@ async function loadCounts() {
   counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
 }
 
+// Скелетон (#128): пока раздел грузится, вместо пустого экрана — его каркас. Только при смене раздела:
+// перерисовка того же раздела (фильтр, сохранение) не мигает, старое содержимое остаётся до прихода нового
+let shownRoute: RouteName | null = null;
+const loading = (): Node[] => [
+  el("div", { className: "page-skel" }, Skeleton({ lines: 2, label: "Загрузка раздела" })),
+  ...[3, 3, 2].map((lines, i) => Card({}, Skeleton({ lines, block: i === 2, label: "Загрузка" }))),
+];
+
 async function render() {
   if (!session.me) return;
   const current = ++page.renders;
@@ -120,16 +128,19 @@ async function render() {
   if (renamed) history.replaceState(null, "", renamed);
   const route = parseRoute(location.pathname, location.search);
   buildNav(route.name);
+  if (route.name !== shownRoute) view.replaceChildren(...loading());
   try {
     const content = await routes[route.name](route);
     if (current !== page.renders) return;
     view.replaceChildren(...nodes(content));
+    shownRoute = route.name;
     // ?section= — блок раздела (пункты меню аккаунта)
     const section = route.query.get("section");
     if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
   } catch (e) {
     if (current !== page.renders) return;
     view.replaceChildren();
+    shownRoute = null;
     if (e instanceof Unauthorized) showLogin();
     setStatus((e as Error).message, true);
   }
@@ -159,6 +170,7 @@ async function loadUsers() {
 
 function showLogin() {
   session.me = null;
+  shownRoute = null;
   view.replaceChildren();
   nav.hidden = tabbar.hidden = more.hidden = true;
   accountMenu?.dispose();

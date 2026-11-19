@@ -3,7 +3,8 @@ import { api, post, put, Unauthorized } from "../api/http";
 import type { CollectCounts, CollectState, User } from "../api/types";
 import { date, options } from "../format";
 import { act, app, me, page as pageState, setStatus } from "../state";
-import { Actions, busy, Button, Card, el, EmptyState, Form, StackTable, Toolbar, type Child } from "../ui/ui";
+import { undoable } from "../undo";
+import { Actions, busy, Button, Card, Confirm, el, EmptyState, Form, StackTable, Toolbar, type Child } from "../ui/ui";
 
 const collectionCounts = (r: CollectCounts) => `просмотрено ${r.seen}, новых ${r.added}, в очередь ${r.queued}, отсеяно ${r.skipped}`;
 
@@ -67,12 +68,26 @@ export async function system(): Promise<Child> {
     const self = u.id === user.id;
     const role = el("select", { disabled: self, "aria-label": "Роль" }, options(ROLES));
     role.value = u.role;
-    role.onchange = () => busy(role, () => act(() => put(`/api/users/${u.id}/role`, { role: role.value }), `${u.email}: роль ${role.value}`));
+    // Роль меняет права — с подтверждением; отказ или ошибка возвращают прежнее значение
+    let currentRole = u.role;
+    role.onchange = async () => {
+      const next = role.value;
+      const sure = await Confirm({ title: `Роль ${next} для ${u.email}?`,
+        text: next === "Admin" ? "Администратор видит данные всех пользователей и управляет ими." : "Пользователь потеряет доступ к разделу «Система».", confirm: "Сменить роль" });
+      const done = sure && await busy(role, () => act(() => put(`/api/users/${u.id}/role`, { role: next }), `${u.email}: роль ${next}`));
+      if (done === undefined || done === false) role.value = currentRole;
+      else currentRole = next;
+    };
+    // Блокировка обратима — сразу, с «Отменить» в тосте
     const block = Button(u.blocked ? "Разблокировать" : "Заблокировать", { kind: u.blocked ? null : "danger", disabled: self,
-      onClick: () => act(() => put(`/api/users/${u.id}/blocked`, { blocked: !u.blocked }), () => { app.render(); return `${u.email}: ${u.blocked ? "разблокирован" : "заблокирован"}`; }) });
-    const reset = Button("Задать пароль", { onClick: () => {
-      const password = prompt(`Новый пароль для ${u.email} (не короче 10 символов)`);
-      if (password) return act(() => put(`/api/users/${u.id}/password`, { password }), `${u.email}: пароль задан`);
+      onClick: () => undoable(() => put(`/api/users/${u.id}/blocked`, { blocked: !u.blocked }), {
+        done: () => { app.render(); return `${u.email}: ${u.blocked ? "разблокирован" : "заблокирован"}`; },
+        undo: () => put(`/api/users/${u.id}/blocked`, { blocked: u.blocked }),
+        undone: `${u.email}: ${u.blocked ? "снова заблокирован" : "снова разблокирован"}`, onUndone: () => { app.render(); } }) });
+    const reset = Button("Задать пароль", { onClick: async () => {
+      const field = el("input", { type: "password", required: true, minLength: 10, autocomplete: "new-password", "aria-label": "Новый пароль (не короче 10 символов)" });
+      if (await Confirm({ title: `Пароль для ${u.email}`, text: "Старый пароль перестанет работать.", confirm: "Задать", field }))
+        return act(() => put(`/api/users/${u.id}/password`, { password: field.value }), `${u.email}: пароль задан`);
     } });
     return [u.email, role, date(u.createdAt), Actions([block, reset], { flush: true })];
   });

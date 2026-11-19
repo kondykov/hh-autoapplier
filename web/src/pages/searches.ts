@@ -3,7 +3,7 @@ import { api, del, put } from "../api/http";
 import type { Search } from "../api/types";
 import { lines } from "../format";
 import { act, app, readOnly, scoped } from "../state";
-import { Button, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "../ui/ui";
+import { Button, Confirm, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "../ui/ui";
 
 export async function searches(): Promise<Child> {
   const items = await api<Search[]>(scoped("/api/searches"));
@@ -36,8 +36,8 @@ function searchForm(s: Search | null): HTMLFormElement {
   if (readOnly()) Object.values(inputs).forEach((i) => (i.disabled = true));
 
   const save = Button(s ? "Сохранить" : "Добавить", { kind: "primary", type: "submit" });
-  const remove = s ? Button("Удалить", { kind: "danger", onClick: () => {
-    if (confirm(`Удалить поиск «${s.name}»?`))
+  const remove = s ? Button("Удалить", { kind: "danger", onClick: async () => {
+    if (await Confirm({ title: `Удалить поиск «${s.name}»?`, text: "Сбор по нему прекратится, правила пропадут. Собранные вакансии останутся. Вернуть нельзя.", confirm: "Удалить", kind: "danger" }))
       return act(() => del(`/api/searches/${s.id}`), () => { app.render(); return `Поиск «${s.name}» удалён`; });
   } }) : null;
 
