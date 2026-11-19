@@ -325,6 +325,25 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(0, await factory.WithDbAsync(db => Task.FromResult(db.LlmCalls.Count())));
     }
 
+    // #113: журнал LlmCalls хранится 90 дней
+    [Fact]
+    public async Task PurgeLlmCalls_RemovesOlderThanRetention()
+    {
+        var now = DateTimeOffset.UtcNow;
+        await factory.WithDbAsync(db =>
+        {
+            db.LlmCalls.Add(HhAutoApplier.Domain.Llm.LlmCall.Succeeded("old", null, "m", "p", "r", 1, 1, now.AddDays(-91)));
+            db.LlmCalls.Add(HhAutoApplier.Domain.Llm.LlmCall.Succeeded("recent", null, "m", "p", "r", 1, 1, now.AddDays(-89)));
+            return db.SaveChangesAsync();
+        });
+
+        var purged = await factory.WithDbAsync(db =>
+            new HhAutoApplier.Application.Commands.Llm.PurgeLlmCallsCommandHandler(db, TimeProvider.System).Handle(new()));
+
+        Assert.Equal(1, purged);
+        Assert.Equal(["recent"], await factory.WithDbAsync(db => Task.FromResult(db.LlmCalls.Select(c => c.Purpose).ToList())));
+    }
+
     [Fact]
     public async Task LlmLetters_ForQueuedWithoutLetter_ByResumeTemplate()
     {
