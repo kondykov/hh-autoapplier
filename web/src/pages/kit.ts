@@ -7,7 +7,8 @@ import { currentTheme, setTheme, type Theme } from "../theme";
 import {
   Actions, Badge, Bars, Button, Callout, Caption, Card, Chips, Confirm, Count, Disclosure, el, EmptyState, Field, Form, FormGrid, Funnel, Icon, ICONS, KeyHints, Meta, Meter,
   Menu, Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
-  type Child, type MenuElement, type SheetElement,
+  FilterList, PickRow, SelectionBar, type PickElement,
+  type Child, type MenuElement, type SelectionBarElement, type SheetElement,
 } from "../ui/ui";
 import { AGGREGATORS } from "./dashboard";
 import { PERIODS } from "./dashboard-data";
@@ -36,6 +37,18 @@ function kitGallery(): HTMLElement {
     { label: "groq-fast · gpt-oss-20b — пауза", onClick: () => { Toast("Оценка через groq-fast"); } }], { label: "Оценить заново через подключение", align: "start", button: true });
   menuButton.classList.add("kit-demo");
   document.body.append(sheet);
+  // SelectionBar над строками PickRow: флажок «выбрать все», действия — в строке, на телефоне — в листе
+  const pickRows: PickElement[] = [];
+  const pickBar = SelectionBar(() => [Button("Вернуть в очередь", { kind: "primary", icon: "undo", onClick: () => { Toast("Вернули в очередь", { undo: () => Toast("Снова в отсеве") }); } }),
+    Button("Скрыть", { onClick: () => { Toast("Скрыто"); } })], { onAll: (on) => { pickRows.forEach((r) => { r.checked = on; }); syncPicks(); } });
+  pickBar.classList.add("kit-demo");
+  const syncPicks = () => pickBar.update(pickRows.filter((r) => r.checked).length, pickRows.length);
+  pickRows.push(
+    PickRow({ title: "Backend-разработчик C#/Go", meta: ["Облако-9", "2 ч назад"], note: "LLM: основной стек Go, C# — вторичный", score: 64, tone: "accent", checked: true, onToggle: syncPicks,
+      actions: Button("Вернуть", { size: "sm", icon: "undo", iconOnly: true }) }),
+    PickRow({ title: "PHP-разработчик (Symfony)", meta: "Диджитал Плюс", note: "LLM: стек PHP, в профиле — C#/.NET", score: 22, onToggle: syncPicks }));
+  const picks = el("div", {}, pickRows);
+  syncPicks();
   const sheetButton = Button("Открыть лист", { icon: "more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
 
   return el("div", {},
@@ -85,6 +98,10 @@ function kitGallery(): HTMLElement {
           return { total: Math.max(sent, answered), title: `день ${i + 1}: отправлено ${sent}`, parts: [{ value: inv, tone: "ok" as const }, { value: answered - inv, tone: "accent" as const }] };
         }), { from: "5 нояб.", to: "сегодня", legend: [{ label: "отправлено", color: "var(--bar)" }, { label: "ответили отказом", color: "var(--accent)" }, { label: "приглашение", color: "var(--ok)" }] }),
         Caption("RankList"), RankList([["оценка N ниже N", 5], ["стоп-слово «…»", 3], ["LLM", 1]])))),
+    sec("FilterList, PickRow, SelectionBar",
+      el("div", { className: "cols narrow-left" },
+        Card({}, FilterList([{ href: KIT, label: "Все", count: 12, active: true }, { href: KIT, label: "Стек не совпадает", count: 7 }, { href: KIT, label: "Офис / переезд", count: 3 }, { href: KIT, label: "Прочее", count: 2 }], { max: 12, label: "Группы" })),
+        Card({}, pickBar, picks))),
     sec("StackTable",
       Card({}, StackTable([{ title: "Поиск" }, { title: "Собрано", num: true }, { title: "Отправлено", num: true }, { title: "Конверсия", num: true }, { title: "" }],
         [["dotnet-remote", 20, 3, "15%", Button("Открыть", { size: "sm" })], ["backend-msk", 3, 0, "0%", Button("Открыть", { size: "sm" })]]),
@@ -129,6 +146,7 @@ export async function kit(route: Route): Promise<Child> {
     // Листы прошлой отрисовки витрины — прочь
     document.querySelectorAll<SheetElement>(".sheet.kit-demo").forEach((n) => n.dispose());
     document.querySelectorAll<MenuElement>(".menu.kit-demo").forEach((n) => n.dispose());
+    document.querySelectorAll<SelectionBarElement>(".selbar.kit-demo").forEach((n) => n.dispose());
     if (kitState.width !== "auto") {
       body.replaceChildren(el("iframe", { className: "kit-frame", src: path("kit", {}, "frame"), title: `Витрина шириной ${kitState.width}px`, style: `max-width:${kitState.width}px` }));
       return;

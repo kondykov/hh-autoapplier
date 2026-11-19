@@ -190,3 +190,40 @@ export interface LlmProviders {
 export interface UserLlmSettings {
   choices: Record<string, string | null>;
 }
+
+// Вкладка LLM (#127): GET /api/llm/overview
+export interface LlmOverview {
+  requests: { server: number; limit: number; own: number; userLimit: number; byUser: { userId: string | null; name: string; count: number }[] | null };
+  errors: { total: number; limit: number; network: number; provider: number; other: number };
+  rejects: { rejected: number; evaluated: number; returned: number; borderline: number };
+  letters: { rejected: number; written: number };
+  routes: { task: string; choice: string | null; connection: LlmConnection; calls: number; errors: number }[];
+  attention: { kind: string; text: string; href: string | null }[];
+}
+
+export interface LlmRejectItem {
+  id: string;
+  title: string;
+  company: string;
+  url: string | null;
+  score: number | null;
+  reason: string | null;
+  group: string;
+  evaluatedAt: string | null;
+}
+
+// GET /api/llm/rejects
+export interface LlmRejects {
+  total: number;
+  borderline: number;
+  groups: { id: string; title: string; count: number }[];
+  items: LlmRejectItem[];
+  matched: number;
+  returned: { returned: number; applied: number; invited: number };
+}
+
+// POST /api/vacancies/bulk
+export interface BulkResult {
+  done: string[];
+  failed: { id: string; error: string }[];
+}

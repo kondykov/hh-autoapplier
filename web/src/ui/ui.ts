@@ -339,6 +339,82 @@ export function Bars(items: BarItem[], { from, to, legend }: { from?: string; to
 export const RankList = (items: [string, number][]) =>
   el("ul", { className: "reasons" }, items.map(([text, n]) => el("li", {}, el("span", { textContent: text }), el("b", { className: "mono", textContent: String(n) }))));
 
+// ── FilterList, PickRow, SelectionBar (#127) ──────────────────────────
+export interface FilterItem {
+  href: string;
+  label: string;
+  count: number;
+  active?: boolean;
+}
+
+// FilterList — фильтры ссылками со счётчиком и полосой доли (от max, по умолчанию — наибольший счётчик); на телефоне — строка чипов
+export function FilterList(items: FilterItem[], { max, label }: { max?: number; label?: string } = {}): HTMLElement {
+  const top = Math.max(1, max ?? Math.max(...items.map((i) => i.count)));
+  return el("nav", { className: "filters", "aria-label": label },
+    items.map((i) => el("a", { href: i.href, className: i.active ? "active" : "", "aria-current": i.active ? "true" : undefined },
+      el("span", { textContent: i.label }), el("b", { className: "mono", textContent: String(i.count) }), Meter(i.count, top, { label: i.label }))));
+}
+
+export interface PickOptions {
+  title: string;
+  href?: string;
+  meta?: MetaParts;
+  note?: Child;
+  // Число справа (балл) и его тон
+  score?: number | string | null;
+  tone?: Tone;
+  actions?: Child;
+  checked?: boolean;
+  onToggle: (on: boolean) => void;
+  // Подпись флажка для чтения с экрана; по умолчанию — заголовок
+  label?: string;
+}
+
+export type PickElement = HTMLDivElement & { checked: boolean };
+
+// PickRow — строка списка с флажком выбора: заголовок (ссылка), Meta, пояснение, число и действия справа.
+// Выбранная подсвечивается; .checked = … меняет выбор без onToggle. На телефоне — карточка
+export function PickRow({ title, href, meta, note, score, tone, actions, checked = false, onToggle, label }: PickOptions): PickElement {
+  const box = el("input", { type: "checkbox", checked, "aria-label": label ?? title });
+  const row = el("div", { className: cls("pick", checked && "on"), tabIndex: 0 },
+    box,
+    el("div", { className: "pick-body" },
+      href ? el("a", { href: safeUrl(href), target: "_blank", rel: "noopener", className: "pick-title", textContent: title }) : el("b", { className: "pick-title", textContent: title }),
+      Meta(meta), note ? el("div", { className: "reason" }, note) : null),
+    el("div", { className: "pick-aside" }, score != null ? el("b", { className: cls("mono", tone), textContent: String(score) }) : null, actions)) as PickElement;
+  Object.defineProperty(row, "checked", {
+    get: () => box.checked,
+    set: (on: boolean) => { box.checked = on; row.classList.toggle("on", on); },
+  });
+  box.onchange = () => { row.classList.toggle("on", box.checked); onToggle(box.checked); };
+  return row;
+}
+
+export type SelectionBarElement = HTMLDivElement & { update(count: number, total: number): void; dispose(): void };
+
+// SelectionBar — «N выбрано» с флажком «выбрать все» и действиями над выбранным. Действия — функция: на компьютере они в строке,
+// на телефоне — в нижнем листе по кнопке. update(count, total) — перерисовать счётчик; dispose() — убрать лист
+export function SelectionBar(actions: () => Child[], { onAll, labels = {} }: { onAll: (on: boolean) => void; labels?: { selected?: string; all?: string; more?: string } }): SelectionBarElement {
+  const all = el("input", { type: "checkbox", "aria-label": labels.all ?? "Выбрать все" });
+  const text = el("span", { className: "selbar-count" });
+  const sheet = Sheet(el("div", { className: "sheet-body actions" }, actions()), { title: labels.more ?? "Действия" });
+  const more = Button(labels.more ?? "Действия", { kind: "primary", className: "selbar-more", onClick: (e) => { e.stopPropagation(); sheet.toggle(); } });
+  const bar = el("div", { className: "selbar" }, all, text, el("div", { className: "selbar-acts actions flush" }, actions()), more, sheet) as SelectionBarElement;
+  all.onchange = () => onAll(all.checked);
+  bar.update = (count, total) => {
+    text.textContent = count ? `${count} ${labels.selected ?? "выбрано"}` : labels.all ?? "Выбрать все";
+    all.checked = total > 0 && count === total;
+    all.indeterminate = count > 0 && count < total;
+    bar.classList.toggle("on", count > 0);
+    bar.querySelectorAll<HTMLButtonElement>(".selbar-acts button, .sheet button").forEach((b) => { b.disabled = count === 0; });
+    more.disabled = count === 0;
+    if (!count) sheet.close();
+  };
+  bar.dispose = () => { sheet.dispose(); bar.remove(); };
+  bar.update(0, 0);
+  return bar;
+}
+
 // ── StackTable ────────────────────────────────────────────────────────
 export interface Column {
   title: string;

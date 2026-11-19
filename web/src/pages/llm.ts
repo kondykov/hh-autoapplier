@@ -1,7 +1,8 @@
 // LLM (#127): подвкладки Обзор · Отсев · Журнал · Письма · Мои модели · Подключения (администратор).
-// Пока работает «Мои модели» (#107): пользователь выбирает подключение сервера для каждой задачи; остальные — «скоро»
+// Работают «Обзор» и «Отсев» (#127) и «Мои модели» (#107); остальные — «скоро»
 import { api, put } from "../api/http";
 import type { LlmConnection, LlmProviders, UserLlmSettings } from "../api/types";
+import { overview, rejects } from "./llm-tab";
 import { path, type Route } from "../router";
 import { act, app, me, readOnly, scoped, session } from "../state";
 import { Button, Card, el, EmptyState, Form, PageHead, StackTable, Tabs, Toolbar, type Child } from "../ui/ui";
@@ -18,15 +19,14 @@ interface Sub {
   soon?: string;
 }
 const SUBS: Sub[] = [
-  { id: "overview", label: "Обзор", soon: "Запросы, ошибки и маршруты по задачам" },
-  { id: "rejects", label: "Отсев", soon: "Почему LLM отсеяла вакансии и массовый возврат" },
+  { id: "overview", label: "Обзор" },
+  { id: "rejects", label: "Отсев" },
   { id: "log", label: "Журнал", soon: "Вызовы LLM: модель, итог, токены" },
   { id: "letters", label: "Письма", soon: "Письма, отклонённые проверкой" },
   { id: "models", label: "Мои модели" },
   { id: "connections", label: "Подключения", admin: true, soon: "Подключения сервера: проверка и остатки лимитов" },
 ];
-// Пока работает только «Мои модели» — она и открывается по /llm
-const DEFAULT_SUB = "models";
+const DEFAULT_SUB = "overview";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
@@ -53,6 +53,8 @@ export async function llm(route: Route): Promise<Child> {
   tabs.classList.add("views");
   const head = PageHead("LLM", "Оценка вакансий, анкеты, письма и разбор ответов работодателей");
   if (sub.soon) return [head, tabs, Card({}, EmptyState(`Скоро: ${sub.soon}.`, { icon: "llm" }))];
+  if (sub.id === "overview") return [head, tabs, await overview()];
+  if (sub.id === "rejects") return [head, tabs, await rejects(route)];
   return [head, tabs, await models()];
 }
 

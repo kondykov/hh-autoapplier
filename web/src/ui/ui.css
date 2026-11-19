@@ -272,3 +272,43 @@ td.n, th.n { text-align: right; font-family: var(--mono); }
   .dialog .actions > button { flex: 1 1 0; }
   .keys { display: none; }
 }
+
+/* FilterList, PickRow, SelectionBar (#127): фильтры со счётчиком и полосой, строки с выбором, панель действий над выбранным */
+.cols.narrow-left { grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); }
+.filters { display: flex; flex-direction: column; gap: 2px; }
+.filters a { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--sp-2); padding: 6px 10px; border-radius: var(--r); border: 1px solid transparent; color: var(--text); text-decoration: none; font-size: var(--fs); }
+.filters a:hover { background: var(--card2); }
+.filters a.active { background: var(--card2); border-color: var(--border); }
+.filters a b { font-size: var(--fs-xs); }
+.filters .track { grid-column: 1 / -1; height: 4px; }
+.pick { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-3); align-items: start; padding: 10px var(--sp-2); border-bottom: 1px solid var(--border); border-radius: var(--r); }
+.pick:last-child { border-bottom: 0; }
+.pick > input { margin-top: 3px; width: 18px; height: 18px; }
+.pick.on { background: var(--accent-soft); }
+.pick.current { outline: 1px solid var(--accent); outline-offset: -1px; }
+.pick:focus { outline: none; }
+.pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pick-title { font-weight: 600; color: var(--text); text-decoration: none; }
+a.pick-title:hover { text-decoration: underline; }
+.pick-aside { display: flex; align-items: center; gap: var(--sp-2); }
+.pick-aside b { font-size: var(--fs); }
+.pick-aside b.ok { color: var(--ok); } .pick-aside b.bad { color: var(--bad); } .pick-aside b.accent { color: var(--warn); }
+.selbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) 10px; margin-bottom: var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card2); }
+.selbar > input { width: 18px; height: 18px; }
+.selbar.on { border-color: var(--accent); }
+.selbar-count { font-weight: 600; margin-right: auto; }
+.selbar-more { display: none; }
+@media (max-width: 720px) {
+  .cols.narrow-left { grid-template-columns: minmax(0, 1fr); }
+  .filters { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .filters a { display: inline-flex; gap: 6px; padding: 4px 10px; border-color: var(--border); font-size: var(--fs-xs); min-height: 36px; }
+  .filters a.active { border-color: var(--accent); }
+  .filters .track { display: none; }
+  .pick { border: 1px solid var(--border); background: var(--card2); margin-bottom: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-md); }
+  .pick:last-child { border-bottom: 1px solid var(--border); }
+  .pick.on { border-color: var(--accent); background: var(--accent-soft); }
+  .pick > input { width: 22px; height: 22px; margin-top: 0; }
+  .selbar-acts { display: none; }
+  .selbar-more { display: inline-flex; }
+  .selbar-more:disabled { display: none; }
+}
