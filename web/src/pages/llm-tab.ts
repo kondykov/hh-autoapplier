@@ -110,7 +110,7 @@ export async function rejects(route: Route): Promise<Child> {
   const groups = Card({},
     Caption("Почему LLM отсеяла"),
     FilterList([{ href: rejectsPath(f, { group: null, n: PAGE }), label: "Все", count: all, active: !f.group },
-      ...data.groups.map((g) => ({ href: rejectsPath(f, { group: g.id, n: PAGE }), label: g.title, count: g.count, active: f.group === g.id }))], { max: all, label: "Группы причин" }),
+      ...byCount(data.groups).map((g) => ({ href: rejectsPath(f, { group: g.id, n: PAGE }), label: g.title, count: g.count, active: f.group === g.id }))], { max: all, label: "Группы причин" }),
     el("p", { className: "muted small", textContent: `Группы — по ключевым словам причины LLM. Вернули вручную: ${data.returned.returned} (откликнулись ${data.returned.applied}, приглашений ${data.returned.invited}).` }));
 
   if (!data.items.length) {
@@ -234,3 +234,7 @@ export function bindPickKeys(list: HTMLElement, onChange: () => void): void {
   };
   document.addEventListener("keydown", onKey);
 }
+
+// Группы — по убыванию числа, «Прочее» — последней
+export const byCount = <T extends { id: string; count: number }>(groups: T[]): T[] =>
+  [...groups].sort((a, b) => Number(a.id === "other") - Number(b.id === "other") || b.count - a.count);
