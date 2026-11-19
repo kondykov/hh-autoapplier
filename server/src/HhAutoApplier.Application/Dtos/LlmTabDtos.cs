@@ -47,3 +47,32 @@ public record LlmReturnedDto(int Returned, int Applied, int Invited);
 public record BulkVacanciesResultDto(IReadOnlyList<string> Done, IReadOnlyList<BulkFailureDto> Failed);
 
 public record BulkFailureDto(string Id, string Error);
+
+// «LLM → Журнал» (#127): Total — вызовов по фильтру, Errors — из них с ошибкой, Matched — строк после свёртки повторов;
+// Purposes и Models — для чипов фильтра (по всем вызовам, которые видно, без фильтра)
+public record LlmCallsDto(int Total, int Errors, IReadOnlyList<LlmCallEntryDto> Items, int Matched, IReadOnlyList<LlmFacetDto> Purposes,
+    IReadOnlyList<LlmFacetDto> Models);
+
+public record LlmFacetDto(string Id, int Count);
+
+// Строка журнала: Id и At — последнего вызова, Since и Count — свёрнутые повторы одной ошибки подряд (Count 1 — без свёртки).
+// Outcome: ok, rejected (ответ не принят), error (ответа не было); Detail — итог оценки («подходит 82») или текст ошибки; ErrorKind — LlmErrorKinds.
+// User — только администратору
+public record LlmCallEntryDto(long Id, DateTimeOffset At, DateTimeOffset Since, int Count, IReadOnlyList<string> Purposes, string Model, string? Connection,
+    string Outcome, string? Detail, string? ErrorKind, int PromptTokens, int CompletionTokens, string? User, string? VacancyId, string? Vacancy);
+
+// Вызов целиком: промпт и ответ — как отправлены и получены, показывать только текстом
+public record LlmCallDto(long Id, DateTimeOffset At, string Purpose, string Model, string? Connection, string? Error, string Prompt, string? Response,
+    int PromptTokens, int CompletionTokens, string? VacancyId);
+
+// «LLM → Письма» (#127): письма LLM, отклонённые проверкой (отклик на проверке с причиной «письмо: проверить — …»).
+// Letter — черновик из журнала (не принят) или новое письмо, если его уже переписали (Rewritten); Model — модель черновика
+public record LlmLetterDto(string VacancyId, string Title, string Company, string? Url, string Reason, string? Letter, string? Model, bool Rewritten,
+    DateTimeOffset? At);
+
+// «LLM → Подключения» (#127, только администратору): подключения сервера без учётных данных. Key — маска «…abcd» или «задан», null — не задан;
+// Host — адрес провайдера без пути; Proxy — общий прокси сервера без учётных данных (#132)
+public record LlmServerConnectionsDto(IReadOnlyList<LlmServerConnectionDto> Connections, IReadOnlyList<LlmTaskDefaultDto> Defaults, string? Proxy);
+
+// Kind: main — основной провайдер, route — маршрут задачи (#104), named — подключение для выбора пользователем (#107)
+public record LlmServerConnectionDto(string Kind, LlmConnectionDto Connection, string? Host, string? Key);

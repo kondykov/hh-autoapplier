@@ -37,9 +37,12 @@ public class WriteCoverLettersCommandHandler(
         var since = clock.GetUtcNow().AddDays(-1);
         var usage = await quota.LoadAsync(ct);
         var exhausted = usage.Exhausted;
-        var queued = await db.ActiveApplications(await users.GetBlockedIdsAsync(ct))
-            .Where(a => (a.Status == VacancyStatus.Queued || a.Status == VacancyStatus.Review) && a.CoverLetter == null && !exhausted.Contains(a.UserId))
-            .Where(a => db.LlmCalls.Count(c => c.Purpose == CoverLetterWriting.Purpose && c.Error != null
+        var candidates = db.ActiveApplications(await users.GetBlockedIdsAsync(ct))
+            .Where(a => (a.Status == VacancyStatus.Queued || a.Status == VacancyStatus.Review) && a.CoverLetter == null && !exhausted.Contains(a.UserId));
+        if (command.VacancyId is { } single)
+            candidates = candidates.Where(a => a.VacancyId == single && a.UserId == command.UserId);
+        var queued = await candidates
+            .Where(a => command.VacancyId != null || db.LlmCalls.Count(c => c.Purpose == CoverLetterWriting.Purpose && c.Error != null
                                                && (c.Error == LlmCall.Unparsed || c.Error.StartsWith(CoverLetterWriting.FiguresError) || c.Error.StartsWith(CoverLetterWriting.PlaceholdersError)
                                                    || c.Error.StartsWith(CoverLetterWriting.PromisesError) || c.Error.StartsWith(CoverLetterWriting.TechnologiesError))
                                                && c.CreatedAt > since && c.VacancyId == a.VacancyId && c.UserId == a.UserId) < MaxAttempts)
