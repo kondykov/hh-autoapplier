@@ -113,15 +113,12 @@ export async function journal(route: Route): Promise<Child> {
     ? el("p", {}, el("a", { href: journalPath(f, { n: f.n + PAGE }), textContent: `Показать ещё (${data.items.length} из ${data.matched})` }))
     : el("p", { className: "muted small", textContent: `Показано ${data.items.length} из ${data.matched} строк` });
 
-  const detail = callCard(call, f);
-  const page = [filters, tiles, el("div", { className: "cols wide-left" }, Card({}, StackTable(columns, rows), more), detail)];
-  if (call) requestAnimationFrame(() => { if (window.innerWidth < 900) detail.scrollIntoView({ block: "start" }); });
-  return page;
+  // Открытый вызов — над списком на всю ширину: промпты длинные, в колонке рядом с таблицей им тесно
+  return [filters, tiles, call ? callCard(call, f) : null, Card({}, StackTable(columns, rows), more)];
 }
 
 // Промпт и ответ вызова — только текстом (Pre), без разметки
-function callCard(call: LlmCall | Error | null, f: JournalFilter): HTMLElement {
-  if (!call) return Card({ title: "Промпт и ответ" }, EmptyState("Откройте вызов в списке — здесь появятся промпт и ответ модели.", { icon: "llm" }));
+function callCard(call: LlmCall | Error, f: JournalFilter): HTMLElement {
   if (call instanceof Error) return Card({ title: "Промпт и ответ" }, EmptyState(`Вызов недоступен: ${call.message}.`));
   return Card({ title: `Вызов ${call.id}`, actions: [el("a", { href: journalPath(f, { call: null }), textContent: "Закрыть" })] },
     Meta([date(call.at), purposeTitle(call.purpose), call.model || "без модели", call.connection ? `через ${call.connection}` : null,

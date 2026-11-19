@@ -33,6 +33,20 @@ public class LlmJournalTests
             entries.Select(e => e.Outcome));
     }
 
+    // Как на стенде: две задачи падают вперемешку с разными ошибками, время паузы в тексте меняется — две строки, а не 6
+    [Fact]
+    public void Collapse_InterleavedErrors_IgnoringNumbers()
+    {
+        var entries = LlmJournal.Collapse([
+            Row(1, "сеть (host:443); пауза до 14:49 МСК", purpose: "cover-letter"), Row(2, "токен: сеть"),
+            Row(3, "сеть (host:443); пауза до 14:44 МСК", purpose: "cover-letter"), Row(4, "токен: сеть"),
+            Row(5, "сеть (host:443); пауза до 14:40 МСК", purpose: "cover-letter"), Row(6, "токен: сеть"),
+        ]);
+
+        Assert.Equal([(3, 1L), (3, 2L)], entries.Select(e => (e.Count, e.Last.Id)));
+        Assert.Equal("сеть (host:443); пауза до 14:49 МСК", entries[0].Last.Error);
+    }
+
     // Ошибки разных пользователей и моделей не сливаются: это разные строки в журнале администратора
     [Fact]
     public void Collapse_NotAcrossUsersOrModels()
