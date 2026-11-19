@@ -108,15 +108,17 @@ describe("Синхронизация чатов с любой страницы",
   });
 });
 
-// Общий код (#123) не тянет hh-специфичное: второе расширение должно собираться из src/shared и src/infra
-const SHARED = ["shared", "infra"];
+// Общий код (#123) не тянет hh-специфичное: второе расширение должно собираться из src/shared и src/infra.
+// UI kit (#129, web/src/ui) — тоже общий: один для веба и всех расширений
+const SHARED = ["shared", "infra", "../web/src/ui"];
+const KIT = (import.meta.glob("../web/src/ui/ui.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>)["../web/src/ui/ui.ts"];
 const SOURCES = import.meta.glob("../src/{shared,infra}/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
-// Путь относительно src: "../src/shared/panel/view.ts" + "./model" → "shared/panel/model"
+// Путь относительно src: "../src/shared/panel/view.ts" + "./model" → "shared/panel/model"; выше src — с "../"
 function resolveFrom(file: string, spec: string): string {
   const parts = file.replace(/^\.\.\/src\//, "").split("/").slice(0, -1);
   for (const piece of spec.split("/")) {
-    if (piece === "..") parts.pop();
+    if (piece === "..") parts.length && parts.at(-1) !== ".." ? parts.pop() : parts.push("..");
     else if (piece !== ".") parts.push(piece);
   }
   return parts.join("/");
@@ -134,5 +136,10 @@ describe("Граница общего кода", () => {
         expect(SHARED.some((d) => target.startsWith(`${d}/`)), `${file} → ${target}`).toBe(true);
       }
     }
+  });
+
+  it("UI kit ничего не импортирует: в нём нет кода приложений", () => {
+    expect(KIT.length).toBeGreaterThan(0);
+    expect(KIT).not.toMatch(/^\s*import\s/m);
   });
 });

@@ -39,26 +39,15 @@ setIconSprite(iconsUrl);
 
 Тема: `data-theme="dark|light"` на `<html>`, без атрибута — как в системе.
 
-## Расширение (пока не переведено, после слияния #123)
+## Расширение (#123)
 
-1. В `scripts/build.mjs` подключить загрузчик `text` для CSS и SVG kit:
-   `loader: { ".css": "text", ".svg": "text" }` (для своих CSS расширения, если такие появятся, — отдельный путь или суффикс).
-2. Импортировать файлы kit по относительному пути из `web/src/ui/`:
+Панель расширения (боковая, плавающая, плашка) и страница настроек — на kit, без своей палитры:
 
-```ts
-import { injectStyles, injectIcons, Button, Card } from "../../web/src/ui/ui";
-import tokens from "../../web/src/ui/tokens.css";
-import ui from "../../web/src/ui/ui.css";
-import icons from "../../web/src/ui/icons.svg";
+- `src/shared/kit.ts` — `mountKit(root, ...свои стили)`: `injectStyles` с `tokens.css` + `ui.css` и `injectIcons` со спрайтом. `root` — shadow root панели на странице сайта или `document` страницы расширения (боковая панель, настройки). Спрайт всегда встраивается: внешний файл на чужом сайте не загрузится, а в `dist` копировать нечего.
+- Сборка (`scripts/build.mjs`): `*.css` и `*.svg` импортируются текстом; CSS сжимается esbuild, у SVG схлопываются пробелы. Объявления модулей для `tsc` — `src/assets.d.ts` (в расширении — текст, в вебе `*.svg` — адрес файла, `web/src/env.d.ts`).
+- Компоненты панели — `Button`, `Segmented` (вид панели), `Stat` (сводка очереди), `Callout` (капча), `Icon` (настройки, свернуть); свои стили — только раскладка: `src/shared/panel/panel.css`, `src/options/options.css`. Цвета в них — только токены.
+- Тема — по системе (`prefers-color-scheme`), как в вебе; вручную — `data-theme` на хосте панели или на `<html>` страницы расширения.
+- Панель — интерфейс для мыши: высоты касания kit на ширине ≤720px (`--tap`) в ней сняты, иначе узкая боковая панель получала кнопки телефона.
+- Граница общего кода (`tests/settings.test.ts`): `src/shared` и `src/infra` импортируют только общий код и kit, а сам kit не импортирует ничего.
 
-const root = host.attachShadow({ mode: "open" });
-injectStyles(root, [tokens, ui]);   // стили — текстом в shadow root
-injectIcons(root, icons);           // спрайт внутрь root: внешний спрайт с чужого сайта не грузится
-root.append(Card({ title: "Очередь" }, Button("Старт", { kind: "primary", onClick: start })));
-```
-
-   Тема в панели — `host.dataset.theme = "dark"` (или без атрибута — по системе). В страницах расширения (боковая панель, настройки) можно так же через `injectStyles(document, …)` или положить файлы в `dist` и подключить `<link>`, а иконки — `setIconSprite(chrome.runtime.getURL("ui/icons.svg"))`.
-3. Для `tsc` нужны объявления `declare module "*.css" { const text: string; export default text; }` и то же для `*.svg` (в расширении — текст, в вебе `*.svg` — адрес файла, `web/src/env.d.ts`). Типы kit — в самом `ui.ts`.
-4. `THEME_VARS` из `src/shared/panel/theme.ts` удалить: палитра — только `tokens.css`.
-
-Проверено 2026-11-18 разовой сборкой во временной папке (без записи в `dist/`): esbuild собирает `ui.js` + `tokens.css` + `ui.css` + `icons.svg` в один IIFE (~37 КБ). В Chromium внутри shadow root применяются стили обеих тем, иконки видны, тост остаётся внутри root.
+Размер `dist/content.js` (несжатый IIFE): 150 КБ → 182 КБ. Основное — текст `ui.css` (~21 КБ сжатым), спрайт (~4 КБ) и используемые функции `ui.ts`; своя палитра панели (~5,5 КБ) ушла.

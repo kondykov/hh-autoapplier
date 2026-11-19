@@ -4,47 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HH AutoApplier — настройки</title>
-  <style>
-    :root {
-      --bg: #0d1117; --card: #161b22; --deep: #0a0e14; --line: #263040; --grid: #1a222d;
-      --text: #e6edf3; --muted: #7d8a99; --accent: #f0a3a8; --accent-ink: #2a0f12; --ok: #7ee2a8; --warn: #f2c66d; --err: #ff7b72;
-      --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace; --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--bg); background-image: radial-gradient(var(--grid) 1.2px, transparent 1.2px);
-      background-size: 18px 18px; color: var(--text); font: 14px/1.5 var(--sans); }
-    main { max-width: 760px; margin: 32px auto; padding: 0 16px; }
-    .card { border: 1px solid var(--line); border-radius: 12px; background: rgba(13, 17, 23, .92); }
-    header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-    .mark { font: 700 13px var(--mono); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
-    .mark b { color: var(--accent); }
-    h1 { font-size: 18px; margin: 0; }
-    .meta { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
-    section { padding: 4px 20px 12px; border-bottom: 1px solid var(--line); }
-    h2 { font: 600 11px var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin: 16px 0 4px; }
-    .field { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); }
-    .field:last-child { border-bottom: 0; }
-    .field > label { color: var(--muted); padding-top: 6px; }
-    .field small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
-    .field .error { color: var(--err); font-size: 12px; margin-top: 4px; }
-    .field .error:empty { display: none; }
-    input[type=text], input[type=password], input[type=number], select, textarea {
-      width: 100%; border-radius: 8px; border: 1px solid var(--line); background: var(--deep); color: var(--text);
-      padding: 7px 10px; font: 13px var(--mono); }
-    input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
-    input[type=number] { max-width: 140px; }
-    textarea { resize: vertical; min-height: 110px; }
-    .check { display: flex; gap: 8px; align-items: center; padding-top: 6px; }
-    .check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
-    .actions { display: flex; gap: 10px; align-items: center; padding: 16px 20px; flex-wrap: wrap; }
-    button { font: 600 13px var(--sans); padding: 8px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
-    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-    button:disabled { opacity: .45; cursor: default; }
-    code { font: 12px var(--mono); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-    .status { font: 12px var(--mono); }
-    .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
-    @media (max-width: 640px) { .field { grid-template-columns: 1fr; } .field > label { padding-top: 0; } }
-  </style>
 </head>
 <body>
   <main class="card">
@@ -55,7 +14,7 @@
     </header>
     <form id="form" novalidate>
       <section>
-        <h2>Сервер</h2>
+        <h3>Сервер</h3>
         <div class="field">
           <label for="url">Адрес сервера</label>
           <div><input id="url" type="text" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false"><div class="error" data-error="url"></div>
@@ -78,7 +37,7 @@
         </div>
       </section>
       <section>
-        <h2>Очередь</h2>
+        <h3>Очередь</h3>
         <div class="field">
           <label for="dailyLimit">Дневной лимит</label>
           <div><input id="dailyLimit" type="number" min="1" step="1"><div class="error" data-error="dailyLimit"></div></div>
@@ -90,7 +49,7 @@
         </div>
       </section>
       <section>
-        <h2>Тексты</h2>
+        <h3>Тексты</h3>
         <div class="field">
           <label for="thanksOnReject">Ответ на отказ</label>
           <div><label class="check"><input id="thanksOnReject" type="checkbox"> Отвечать «спасибо» на новые отказы при синхронизации чатов</label>
@@ -103,7 +62,7 @@
         </div>
       </section>
       <section>
-        <h2>Панель</h2>
+        <h3>Панель</h3>
         <div class="field">
           <label for="panelMode">Вид панели</label>
           <div><select id="panelMode">

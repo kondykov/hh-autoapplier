@@ -5,10 +5,15 @@ import { API_VERSION } from "../api/version";
 import { loadConfig, saveConfig, type AppConfig } from "../core/config";
 import { ChromeStorage } from "../infra/storage";
 import { VERSION } from "../shared/build-info";
+import { mountKit } from "../shared/kit";
 import { applyForm, maskToken, toForm, type FormField, type SettingsForm } from "./form";
+import OPTIONS_CSS from "./options.css";
 
 // Страница настроек расширения (#101, #123): сервер и токен, поиск для выдачи, лимиты, тексты, вид панели;
 // разрешение на адрес backend в домашней сети — chrome.permissions.request требует нажатия на странице расширения
+// Вид — UI kit (#129): токены, поля, кнопки, карточка и тема по системе; options.css — только раскладка страницы
+mountKit(document, OPTIONS_CSS);
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: FormField) => $<HTMLInputElement>(id);
 

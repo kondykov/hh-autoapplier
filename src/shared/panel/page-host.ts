@@ -1,6 +1,5 @@
 import type { KeyValueStorage } from "../../infra/storage";
 import type { PanelCommand, PanelState } from "./model";
-import { THEME_VARS } from "./theme";
 import { PanelView, type ViewOptions } from "./view";
 
 // Панель на странице сайта (#123): режимы «плавающая» и «плашка». В режиме «боковая» на странице ничего нет.
@@ -8,18 +7,20 @@ import { PanelView, type ViewOptions } from "./view";
 
 const POS_KEY = "panel_pos";
 
-// Плашка — в левом нижнем углу: правый нижний занимают кнопка и окно чатов hh.ru
+// Плашка — в левом нижнем углу: правый нижний занимают кнопка и окно чатов hh.ru.
+// Цвета и тени — токены UI kit (#129): kit вставляется в тот же shadow root (PanelView.mount), тема — по системе
 const HOST_CSS = `
 :host{all:initial}
 .ap-float{position:fixed;top:72px;right:16px;width:340px;max-height:min(560px,calc(100vh - 96px));z-index:2147483647;display:flex;flex-direction:column;
-  border:1px solid #263040;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(13,17,23,.45)}
+  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-pop)}
 .ap-float .ap-root{flex:1}
 .ap-float .ap-hd{cursor:move;user-select:none}
-.ap-pill{${THEME_VARS};position:fixed;left:16px;bottom:16px;z-index:2147483647;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;
-  background:var(--ap-bg);border:1px solid var(--ap-line);color:var(--ap-text);font:600 12px var(--ap-mono);cursor:pointer;box-shadow:0 8px 20px rgba(13,17,23,.35)}
-.ap-pill b{color:var(--ap-accent)}
-.ap-pill .n{background:var(--ap-accent);color:var(--ap-accent-ink);border-radius:999px;padding:0 7px}
-.ap-pill .alert{background:var(--ap-err);color:#fff;border-radius:999px;padding:0 7px}
+.ap-pill{position:fixed;left:16px;bottom:16px;z-index:2147483647;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:var(--r-pill);
+  background:var(--card);border:1px solid var(--border);color:var(--text);font:600 var(--fs-xs) var(--mono);cursor:pointer;box-shadow:var(--shadow-pop)}
+.ap-pill:hover:not(:disabled){border-color:var(--muted)}
+.ap-pill .ap-mark{border:1px solid var(--border);border-radius:var(--r-sm);padding:0 5px;background:var(--bg)}
+.ap-pill b{color:var(--accent)}
+.ap-pill .alert-text{background:var(--bad);color:var(--on-accent);border-radius:var(--r-pill);padding:0 7px}
 .ap-pill[hidden],.ap-float[hidden]{display:none}
 `;
 
@@ -106,12 +107,13 @@ export class PageHost {
       const [mark, accent] = this.options.brand;
       this.pill.replaceChildren();
       const logo = document.createElement("span");
+      logo.className = "ap-mark";
       const b = document.createElement("b");
       b.textContent = accent;
       logo.append(mark, b);
       const text = document.createElement("span");
       text.textContent = pillText(state);
-      text.className = state.captcha ? "alert" : "";
+      text.className = state.captcha ? "alert-text" : "";
       this.pill.append(logo, text);
     }
   }
