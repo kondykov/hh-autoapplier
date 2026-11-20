@@ -26,6 +26,15 @@ export const sourcePill = (v: Pick<Vacancy, "source">) => {
   return Pill(s.name, { dot: s.color, title: "Источник вакансии" });
 };
 
+// Конкуренция (#148): метка с числом откликов на hh.ru — при сборе и, если был свой отклик, перед ним («156 → 180»)
+export function responsesPill(v: Pick<Vacancy, "responsesAtCollect" | "responsesAtApply">): HTMLSpanElement | null {
+  const { responsesAtCollect: collect, responsesAtApply: apply } = v;
+  if (collect == null && apply == null) return null;
+  const text = collect != null && apply != null ? `${collect} → ${apply}` : String(collect ?? apply);
+  const title = [collect != null && `откликов на hh.ru при сборе: ${collect}`, apply != null && `перед своим откликом: ${apply}`].filter(Boolean).join("; ");
+  return Pill(`откликов ${text}`, { title });
+}
+
 export function salary(v: Pick<Vacancy, "salaryFrom" | "salaryTo" | "salaryCurrency">): string | null {
   if (v.salaryFrom == null && v.salaryTo == null) return null;
   const range = [v.salaryFrom != null ? `от ${v.salaryFrom.toLocaleString("ru-RU")}` : "", v.salaryTo != null ? `до ${v.salaryTo.toLocaleString("ru-RU")}` : ""];
