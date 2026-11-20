@@ -51,7 +51,7 @@ npm install
 npm run build
 ```
 
-Без сборки: скачайте `hh-autoapplier-<версия>.zip` из [релиза расширения](https://github.com/kondykov/hh-autoapplier-extension/releases/latest) и распакуйте — это та же папка `dist` с письмом по умолчанию. При обновлении распакуйте новую версию в ту же папку и нажмите «Обновить» на `chrome://extensions`.
+Без сборки: скачайте `hh-autoapplier-<версия>.zip` из [релиза расширения](https://github.com/kondykov/hh-autoapplier/releases/latest) и распакуйте — это та же папка `dist` с письмом по умолчанию. При обновлении распакуйте новую версию в ту же папку и нажмите «Обновить» на `chrome://extensions`.
 
 Загрузите папку `dist` в Chrome: `chrome://extensions` → «Режим разработчика» → «Загрузить распакованное». Или запустите тестовый браузер с расширением: `node scripts/dev-browser.mjs`. Войдите в hh.ru в этом браузере.
 
