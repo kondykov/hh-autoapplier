@@ -240,9 +240,10 @@ export const Alert = (a: NavAlert | null | undefined) => a
   ? el("span", { className: cls("alert", a.tone), title: a.title, role: "img", "aria-label": `Требует внимания: ${a.title}`, textContent: "!" })
   : null;
 
-// Tabs — ссылки разделов
+// Tabs — ссылки разделов; со значком подпись — в .tab-label: шапка узкого компьютера может оставить только значок
 export const Tabs = (items: NavItem[], { label }: { label?: string } = {}) => el("div", { className: "tabs", role: label ? "group" : undefined, "aria-label": label },
-  items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined }, t.label, Count(t.count), Alert(t.alert))));
+  items.map((t) => el("a", { href: t.href, className: t.active ? "active" : "", "aria-current": t.active ? "page" : undefined, title: t.icon ? t.label : undefined },
+    t.icon ? Icon(t.icon) : null, t.icon ? el("span", { className: "tab-label", textContent: t.label }) : t.label, Count(t.count), Alert(t.alert))));
 
 // TabBar — пункты нижней панели телефона и, последним, свой узел (кнопка «Ещё»)
 export const TabBar = (items: NavItem[], more?: Node | null): Node[] => [

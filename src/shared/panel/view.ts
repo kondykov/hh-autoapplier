@@ -101,7 +101,7 @@ export class PanelView {
         section("sendSearch", el("h3", { textContent: "Эта страница" }),
           button("search-send", "", "primary"), hint("", "search-hint")),
         section("queue", el("h3", { textContent: "Очередь" }),
-          el("div", { className: "kpis" }, stat("q-queued", "в очереди"), stat("q-review", "проверка"), stat("q-run", "за запуск"), stat("q-daily", "за день")),
+          el("div", { className: "kpis" }, stat("q-queued", "очередь"), stat("q-review", "проверка"), stat("q-run", "за запуск"), stat("q-daily", "за день")),
           button("queue-btn", ""),
           el("label", { className: "ap-check" }, el("input", { type: "checkbox", ...ap("dryrun") }), "Пробный режим — не нажимать «Отправить»")),
         section("syncChats", el("h3", { textContent: "Чаты" }),

@@ -38,6 +38,7 @@ describe("delta", () => {
     expect(delta(5, 10, 7)).toEqual({ trend: "down", note: "-50% к прошлым 7 дн" });
     expect(delta(3, 0, 30)).toEqual({ note: "новое за период" });
     expect(delta(0, 0, 30)).toEqual({ note: "—" });
+    expect(delta(48, 1, 30)).toEqual({ trend: "up", note: "+47 к прошлым 30 дн" });
   });
 });
 

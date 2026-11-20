@@ -15,7 +15,9 @@ header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, v
 .top > nav#nav { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 nav#nav::-webkit-scrollbar { display: none; }
 nav#nav .tabs { flex-wrap: nowrap; gap: 2px; }
-nav#nav .tabs a { white-space: nowrap; display: inline-flex; align-items: center; padding: 6px 9px; }
+nav#nav .tabs a { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; }
+/* Значки разделов — только в узкой шапке (ниже) */
+nav#nav .tabs a > .ic { display: none; width: 18px; height: 18px; }
 /* Поиск — справа от разделов, остальное за ним */
 .find { margin-left: auto; display: flex; flex: 0 10 260px; min-width: 150px; }
 .find .search-button { width: 100%; }
@@ -33,6 +35,10 @@ main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 
   .find { flex: none; min-width: 0; }
   .find .search-button { width: auto; padding: 6px; }
   .find .search-button .search-text, .find .search-button kbd { display: none; }
+  /* Разделы — значками, подпись — только у текущего; у остальных — в подсказке и для чтения с экрана */
+  nav#nav .tabs a > .ic { display: block; }
+  nav#nav .tabs a:not(.active) > .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #viewing > label { display: none; }
 }
 
 @media (max-width: 720px) {

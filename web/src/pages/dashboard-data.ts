@@ -7,6 +7,8 @@ export const PERIODS = [7, 30, 90] as const;
 export function delta(a: number, b: number, period: number): { trend?: "up" | "down" | null; note: string } {
   if (!b) return { note: a ? "новое за период" : "—" };
   const d = Math.round(((a - b) / b) * 100);
+  // Рост в разы (+4700%) не читается — тогда разница в штуках
+  if (Math.abs(d) > 300) return { trend: a > b ? "up" : "down", note: `${a > b ? "+" : ""}${a - b} к прошлым ${period} дн` };
   return { trend: d > 0 ? "up" : d < 0 ? "down" : null, note: `${d > 0 ? "+" : ""}${d}% к прошлым ${period} дн` };
 }
 

@@ -41,7 +41,7 @@
 .ap-root .kpis { grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: var(--sp-2); margin-bottom: 10px; }
 .ap-root .kpi { padding: 6px var(--sp-2); border-radius: var(--r); margin: 0; }
 .ap-root .kpi b { font-size: var(--fs-h2); white-space: nowrap; }
-.ap-root .kpi span { font-size: var(--fs-2xs); }
+.ap-root .kpi span { font-size: var(--fs-2xs); white-space: nowrap; }
 
 .ap-check { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--muted); margin-top: var(--sp-2); cursor: pointer; }
 .ap-check input { width: 14px; height: 14px; margin: 0; }
