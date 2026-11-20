@@ -8,12 +8,12 @@ import { pageOf, type PageStep, type StepContext } from "./step-context";
 
 export type ChatReader = Pick<ChatSource, "recent" | "writePossibility">;
 
-// Кнопка «Автоответ» на странице чатов (#26): чаты откликов → на сервер (статусы, разбор LLM, Telegram);
+// «Синхронизировать чаты с сервером» (бывший «Автоответ», #26, #123): чаты откликов → на сервер (статусы, разбор LLM, Telegram);
 // на новые отказы — короткое «спасибо», где hh.ru разрешает писать (решение владельца 2026-10-26).
 // Обычно после отказа переписка закрыта до приглашения — тогда сервер узнаёт, что автоответ невозможен.
 // Пробный режим (галочка очереди) не отправляет ничего работодателю
 export class DialogStep implements PageStep {
-  readonly name = "автоответ";
+  readonly name = "синхронизация чатов";
 
   private running = false;
 
@@ -44,19 +44,26 @@ export class DialogStep implements PageStep {
         chats = await this.chats.recent();
       } catch (e) {
         logger.log(`Чаты hh.ru не получены: ${(e as Error).message}`, "error");
-        panel.setStep("Автоответ: ошибка — см. журнал");
+        panel.setStep("Синхронизация чатов: ошибка — см. журнал");
         return;
       }
 
       const res = await backend.importDialogs(chats);
       if (!res.ok) {
         logger.log(`Чаты не отправлены на сервер: ${res.error}`, "error");
-        panel.setStep("Автоответ: ошибка — см. журнал");
+        panel.setStep("Синхронизация чатов: ошибка — см. журнал");
         return;
       }
       const r = res.result;
       logger.log(`Чатов: ${r.received}, новых сообщений работодателей: ${r.newMessages}, отказов: ${r.rejected}, приглашений: ${r.invited}${r.recovered ? `, найдено потерянных откликов: ${r.recovered}` : ""}. ` +
         "Разбор и черновики ответов — в Telegram и в веб-интерфейсе backend («Ответы работодателей»)", "success");
+
+      // «Спасибо» выключено в настройках (#123): ничего не пишем и сервер не трогаем — включат, ответы уйдут со следующей синхронизацией
+      if (!config.thanksOnReject) {
+        if (r.autoReplies.length) logger.log(`«Спасибо» на отказы выключено в настройках — не отвечаю (${r.autoReplies.length})`);
+        panel.setStep("Синхронизация чатов: готово");
+        return;
+      }
 
       const writable: AutoReply[] = [];
       for (const reply of r.autoReplies) {
@@ -82,7 +89,7 @@ export class DialogStep implements PageStep {
       }
 
       if (writable.length === 0) {
-        panel.setStep("Автоответ: готово");
+        panel.setStep("Синхронизация чатов: готово");
         return;
       }
       state.autoReplies = writable;
@@ -106,6 +113,13 @@ export class DialogStep implements PageStep {
       logger.log("Пробный режим: автоответы остановлены", "warn");
       return;
     }
+    // «Спасибо» выключили в настройках, пока шли переходы
+    if (!config.thanksOnReject) {
+      state.autoReplies = [];
+      await this.ctx.persist();
+      logger.log("«Спасибо» на отказы выключено в настройках: автоответы остановлены", "warn");
+      return;
+    }
 
     const label = current.title || `чат ${current.chatId}`;
     // Не тот чат (hh.ru перенаправил) — не писать в чужой
@@ -119,7 +133,7 @@ export class DialogStep implements PageStep {
     await this.ctx.persist();
     const next = state.autoReplies[0];
     if (!next) {
-      panel.setStep("Автоответ: готово");
+      panel.setStep("Синхронизация чатов: готово");
       return;
     }
     await pause(DELAYS.step);

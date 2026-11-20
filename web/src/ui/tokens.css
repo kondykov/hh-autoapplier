@@ -1,0 +1,53 @@
+/* Токены UI kit (#129): единственное место с палитрой, отступами, радиусами, шрифтами и тенями.
+   Веб отдаёт файл как статику (/ui/tokens.css); расширение потом встроит его же в панель вместо своей копии палитры.
+   В shadow root те же правила срабатывают на :host (стили — injectStyles из ui.js).
+   Тема: по умолчанию системная; data-theme="dark|light" на <html> (или на любом блоке — витрина показывает обе рядом) — выбор вручную. */
+
+:root, :host, [data-theme="light"] {
+  color-scheme: light;
+  /* Светлая — парная к тёмной «как профиль» */
+  --bg: #f6f8fa; --card: #ffffff; --card2: #f0f3f6; --text: #1f2328; --muted: #59636e; --border: #d0d7de; --grid: #e4e8ec;
+  --accent: #c2414c; --on-accent: #ffffff; --accent-soft: #fbe7e9;
+  --ok: #1a7f37; --on-ok: #ffffff; --bad: #d70a1b; --warn-bg: #fff8c5; --warn: #7a5400;
+  --bar: #e7c9cc; --track: #eaeef2;
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]), :host(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #0d1117; --card: #161b22; --card2: #1c222b; --text: #e6edf3; --muted: #8b98a8; --border: #263040; --grid: #1a222d;
+    --accent: #f0a3a8; --on-accent: #2a0f12; --accent-soft: #3a2a2e;
+    --ok: #7ee2a8; --on-ok: #0b2a19; --bad: #ff5c5c; --warn-bg: #2b2414; --warn: #f2c66d;
+    --bar: #6e4b52; --track: #1f2631;
+    --shadow-pop: 0 10px 30px rgba(0, 0, 0, .35);
+  }
+}
+
+:host([data-theme="dark"]), [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1117; --card: #161b22; --card2: #1c222b; --text: #e6edf3; --muted: #8b98a8; --border: #263040; --grid: #1a222d;
+  --accent: #f0a3a8; --on-accent: #2a0f12; --accent-soft: #3a2a2e;
+  --ok: #7ee2a8; --on-ok: #0b2a19; --bad: #ff5c5c; --warn-bg: #2b2414; --warn: #f2c66d;
+  --bar: #6e4b52; --track: #1f2631;
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .35);
+}
+
+:root, :host {
+  /* Источники вакансий (#32): одинаковые в обеих темах */
+  --src-hh: #ff6b78; --src-hirify: #8fb4ff; --src-getmatch: #b9a3ff; --src-other: #8b98a8;
+
+  /* Шрифты и кегли */
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fs-2xs: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs: 14px; --fs-body: 15px; --fs-h2: 17px; --fs-h1: 22px;
+
+  /* Отступы (шаг 4px) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+
+  /* Радиусы */
+  --r-xs: 4px; --r-sm: 6px; --r: 8px; --r-md: 10px; --r-lg: 12px; --r-xl: 14px; --r-pill: 999px;
+
+  /* Касание на телефоне, ширина страницы, граница телефона (та же — в @media ui.css) */
+  --tap: 44px; --page: 1100px; --phone: 720px;
+}

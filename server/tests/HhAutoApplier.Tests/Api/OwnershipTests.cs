@@ -141,6 +141,62 @@ public class OwnershipTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(1, factory.Source.DetailsLoaded);
     }
 
+    // Импорт с заданными названием, компанией и датой публикации (поиск по тексту, #141)
+    private async Task ImportTitled(HttpClient client, string search, params (string Id, string Title, string Company, int DaysAgo)[] items)
+    {
+        await Json(await client.PostAsJsonAsync("/api/import", new
+        {
+            search,
+            vacancies = items.Select(v => new
+            {
+                id = v.Id, title = v.Title, company = v.Company, description = "ASP.NET Core",
+                publishedAt = DateTimeOffset.UtcNow.AddDays(-v.DaysAgo),
+            }),
+        }));
+        await factory.ConfirmImportedAsync();
+    }
+
+    private static async Task<List<string?>> Ids(HttpClient client, string url) =>
+        (await Vacancies(client, url)).Select(v => v.GetProperty("id").GetString()).ToList();
+
+    [Fact]
+    public async Task TextQuery_OwnVacancies_CaseInsensitive_TitleOrCompany()
+    {
+        var (idA, a) = await CreateUser("a@test.local");
+        var (_, b) = await CreateUser("b@test.local");
+        await SaveSearch(a, "a-search");
+        await SaveSearch(b, "b-search");
+        await ImportTitled(a, "a-search", ("1", "Ведущий C# разработчик", "Облако-9", 3), ("2", "PHP-разработчик", "Ёлка Софт", 1),
+            ("3", "Тестировщик", "Облако-9", 2));
+        await ImportTitled(b, "b-search", ("4", "C# разработчик", "Облако-9", 0));
+
+        // Регистр не важен, слова — в названии или компании, свежие сверху; чужие вакансии не находятся
+        Assert.Equal(["3", "1"], await Ids(a, "/api/vacancies?q=ОБЛАКО"));
+        Assert.Equal(["1"], await Ids(a, "/api/vacancies?q=c%23 облако"));
+        Assert.Equal(["2"], await Ids(a, "/api/vacancies?q=елка"));
+        Assert.Equal(["4"], await Ids(b, "/api/vacancies?q=облако"));
+        Assert.Empty(await Ids(_admin, "/api/vacancies?q=облако"));
+        // Администратор — по userId, чужой userId пользователю — 403
+        Assert.Equal(["3", "1"], await Ids(_admin, $"/api/vacancies?q=облако&userId={idA}"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await b.GetAsync($"/api/vacancies?q=облако&userId={idA}")).StatusCode);
+
+        // Короче 2 символов (без пробелов по краям) — пусто, а не весь список
+        Assert.Empty(await Ids(a, "/api/vacancies?q=о"));
+        Assert.Empty(await Ids(a, "/api/vacancies?q=%20%20р%20"));
+        Assert.Equal(3, (await Ids(a, "/api/vacancies?view=all")).Count);
+    }
+
+    [Fact]
+    public async Task TextQuery_LimitedTo20Freshest()
+    {
+        var (_, a) = await CreateUser("a@test.local");
+        await SaveSearch(a, "a-search");
+        await ImportTitled(a, "a-search", Enumerable.Range(1, 25).Select(i => ($"{i}", $"C# разработчик {i}", "Acme", i)).ToArray());
+
+        var found = await Ids(a, "/api/vacancies?q=разработчик&take=100");
+        Assert.Equal(Enumerable.Range(1, 20).Select(i => (string?)$"{i}"), found);
+    }
+
     [Fact]
     public async Task UserIdParam_AdminReadsOthers_UserForbidden()
     {

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<!-- Концепт #127: вкладка LLM. Числа — по копии прода 18.11 (порядок величин), вакансии выдуманные -->
+<style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c222b;--line:#263040;--grid:#1a222d;--text:#e6edf3;--muted:#8b98a8;--accent:#f0a3a8;--ok:#7ee2a8;--bad:#ff8b8b;--warn:#f2c66d;--info:#8fb4ff;--vio:#c9a7ff;--mono:"Cascadia Mono",Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#e9ecf1;font:14px/1.45 var(--sans);color:var(--text);width:1600px}
+.row{display:flex;gap:28px;padding:28px 28px 0;align-items:flex-start}
+.cap{font:600 15px var(--sans);color:#1d2330;margin:0 0 10px}.cap small{display:block;font-weight:400;color:#5b6576;font-size:13px;margin-top:2px;max-width:900px}
+.app{background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line)}
+.mark{font:700 14px var(--mono);border:1px solid var(--line);border-radius:6px;padding:3px 7px;background:#0d1117}.mark b{color:var(--accent)}
+.nav{display:flex;gap:4px}.nav span{padding:6px 10px;border-radius:8px;color:var(--muted);font-size:13px}.nav span.on{color:var(--text);background:var(--card);border:1px solid var(--line)}
+.cnt{font:600 11px var(--mono);background:var(--accent);color:#2a0f12;border-radius:999px;padding:0 6px;margin-left:4px}
+.kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--muted);background:var(--card)}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--muted);font-size:13px;background:var(--card);min-width:220px}
+.muted{color:var(--muted)}.mono{font-family:var(--mono)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+h2{margin:0 0 4px;font-size:20px}h3{margin:0 0 10px;font:600 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+h3 .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line)}.tabs span{padding:8px 14px;color:var(--muted);font-size:13px;border-bottom:2px solid transparent}.tabs span.on{color:var(--text);border-color:var(--accent)}
+.tabs b{font:600 11px var(--mono);color:var(--muted);margin-left:4px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi b{display:block;font:700 24px var(--mono)}.kpi span{font-size:12px;color:var(--muted)}.kpi i{display:block;font:normal 12px var(--mono);color:var(--muted);margin-top:2px}
+.meter{height:8px;border-radius:99px;background:#1f2631;overflow:hidden;margin-top:8px}.meter s{display:block;height:100%;background:var(--warn);text-decoration:none}
+.route{display:grid;grid-template-columns:130px minmax(0,1fr) 90px 70px 64px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.route:last-child{border-bottom:0}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.model{font:600 12.5px var(--mono)}.prov{font-size:11.5px;color:var(--muted)}
+.spark{display:flex;align-items:flex-end;gap:2px;height:22px}.spark i{flex:1;background:#2c3f63;border-radius:1px}.spark i.e{background:#6b3b40}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 11px var(--mono);border-radius:6px;padding:1px 7px;border:1px solid var(--line);color:var(--muted);background:var(--card2);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:#24503a}.pill.bad{color:var(--bad);border-color:#5a2a2e}.pill.warn{color:var(--warn);border-color:#5a4a1e}.pill.info{color:var(--info);border-color:#2c3f63}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:12.5px;color:var(--text);white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#2a0f12}.btn.ghost{color:var(--muted)}.btn.sm{height:26px;padding:0 9px;font-size:12px}
+.cluster{display:grid;grid-template-columns:minmax(0,1fr) 44px 120px;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;font-size:13px}
+.cluster.on{background:var(--card2);border:1px solid var(--line)}
+.bar{height:6px;border-radius:99px;background:#1f2631;overflow:hidden}.bar s{display:block;height:100%;background:var(--accent);text-decoration:none}
+.vac{display:grid;grid-template-columns:22px minmax(0,1fr) 44px auto;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.vac:last-child{border-bottom:0}
+.cb{width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;margin-top:2px}.cb.on{background:var(--accent);border-color:var(--accent)}
+.score{font:700 13px var(--mono);text-align:right}
+.why{color:var(--muted);font-size:12.5px;margin-top:2px}
+.why b{color:var(--warn);font-weight:600}
+.log{font:12px var(--mono);display:grid;grid-template-columns:52px 120px minmax(0,1fr) 70px 56px;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);align-items:center}
+.log .e{color:var(--bad)}.log .g{color:var(--muted)}
+.bulk{position:sticky;display:flex;align-items:center;gap:10px;background:#1a1420;border:1px solid #5a3a3e;border-radius:10px;padding:8px 12px;font-size:13px}
+.toast{display:flex;align-items:center;gap:10px;background:#101a14;border:1px solid #24503a;border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.note{font-size:12px;color:#5b6576;margin:8px 0 0;max-width:600px}
+.phone{width:390px;height:844px;border-radius:44px;border:10px solid #1b1f26;background:var(--bg);overflow:hidden;position:relative;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.phone .status{height:34px;display:flex;justify-content:space-between;padding:8px 22px;font:600 12px var(--sans)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:64px;border-top:1px solid var(--line);background:#0b0f14;display:grid;grid-template-columns:repeat(5,1fr);font-size:10px;color:var(--muted);text-align:center;padding-top:9px}
+.tabbar b{display:block;font:700 15px var(--mono);color:var(--muted)}.tabbar .on,.tabbar .on b{color:var(--accent)}
+.sheet{position:absolute;left:0;right:0;bottom:64px;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:10px 16px 14px;box-shadow:0 -10px 30px rgba(0,0,0,.4)}
+.grip{width:40px;height:4px;border-radius:9px;background:var(--line);margin:0 auto 10px}
+</style>
+<body>
+<div class="row">
+  <div>
+    <p class="cap">1. Веб: вкладка «LLM» — обзор (вид администратора)<small>Шапка нового UI: поиск и команды по Ctrl+K, разделы по новой карте (#128). Подвкладки: Обзор · Отсев · Журнал · Письма · Мои модели (#107) · Подключения (только администратор). Пользователь видит всё, кроме «Подключений», — по своим данным</small></p>
+    <div class="app" style="width:1544px">
+      <div class="top"><span class="mark">hh<b>=#</b></span>
+        <div class="nav"><span>Дашборд</span><span>Проверка<span class="cnt">2</span></span><span>Ответы<span class="cnt">3</span></span><span>Вакансии</span><span class="on">LLM <span class="pill warn" style="margin-left:4px;padding:0 5px">!</span></span><span>Поиски</span><span>Кандидат</span><span>Система</span></div>
+        <div class="search" style="margin-left:auto">⌕ Найти вакансию, команду… <span class="kbd" style="margin-left:auto">Ctrl K</span></div><span class="muted mono">admin ▾</span><span class="muted">◐</span></div>
+      <div style="padding:20px 22px;display:grid;gap:14px">
+        <div style="display:flex;align-items:flex-end;gap:12px"><div><h2>LLM</h2><div class="muted" style="font-size:13px">Оценка вакансий, анкеты, письма и разбор ответов работодателей</div></div>
+          <span class="pill warn" style="margin-left:auto;height:28px;padding:0 10px">⏸ Groq на паузе до 15:20 — 403 от провайдера</span><span class="btn">Проверить все</span></div>
+        <div class="tabs"><span class="on">Обзор</span><span>Отсев <b>381</b></span><span>Журнал</span><span>Письма <b>38</b></span><span>Мои модели</span><span>Подключения</span></div>
+
+        <div class="kpis">
+          <div class="card kpi"><span>запросов сегодня</span><b>214<span class="muted" style="font-size:15px"> / 300</span></b><div class="meter"><s style="width:71%"></s></div><i>лимит сбросится в 00:00 · ваши 168, Дмитрий 46</i></div>
+          <div class="card kpi"><span>ошибок за сутки</span><b style="color:var(--bad)">23</b><i>сеть 15 · 403 — 8 · повтор позже</i></div>
+          <div class="card kpi"><span>отсеяно LLM · 30 дн</span><b>381</b><i>из 917 оценённых · вернули 12</i></div>
+          <div class="card kpi"><span>писем отклонено проверкой</span><b>38<span class="muted" style="font-size:15px"> / 268</span></b><i>чаще всего «цифры не из фактов»</i></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px">
+          <div class="card"><h3>Маршруты по задачам <span class="r muted" style="font-size:12px">задача → модель · доступность · ответ · ошибки 24 ч</span></h3>
+            <div class="route"><span>Оценка вакансий<div class="prov">и разбор просьб к письму</div></span><span><span class="dot" style="background:var(--ok)"></span><span class="model">GigaChat-2-Max</span><div class="prov">ГигаЧат · напрямую</div></span><div class="spark"><i style="height:60%"></i><i style="height:80%"></i><i style="height:40%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:85%"></i><i style="height:65%"></i></div><span class="mono">2,1 с</span><span class="pill ok">0</span></div>
+            <div class="route"><span>Анкеты</span><span><span class="dot" style="background:var(--warn)"></span><span class="model">qwen/qwen3.8-27b</span><div class="prov">Groq · через VPN</div></span><div class="spark"><i style="height:30%"></i><i style="height:50%"></i><i class="e" style="height:100%"></i><i class="e" style="height:100%"></i><i style="height:20%"></i><i style="height:40%"></i><i style="height:10%"></i><i style="height:30%"></i></div><span class="mono">1,4 с</span><span class="pill bad">8</span></div>
+            <div class="route"><span>Ответы работодателей</span><span><span class="dot" style="background:var(--warn)"></span><span class="model">openai/gpt-oss-20b</span><div class="prov">Groq · через VPN</div></span><div class="spark"><i style="height:20%"></i><i style="height:30%"></i><i class="e" style="height:100%"></i><i style="height:20%"></i><i style="height:10%"></i><i style="height:40%"></i><i style="height:25%"></i><i style="height:15%"></i></div><span class="mono">0,9 с</span><span class="pill bad">6</span></div>
+            <div class="route"><span>Письма</span><span><span class="dot" style="background:var(--warn)"></span><span class="model">openai/gpt-oss-120b</span><div class="prov">Groq · через VPN</div></span><div class="spark"><i style="height:50%"></i><i style="height:70%"></i><i style="height:60%"></i><i class="e" style="height:100%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:90%"></i><i style="height:75%"></i></div><span class="mono">3,8 с</span><span class="pill bad">9</span></div>
+            <div class="muted" style="font-size:12px;margin-top:8px">Это маршруты сервера по умолчанию. Свою модель для задачи — в «Мои модели» (#107); у вас сейчас: оценка → ГигаЧат.</div>
+          </div>
+          <div class="card"><h3>Требует внимания</h3>
+            <div style="display:grid;gap:10px;font-size:13px">
+              <div style="display:flex;gap:10px"><span class="pill warn">VPN</span><span>Groq недоступен через relay <span class="mono">172.17.0.1:10810</span> — запустите Happ на сервере. Анкеты и письма ждут: <b>14</b></span></div>
+              <div style="display:flex;gap:10px"><span class="pill info">отсев</span><span><b>27</b> отсеянных с баллом 60–69 — пограничные, стоит просмотреть</span><span class="btn sm" style="margin-left:auto">Открыть</span></div>
+              <div style="display:flex;gap:10px"><span class="pill">письма</span><span>Проверка отклоняет «CI/CD», когда в профиле «GitLab CI» — похоже на ложное срабатывание (12 писем)</span><span class="btn sm" style="margin-left:auto">Посмотреть</span></div>
+              <div style="display:flex;gap:10px"><span class="pill">лимит</span><span>Вчера лимит 300 закончился в 16:40; после этого 1 968 запросов отложены</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:14px">
+          <div class="card"><h3>Отсев · почему LLM отправила в корзину <span class="r"><span class="btn sm">7 дн</span> <span class="btn sm primary">30 дн</span> <span class="btn sm">всё</span></span></h3>
+            <div style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr);gap:18px">
+              <div style="display:grid;gap:4px">
+                <div class="cluster on"><span>Стек не совпадает (PHP, Java, 1С…)</span><span class="mono" style="text-align:right">142</span><div class="bar"><s style="width:100%"></s></div></div>
+                <div class="cluster"><span>Нужен уровень выше (Senior, Lead)</span><span class="mono" style="text-align:right">88</span><div class="bar"><s style="width:62%"></s></div></div>
+                <div class="cluster"><span>Офис / переезд</span><span class="mono" style="text-align:right">61</span><div class="bar"><s style="width:43%"></s></div></div>
+                <div class="cluster"><span>Не разработка (поддержка, QA)</span><span class="mono" style="text-align:right">49</span><div class="bar"><s style="width:35%"></s></div></div>
+                <div class="cluster"><span>Мало данных в описании</span><span class="mono" style="text-align:right">23</span><div class="bar"><s style="width:16%"></s></div></div>
+                <div class="cluster"><span class="muted">Прочее</span><span class="mono" style="text-align:right">18</span><div class="bar"><s style="width:12%;background:var(--muted)"></s></div></div>
+                <div class="muted" style="font-size:11.5px;margin-top:6px">Группы — по причине LLM; вернули вручную: 12 (из них откликнулись 7, приглашение 1)</div>
+              </div>
+              <div>
+                <div class="bulk"><span class="cb on"></span><span><b>2</b> выбрано</span><span class="btn sm primary" style="margin-left:auto">↺ Вернуть в очередь</span><span class="btn sm">Оценить заново через ▾</span><span class="btn sm ghost">Скрыть</span></div>
+                <div class="vac"><span class="cb on"></span><div><b>Backend-разработчик C#/Go</b> <span class="muted">· Облако-9</span><div class="why"><b>LLM:</b> основной стек Go, C# — вторичный; опыта Go в профиле нет</div></div><span class="score" style="color:var(--warn)">64</span><span class="btn sm">↺</span></div>
+                <div class="vac"><span class="cb on"></span><div><b>Разработчик .NET (поддержка + развитие)</b> <span class="muted">· Северный ветер</span><div class="why"><b>LLM:</b> больше поддержки, чем разработки</div></div><span class="score" style="color:var(--warn)">61</span><span class="btn sm">↺</span></div>
+                <div class="vac"><span class="cb"></span><div><b>PHP-разработчик (Symfony)</b> <span class="muted">· Диджитал Плюс</span><div class="why"><b>LLM:</b> стек PHP, в профиле — C#/.NET</div></div><span class="score">22</span><span class="btn sm">↺</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card"><h3>Журнал <span class="r muted" style="font-size:12px">повторы свёрнуты · промпт и ответ — по клику</span></h3>
+            <div class="log g"><span>время</span><span>задача</span><span>модель / итог</span><span>токены</span><span>польз.</span></div>
+            <div class="log"><span>14:52</span><span>оценка</span><span>GigaChat-2-Max · <span style="color:var(--ok)">подходит 82</span></span><span>1 204</span><span>admin</span></div>
+            <div class="log"><span>14:51</span><span>письмо</span><span>gpt-oss-120b · <span class="e">отклонено проверкой</span></span><span>3 410</span><span>admin</span></div>
+            <div class="log"><span>14:49</span><span>анкета</span><span class="e">сеть: SSL ×6 за 4 мин</span><span>—</span><span>dima</span></div>
+            <div class="log"><span>14:40</span><span>ответы</span><span>gpt-oss-20b · приглашение</span><span>1 512</span><span>admin</span></div>
+            <div class="log"><span>вчера</span><span>все</span><span class="e">лимит 300 исчерпан ×1 968</span><span>—</span><span>—</span></div>
+            <div class="log" style="border-bottom:0"><span>вчера</span><span>анкета</span><span class="e">403 Access denied ×8</span><span>—</span><span>admin</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row" style="padding-bottom:28px">
+  <div>
+    <p class="cap">2. «Мои модели» (#107) и «Подключения» (администратор)<small>Пользователь выбирает модель для каждой задачи из подключений сервера или «как на сервере»; ключей не видит. Подключения задаются в .env сервера — в вебе просмотр, проверка и остатки лимитов</small></p>
+    <div class="app" style="width:640px"><div style="padding:18px;display:grid;gap:12px">
+      <div class="card" style="border-color:#5a3a3e"><h3>Мои модели <span class="r muted" style="font-size:12px">для откликов admin</span></h3>
+        <div class="route" style="grid-template-columns:120px minmax(0,1fr) 110px"><span>Оценка</span><span class="btn" style="justify-content:space-between"><span><span class="dot" style="background:var(--ok)"></span>gigachat-max · GigaChat-2-Max</span><span class="muted">▾</span></span><span class="mono muted" style="font-size:12px">осталось 812</span></div>
+        <div class="route" style="grid-template-columns:120px minmax(0,1fr) 110px"><span>Письма</span><span class="btn" style="justify-content:space-between"><span class="muted">как на сервере · groq-120b</span><span class="muted">▾</span></span><span class="mono" style="font-size:12px;color:var(--warn)">пауза</span></div>
+        <div class="route" style="grid-template-columns:120px minmax(0,1fr) 110px"><span>Анкеты</span><span class="btn" style="justify-content:space-between"><span class="muted">как на сервере · qwen</span><span class="muted">▾</span></span><span class="mono" style="font-size:12px;color:var(--warn)">пауза</span></div>
+        <div class="route" style="grid-template-columns:120px minmax(0,1fr) 110px"><span>Ответы</span><span class="btn" style="justify-content:space-between"><span class="muted">как на сервере · groq-20b</span><span class="muted">▾</span></span><span class="mono" style="font-size:12px;color:var(--warn)">пауза</span></div>
+        <div class="card" style="background:var(--card2);margin-top:10px;padding:10px 12px;font-size:12.5px"><div class="muted" style="margin-bottom:6px">Выпадающий список</div>
+          <div>○ как на сервере (groq-120b)</div><div>● <span class="dot" style="background:var(--ok)"></span>gigachat-max — GigaChat-2-Max · ~2 с · осталось 812</div><div>○ <span class="dot" style="background:var(--warn)"></span>groq-120b — gpt-oss-120b · пауза до 15:20</div><div>○ <span class="dot" style="background:var(--warn)"></span>qwen — qwen3.8-27b · пауза до 15:20</div></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">Разово другой моделью — «Оценить заново через ▾» на карточке вакансии и в «Отсеве»; настройка не меняется.</div>
+      </div>
+      <div class="card"><h3>Подключения сервера <span class="r muted" style="font-size:12px">из .env · только администратор</span></h3>
+        <div class="route" style="grid-template-columns:minmax(0,1fr) 130px 90px"><span><span class="dot" style="background:var(--ok)"></span><b class="mono">gigachat-max</b><div class="prov">ГигаЧат · GigaChat-2-Max · ключ ••••7f2c · напрямую</div></span><span class="mono" style="font-size:12px">188 / 1000 сегодня</span><span class="btn sm">Проверить</span></div>
+        <div class="route" style="grid-template-columns:minmax(0,1fr) 130px 90px"><span><span class="dot" style="background:var(--warn)"></span><b class="mono">groq-120b</b><div class="prov">Groq · gpt-oss-120b · ••••a91e · VPN-прокси</div></span><span class="pill warn">пауза 403</span><span class="btn sm">Проверить</span></div>
+        <div class="route" style="grid-template-columns:minmax(0,1fr) 130px 90px"><span><span class="dot" style="background:var(--warn)"></span><b class="mono">groq-20b</b><div class="prov">Groq · gpt-oss-20b · VPN-прокси</div></span><span class="pill warn">пауза 403</span><span class="btn sm">Проверить</span></div>
+        <div class="route" style="grid-template-columns:minmax(0,1fr) 130px 90px"><span><span class="dot" style="background:var(--warn)"></span><b class="mono">qwen</b><div class="prov">Groq · qwen3.8-27b · VPN-прокси</div></span><span class="pill warn">пауза 403</span><span class="btn sm">Проверить</span></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">Маршруты по умолчанию и лимиты — тоже из .env; правка из веба — отдельная задача (ключи в базе), если понадобится.</div>
+      </div>
+      <div class="card"><h3>Запустить сейчас</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn sm">Оценить ожидающие</span><span class="btn sm">Ответить на анкеты</span><span class="btn sm">Написать письма</span></div><div class="muted" style="font-size:12px;margin-top:6px">Перенесено из «Администрирования»</div></div>
+    </div></div>
+  </div>
+
+  <div>
+    <p class="cap">3. Телефон: «Отсев»<small>Карточки с баллом и причиной; выбор — долгим нажатием, действия — в нижнем листе</small></p>
+    <div class="phone">
+      <div class="status"><span>15:02</span><span>◔ ▮▮▮</span></div>
+      <div style="padding:6px 16px 0;display:flex;align-items:center;gap:10px"><span class="mark">hh<b>=#</b></span><b style="font-size:17px">LLM · Отсев</b><span class="muted mono" style="margin-left:auto;font-size:12px">381</span></div>
+      <div style="padding:10px 16px 0;display:flex;gap:6px;overflow:hidden"><span class="pill info">стек 142</span><span class="pill">уровень 88</span><span class="pill">офис 61</span><span class="pill">не разработка 49</span></div>
+      <div style="padding:10px 16px;display:grid;gap:8px">
+        <div class="card" style="padding:12px;border-color:#5a3a3e"><div style="display:flex;gap:8px"><span class="cb on"></span><b style="font-size:14px">Backend-разработчик C#/Go</b><span class="score" style="margin-left:auto;color:var(--warn)">64</span></div><div class="why" style="margin-left:24px">Облако-9 · основной стек Go, C# вторичный</div></div>
+        <div class="card" style="padding:12px;border-color:#5a3a3e"><div style="display:flex;gap:8px"><span class="cb on"></span><b style="font-size:14px">Разработчик .NET (поддержка)</b><span class="score" style="margin-left:auto;color:var(--warn)">61</span></div><div class="why" style="margin-left:24px">Северный ветер · больше поддержки</div></div>
+        <div class="card" style="padding:12px"><div style="display:flex;gap:8px"><span class="cb"></span><b style="font-size:14px">PHP-разработчик (Symfony)</b><span class="score" style="margin-left:auto">22</span></div><div class="why" style="margin-left:24px">Диджитал Плюс · стек PHP</div></div>
+      </div>
+      <div class="sheet"><div class="grip"></div><div style="font-size:13px;margin-bottom:10px"><b>2</b> выбрано</div>
+        <div class="btn primary" style="width:100%;height:44px">↺ Вернуть в очередь</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><span class="btn" style="height:44px">Оценить заново</span><span class="btn ghost" style="height:44px">Скрыть</span></div></div>
+      <div class="tabbar"><div><b>◫</b>Дашборд</div><div><b>✎</b>Проверка</div><div><b>✉</b>Ответы</div><div><b>☰</b>Вакансии</div><div class="on"><b>⋯</b>Ещё</div></div>
+    </div>
+  </div>
+
+  <div style="width:440px">
+    <p class="cap">4. Современный UI: общие приёмы<small>Для всех разделов, не только LLM</small></p>
+    <div class="card" style="font-size:13px;line-height:1.6;display:grid;gap:10px">
+      <div><b>Команды по Ctrl+K</b> — переход в раздел, поиск вакансии по названию, «запустить сбор», «проверить LLM».</div>
+      <div><b>Отмена вместо подтверждений.</b> «Скрыть», «Отклонить», «Отозвать» — сразу, с тостом «Отменить» 6 с:</div>
+      <div class="toast">✓ 2 вакансии возвращены в очередь <span class="btn sm" style="margin-left:auto">Отменить</span></div>
+      <div><b>Клавиши в «Проверке» и «Отсеве»:</b> <span class="kbd">J</span>/<span class="kbd">K</span> — следующая/предыдущая, <span class="kbd">A</span> — одобрить, <span class="kbd">R</span> — отклонить, <span class="kbd">X</span> — выбрать.</div>
+      <div><b>Скелетоны</b> при загрузке вместо пустого экрана; <b>относительное время</b> («2 ч назад», точное — при наведении).</div>
+      <div><b>Иконки</b> — один набор SVG (вместо символов ◫ ✎ ✉), подписи остаются.</div>
+      <div><b>Пустые состояния</b> с действием: «Отсеянных нет — LLM оценивает строже? Настроить порог».</div>
+      <div><b>Фильтры в адресе</b> — ссылку на отфильтрованный список можно сохранить и открыть с телефона.</div>
+      <div class="muted">Без фреймворков и сборки (решение #120); иконки — встроенный SVG-спрайт.</div>
+    </div>
+  </div>
+</div>
+</body></html>

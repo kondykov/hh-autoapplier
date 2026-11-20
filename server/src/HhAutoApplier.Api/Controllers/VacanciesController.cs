@@ -28,6 +28,7 @@ public class VacanciesController : ApiController
 
     /// <summary>
     /// Список вакансий с фильтром по статусу и поиску, новые сверху.
+    /// ?q=текст — слова в названии или компании (без учёта регистра); не короче 2 символов, не больше 20 вакансий.
     /// </summary>
     [HttpGet("vacancies")]
     [ProducesResponseType(typeof(IReadOnlyList<VacancyDto>), StatusCodes.Status200OK)]
@@ -70,22 +71,27 @@ public class VacanciesController : ApiController
     /// <summary>
     /// Оценить заново отсеянную вакансию (Skipped): правила и затем LLM, импортная карточка — через подтверждение при сборе.
     /// Письмо LLM и ответы анкеты сбрасываются, письмо, поправленное человеком, остаётся.
+    /// ?provider=имя — разовый прогон (#107): прошедшая правила вакансия сразу оценивается этим подключением сервера
+    /// (GET /api/llm/providers), письмо потом пишет конвейер обычным выбором. Провайдер не ответил — вакансия ждёт обычной оценки.
     /// </summary>
+    /// <response code="400">Нет такого подключения LLM.</response>
     /// <response code="404">Вакансия не найдена.</response>
     /// <response code="409">Вакансия не отсеяна: оценить заново нельзя.</response>
     /// <response code="503">LLM не настроена, статус не меняется.</response>
     [HttpPost("vacancies/{id}/reevaluate")]
     [ProducesResponseType(typeof(VacancyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(NotFoundError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ConflictError), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(LlmUnavailableError), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Reevaluate(
         string id,
+        [FromQuery] string? provider,
         [FromServices] ReevaluateVacancyCommandHandler handler,
         CancellationToken ct
     )
     {
-        return FromResult((await handler.Handle(new ReevaluateVacancyCommand { VacancyId = id }, ct)).Value);
+        return FromResult((await handler.Handle(new ReevaluateVacancyCommand { VacancyId = id, Provider = provider }, ct)).Value);
     }
 
     /// <summary>
@@ -123,9 +129,20 @@ public class VacanciesController : ApiController
     }
 
     /// <summary>
+    /// Массовое действие над своими откликами (#127): Requeue — в очередь, Skip — обратно в отсев с причиной LLM, Reevaluate — оценить заново
+    /// (provider — разовый прогон через подключение, #107), Hide / Unhide. До 500 id; что не вышло — в failed с причиной, чужие id — «не найдена».
+    /// </summary>
+    [HttpPost("vacancies/bulk")]
+    [ProducesResponseType(typeof(BulkVacanciesResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Bulk([FromBody] BulkVacanciesCommand command, [FromServices] BulkVacanciesCommandHandler handler, CancellationToken ct)
+    {
+        return Ok(await handler.Handle(command, ct));
+    }
+
+    /// <summary>
     /// Ручная проверка вакансии в статусе Review: одобрить — в очередь (coverLetter — поправленное письмо, пусто — письмо LLM;
     /// answers — поправленные ответы анкеты, все по порядку вопросов, пусто — ответы LLM),
-    /// отклонить — Skipped с причиной. Список на проверке — GET /api/vacancies?status=Review, страница — веб-интерфейс, «Проверка» (/#review).
+    /// отклонить — Skipped с причиной. Список на проверке — GET /api/vacancies?status=Review, страница — веб-интерфейс, «Проверка» (/review).
     /// </summary>
     /// <response code="404">Вакансия не найдена.</response>
     /// <response code="409">Вакансия не на проверке.</response>

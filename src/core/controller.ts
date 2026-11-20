@@ -13,10 +13,13 @@ import { SearchStep } from "../pages/search-step";
 import { browserNavigator, pageOf, pickStep, stopQueue, type Navigator, type StepContext } from "../pages/step-context";
 import { isDryRun, isQueueOn } from "../queue/queue-mode";
 import type { ResumeSelector } from "../resume/selector";
-import type { Panel } from "../ui/panel";
+import { chatsPageUrl, requestChatSync, takeChatSync } from "../pages/chat-sync";
+import { pageKindOf } from "../pages/page-kind";
+import type { PanelCommand } from "../shared/panel/model";
+import type { PanelStore } from "../shared/panel/store";
 import { watchConfig, type AppConfig } from "./config";
 import type { DailyLimit } from "./daily-limit";
-import { Settings } from "./settings";
+import { panelSettings, Settings } from "./settings";
 import type { AppState, StateRepository } from "./state";
 
 interface ControllerDeps {
@@ -26,7 +29,7 @@ interface ControllerDeps {
   repo: StateRepository;
   limit: DailyLimit;
   logger: Logger;
-  panel: Panel;
+  panel: PanelStore;
   letters: LetterProvider;
   resumes: ResumeSelector;
   backend: BackendClient;
@@ -63,7 +66,7 @@ export class Controller {
       if (shown && d.state.queueRunning)
         void d.backend.reportEvent("Captcha", location.href);
     });
-    this.settings = new Settings(d.config, d.storage, d.panel, d.logger, d.limit, d.backend, () => this.refresh());
+    this.settings = new Settings(d.config, d.storage, d.panel, d.logger, d.backend);
 
     const ctx: StepContext = {
       state: d.state,
@@ -90,25 +93,76 @@ export class Controller {
 
   async init(): Promise<void> {
     const { state, panel } = this.d;
+    const page = pageOf(this.ctx);
+    const kind = pageKindOf(page);
+    panel.setPage(kind.kind, kind.title);
+    panel.setSettings(panelSettings(this.d.config));
     await this.refresh();
     this.captcha.start();
     this.d.repo.watch((saved) => this.onExternalState(saved));
     watchConfig(this.d.storage, (config) => this.onExternalConfig(config));
     await this.queue.adoptOrphan();
-    panel.setQueueActive(state.queueRunning);
     if (state.queueRunning && !this.queue.owns(state)) {
-      panel.setStep("Очередь идёт в другой вкладке — «Стоп очередь» остановит её");
+      panel.setQueueActive(true, true);
+      panel.setStep("Очередь идёт в другой вкладке — «Остановить очередь» остановит её");
       return;
     }
+    panel.setQueueActive(state.queueRunning);
 
-    const page = pageOf(this.ctx);
     const step = pickStep([this.queue, this.dialogs], page, state);
-    if (!step) {
-      panel.setStep(page === "search" ? "Отправьте выдачу на сервер или запустите очередь"
-        : page === "chat" ? "«Автоответ» — чаты на сервер, «спасибо» на новые отказы" : "Запустите режим «из очереди»");
+    if (step) {
+      await step.resume();
       return;
     }
-    await step.resume();
+    // «Синхронизировать чаты» нажали на другой странице: она открыла чаты — запускаем сбор (#123)
+    if (page === "chat" && (await takeChatSync(this.d.storage))) {
+      await this.dialogs.run();
+      return;
+    }
+    panel.setStep(page === "search" ? "Отправьте страницу в поиск на сервере или запустите очередь"
+      : page === "chat" ? "«Синхронизировать чаты» — чаты на сервер" : "");
+  }
+
+  // Команда из панели (#123): одна точка входа для панели на странице и боковой панели браузера
+  async dispatch(command: PanelCommand): Promise<void> {
+    switch (command.kind) {
+      case "queue.toggle":
+        return this.queue.toggle();
+      case "queue.dryRun":
+        return this.settings.setQueueDryRun(command.enabled);
+      case "search.send":
+        await this.search.send();
+        return this.settings.refreshServer(true);
+      case "chats.sync":
+        return this.syncChats();
+      case "server.check":
+        return this.settings.checkServer();
+      case "rejects.next":
+        await this.rejects.next();
+        return;
+      case "rejects.auto":
+        return this.rejects.toggleAuto();
+      case "mode":
+        return this.settings.setPanelMode(command.mode);
+      case "options.open":
+      case "site.open":
+        // Это делает вид: у content script нет доступа к этим API
+        return;
+    }
+  }
+
+  // На странице чатов — сразу; с другой страницы — открыть чаты, сбор запустится после их загрузки
+  private async syncChats(): Promise<void> {
+    const { state, logger, storage } = this.d;
+    const nav = this.ctx.nav;
+    if (pageOf(this.ctx) === "chat") return this.dialogs.run();
+    if (state.queueRunning) {
+      logger.log("Идёт очередь: сначала остановите её, потом синхронизируйте чаты", "error");
+      return;
+    }
+    await requestChatSync(storage);
+    logger.log("Открываю страницу откликов и чатов для синхронизации", "step");
+    nav.go(chatsPageUrl(new URL(nav.url()).origin));
   }
 
   private createPipeline(): ApplyPipeline {
@@ -157,8 +211,8 @@ export class Controller {
     state.queueSubmitted = saved.queueSubmitted;
     state.queueTab = saved.queueTab;
     state.queueRunId = saved.queueRunId;
-    panel.setQueueActive(state.queueRunning);
-    if (state.queueRunning) panel.setStep("Очередь идёт в другой вкладке — «Стоп очередь» остановит её");
+    panel.setQueueActive(state.queueRunning, state.queueRunning);
+    if (state.queueRunning) panel.setStep("Очередь идёт в другой вкладке — «Остановить очередь» остановит её");
   }
 
   // Настройки сохранила другая вкладка (#51): пробный режим и лимиты — сразу, в том числе для вакансии в работе
@@ -167,7 +221,7 @@ export class Controller {
     const dryRunChanged = config.queueDryRun !== this.d.config.queueDryRun;
     Object.assign(this.d.config, config);
     limit.limit = config.dailyLimit;
-    panel.setSettings(config);
+    panel.setSettings(panelSettings(config));
     if (dryRunChanged)
       logger.log(config.queueDryRun ? "Пробный режим включён в другой вкладке" : "Пробный режим выключен в другой вкладке", "warn");
     void this.refresh();
@@ -181,9 +235,10 @@ export class Controller {
   private async refresh() {
     const { state, limit, panel } = this.d;
     panel.setStats({
-      applied: state.applied,
       daily: await limit.count(),
       dailyLimit: limit.limit,
+      runApplied: state.queueRunApplied,
+      runLimit: this.d.config.queueRunLimit,
     });
   }
 }

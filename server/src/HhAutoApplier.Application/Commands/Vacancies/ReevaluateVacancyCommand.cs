@@ -5,13 +5,15 @@ using OneOf;
 
 namespace HhAutoApplier.Application.Commands.Vacancies;
 
-// Вернуть отсеянный отклик на оценку (#71)
+// Вернуть отсеянный отклик на оценку (#71). Provider — разовый прогон (#107): оценить сразу этим подключением сервера
 public record ReevaluateVacancyCommand
 {
     [Required]
     public required string VacancyId { get; init; }
+
+    public string? Provider { get; init; }
 }
 
-// На .NET 11: public union ReevaluateVacancyResult(VacancyDto, NotFoundError, ConflictError, LlmUnavailableError);
+// На .NET 11: public union ReevaluateVacancyResult(VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError);
 [GenerateOneOf]
-public partial class ReevaluateVacancyResult : OneOfBase<VacancyDto, NotFoundError, ConflictError, LlmUnavailableError>;
+public partial class ReevaluateVacancyResult : OneOfBase<VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError>;

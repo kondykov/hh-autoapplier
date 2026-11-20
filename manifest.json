@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "HH AutoApplier",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Полуавтоматические отклики на hh.ru",
   "permissions": [
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.hh.ru/*",
@@ -15,6 +16,12 @@
     "http://*/*",
     "https://*/*"
   ],
+  "action": {
+    "default_title": "HH AutoApplier — открыть панель"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true

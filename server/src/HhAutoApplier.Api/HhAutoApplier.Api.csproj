@@ -22,4 +22,9 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- wwwroot — сборка веба из web/ (#130), в git её нет: npm run build:web в корне репозитория (в Docker — шаг Node) -->
+  <Target Name="WarnNoWebBuild" BeforeTargets="Build" Condition="!Exists('wwwroot/index.html')">
+    <Warning Text="Нет сборки веба (wwwroot/index.html): выполните npm run build:web в корне репозитория — без неё веб-интерфейс и его тесты не работают" />
+  </Target>
+
 </Project>

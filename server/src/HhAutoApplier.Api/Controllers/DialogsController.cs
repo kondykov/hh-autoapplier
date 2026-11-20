@@ -12,7 +12,7 @@ namespace HhAutoApplier.Api.Controllers;
 public class DialogsController : ApiController
 {
     /// <summary>
-    /// Сообщения работодателей с разбором LLM, новые сверху; handled=false — необработанные. Страница — веб-интерфейс, «Ответы работодателей» (/#dialogs).
+    /// Сообщения работодателей с разбором LLM, новые сверху; handled=false — необработанные. Страница — веб-интерфейс, «Ответы работодателей» (/dialogs).
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<EmployerMessageDto>), StatusCodes.Status200OK)]
@@ -27,7 +27,7 @@ public class DialogsController : ApiController
     }
 
     /// <summary>
-    /// Чаты откликов от расширения: последнее сообщение и состояние отклика hh.ru. Отказ → Rejected, приглашение → Invited;
+    /// Чаты откликов от расширения: последнее сообщение и состояние отклика hh.ru. Отказ → Rejected, приглашение → Invited, собеседование → Interview;
     /// сообщения работодателей (кроме отказов) разбирает LLM в фоне. В ответе — чаты, где ждёт автоответ на отказ.
     /// </summary>
     /// <response code="409">Запрос без пользователя, или те же чаты одновременно записал другой запрос.</response>

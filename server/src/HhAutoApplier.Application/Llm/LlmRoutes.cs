@@ -1,19 +1,20 @@
 using HhAutoApplier.Application.Abstractions;
+using HhAutoApplier.Domain.Llm;
 
 namespace HhAutoApplier.Application.Llm;
 
 // Какой маршрут LLM у назначения запроса (#104). Назначение не из таблицы (проверка связи) — основной провайдер
 public static class LlmRoutes
 {
-    public const string Evaluation = "Evaluation";
+    public const string Evaluation = LlmTasks.Evaluation;
 
-    public const string Letters = "Letters";
+    public const string Letters = LlmTasks.Letters;
 
-    public const string Questionnaires = "Questionnaires";
+    public const string Questionnaires = LlmTasks.Questionnaires;
 
-    public const string Dialogs = "Dialogs";
+    public const string Dialogs = LlmTasks.Dialogs;
 
-    public static readonly IReadOnlyList<string> All = [Evaluation, Letters, Questionnaires, Dialogs];
+    public static readonly IReadOnlyList<string> All = LlmTasks.All;
 
     public static readonly IReadOnlyDictionary<string, string> ByPurpose = new Dictionary<string, string>
     {

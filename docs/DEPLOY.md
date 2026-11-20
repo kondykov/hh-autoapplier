@@ -19,6 +19,8 @@ Workflow — [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), 
 - выполняет checkout в `/opt/hh-autoapplier`, `docker compose up -d --build` с `GIT_COMMIT` выкатываемого коммита (его показывает `GET /api/version`) и ждёт `/health` (до 3 минут); затем сверяет `commit` из `GET /api/version` с выкатываемым коммитом (#116): другой коммит — сбой и откат, 401 — сборка до #116, версия в Summary «нет»;
 - при сбое сохраняет логи API в `/var/backups/hh-autoapplier/deploy-failed-*.log`, возвращает предыдущий коммит, задача становится красной. GitHub присылает письмо о сбое; уведомление в Telegram — после #28.
 
+Образ собирается из корня репозитория (#130): сначала шаг Node (`node:22-alpine`, `npm ci` и `npm run build:web`) собирает веб, затем `dotnet publish`. Сборке нужен доступ к Docker Hub и registry.npmjs.org; `HTTPS_PROXY` из `server/.env` действует только на работающий контейнер, не на сборку. Сам `deploy.sh` не менялся: compose по-прежнему запускается из `server/`.
+
 Одновременно идёт только один деплой. Логи Actions в публичном репозитории видны всем, поэтому логи приложения в них не выводятся.
 
 ## Как откатить
@@ -39,6 +41,8 @@ docker compose start api
 ## Первоначальная настройка
 
 Секреты (`POSTGRES_PASSWORD`, ключ LLM, токен Telegram) лежат только в `server/.env` на сервере. В секреты GitHub их не добавлять.
+
+**Подключения LLM для выбора пользователем** (#107) — файл `server/llm-providers.env` рядом с `.env` (образец — `server/llm-providers.env.example`, в git и в образ не попадает). Строка — `Llm__Providers__<имя>__<поле>=значение`, поля как у маршрута #104: `Provider`, `BaseUrl`, `ApiKey`, `Model`, `DailyRequestLimit` и др.; другой провайдер или адрес — свой `ApiKey`. Например, ГигаЧат: `Llm__Providers__gigachat__Provider=gigachat`, `…__BaseUrl=https://gigachat.devices.sberbank.ru/api/v1`, `…__ApiKey=<ключ>`, `…__Model=GigaChat-2-Max`. Файла нет — подключений нет, задачи идут маршрутами `.env`. Ошибка в подключении (неизвестный провайдер, чужой адрес без ключа, имя не латиницей) не даёт API стартовать — смотреть `docker compose logs api`. Другой путь к файлу — `LLM_PROVIDERS_FILE` в `.env`. После правки — `docker compose up -d` (пересборка не нужна). Миграция `UserLlmSettings` (таблица выбора и колонка `LlmCalls.Connection`) применяется при старте сама.
 
 ### Исходящий прокси и бэкапы (сервер, root)
 

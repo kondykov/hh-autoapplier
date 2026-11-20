@@ -78,6 +78,7 @@ public static partial class BotHtml
         VacancyStatus.Queued => "в очереди",
         VacancyStatus.Applied => "отклик отправлен",
         VacancyStatus.Invited => "приглашение",
+        VacancyStatus.Interview => "собеседование",
         VacancyStatus.Rejected => "отказ",
         VacancyStatus.Skipped => "пропущена",
         VacancyStatus.Failed => "ошибка",

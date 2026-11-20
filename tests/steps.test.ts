@@ -734,6 +734,21 @@ describe("DialogStep", () => {
     expect(visited).toEqual([]);
   });
 
+  it("«спасибо» выключено в настройках (#123): чаты уходят на сервер, работодателю ничего не пишется", async () => {
+    const { ctx, visited, messages } = context({ url: CHATS, autoReplies: [reply(1), reply(2)], config: { queueDryRun: false, thanksOnReject: false } });
+    const chats = reader([1, 2]);
+    const send = vi.fn();
+
+    await run(new DialogStep(ctx, chats, send).run());
+
+    expect(ctx.backend.importDialogs).toHaveBeenCalledTimes(1);
+    expect(chats.writePossibility).not.toHaveBeenCalled();
+    expect(ctx.backend.reportAutoReply).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(visited).toEqual([]);
+    expect(messages.some((m) => m.includes("«Спасибо» на отказы выключено"))).toBe(true);
+  });
+
   it("не на странице чатов — ничего не собирает", async () => {
     const { ctx } = context({ url: "https://hh.ru/vacancy/1" });
     const chats = reader([]);
@@ -799,6 +814,6 @@ describe("DialogStep: ошибки", () => {
 
     await run(new DialogStep(ctx, chats, vi.fn()).run());
 
-    expect(ctx.panel.setStep).toHaveBeenLastCalledWith("Автоответ: ошибка — см. журнал");
+    expect(ctx.panel.setStep).toHaveBeenLastCalledWith("Синхронизация чатов: ошибка — см. журнал");
   });
 });

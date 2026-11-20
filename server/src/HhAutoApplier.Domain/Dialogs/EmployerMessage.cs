@@ -84,8 +84,10 @@ public class EmployerMessage
     // Состояние hh.ru: работодатель отказал
     public const string Rejected = "DISCARD";
 
-    // Состояния hh.ru: приглашение или собеседование
-    public static bool IsInvitationState(string? state) => state is "INVITATION" or "INTERVIEW";
+    // Состояния hh.ru: приглашение и собеседование — разные статусы отклика (#122)
+    public const string Invitation = "INVITATION";
+
+    public const string Interview = "INTERVIEW";
 
     // autoReply — отвечать ли на отказ автоматически (false — первый сбор: старые отказы без ответа)
     public static EmployerMessage Create(Guid userId, long chatId, string? vacancyId, string title, string company,

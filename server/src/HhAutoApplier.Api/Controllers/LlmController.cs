@@ -1,6 +1,7 @@
 using HhAutoApplier.Application.Commands.Llm;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Errors;
+using HhAutoApplier.Application.Queries.Llm;
 using HhAutoApplier.Domain.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,14 +16,29 @@ public class LlmController : ApiController
 {
     /// <summary>
     /// Проверить ключ и модель LLM коротким запросом к провайдеру (расходует один запрос дневного лимита).
+    /// Без параметров — основной провайдер; ?connection — подключение для выбора (#107), ?task — маршрут задачи (#104).
     /// </summary>
+    /// <response code="400">Подключения или задачи нет на сервере.</response>
     /// <response code="503">LLM не настроена, исчерпан дневной лимит или провайдер не отвечает.</response>
     [HttpPost("check")]
     [ProducesResponseType(typeof(LlmCheckDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(LlmUnavailableError), StatusCodes.Status503ServiceUnavailable)]
-    public async Task<IActionResult> Check([FromServices] CheckLlmCommandHandler handler, CancellationToken ct)
+    public async Task<IActionResult> Check([FromQuery] CheckLlmCommand command, [FromServices] CheckLlmCommandHandler handler, CancellationToken ct)
     {
-        return FromResult((await handler.Handle(new CheckLlmCommand(), ct)).Value);
+        return FromResult((await handler.Handle(command, ct)).Value);
+    }
+
+    /// <summary>
+    /// Подключения LLM сервера для «LLM → Подключения» (#127): основной провайдер, маршруты задач и подключения для выбора —
+    /// провайдер, модель, адрес без пути, ключ маской (последние 4 символа или «задан»), расход, лимит, пауза; маршруты по умолчанию
+    /// и общий прокси без учётных данных. Состояние связи — GET /api/health/links.
+    /// </summary>
+    [HttpGet("connections")]
+    [ProducesResponseType(typeof(LlmServerConnectionsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Connections([FromServices] GetLlmServerConnectionsQueryHandler handler, CancellationToken ct)
+    {
+        return Ok(await handler.Handle(new GetLlmServerConnectionsQuery(), ct));
     }
 
     /// <summary>

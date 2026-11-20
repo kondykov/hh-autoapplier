@@ -127,6 +127,12 @@ public class JobApplication
     // Закрыт, потому что вакансия в архиве: и сбором, и расширением (оно шлёт ту же причину)
     public bool ClosedAsArchived => Status == VacancyStatus.Skipped && StatusReason == VacancyArchived;
 
+    // Отсеян LLM (#127): вердикт Reject остаётся и после ручного возврата в очередь — так считаются возвращённые
+    public bool RejectedByLlm => LlmVerdict == Vacancies.LlmVerdict.Reject;
+
+    // Причина пропуска по вердикту LLM: её же ставит отмена возврата во вкладке «LLM → Отсев»
+    public string? LlmRejectReason => RejectedByLlm ? $"LLM: {LlmReason}" : null;
+
     // LLM-оценка под резюме: подходящие — в очередь, сомнительные — на ручную проверку (Review; reviewDoubtful = false —
     // правило поиска «без проверки», сразу в очередь), неподходящие — пропуск с причиной.
     // resume — имя профиля, выбранное LLM; null — оставить выбор правил
@@ -142,7 +148,7 @@ public class JobApplication
 
         if (verdict == Vacancies.LlmVerdict.Reject)
         {
-            MoveTo(VacancyStatus.Skipped, $"LLM: {reason}", at);
+            MoveTo(VacancyStatus.Skipped, LlmRejectReason, at);
             return;
         }
 
@@ -417,10 +423,10 @@ public class JobApplication
         MoveTo(VacancyStatus.Failed, reason ?? StatusReason, at);
     }
 
-    // Работодатель отказал после отклика или после приглашения
+    // Работодатель отказал после отклика, приглашения или собеседования
     public void Reject(string? reason, DateTimeOffset at)
     {
-        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited))
+        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview))
             throw new DomainException("Отказ возможен только после отклика");
 
         MoveTo(VacancyStatus.Rejected, reason ?? StatusReason, at);
@@ -435,8 +441,19 @@ public class JobApplication
         MoveTo(VacancyStatus.Invited, reason, at);
     }
 
+    // Работодатель назначил собеседование (из чата hh.ru, #122): после отклика или приглашения.
+    // at раньше последнего перехода (пересчёт по старому сообщению) сдвигается к нему: история идёт по порядку
+    public void ScheduleInterview(string? reason, DateTimeOffset at)
+    {
+        if (Status is not (VacancyStatus.Applied or VacancyStatus.Invited))
+            throw new DomainException($"Собеседование возможно только после отклика или приглашения, сейчас {Status}");
+
+        var last = History.Count > 0 ? History[^1].At : at;
+        MoveTo(VacancyStatus.Interview, reason, at < last ? last : at);
+    }
+
     // Отклик уже у работодателя: письмо, анкету и статус до отклика не поменять
-    public bool Sent => Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Rejected;
+    public bool Sent => Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview or VacancyStatus.Rejected;
 
     // Вернуть в очередь пропущенный или упавший отклик. С незакрытыми просьбами — на проверку: из очереди он бы не вышел
     public void Requeue(DateTimeOffset at)
@@ -514,7 +531,7 @@ public class JobApplication
     // Причина в истории, когда человек вернул отклик на оценку
     public const string Reevaluation = "повторная оценка";
 
-    private const string LetterReviewPrefix = "письмо: проверить";
+    public const string LetterReviewPrefix = "письмо: проверить";
 
     private const string LetterRequestsPrefix = "просьбы к письму";
 
