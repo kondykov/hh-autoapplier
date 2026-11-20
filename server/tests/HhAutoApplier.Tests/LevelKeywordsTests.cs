@@ -95,6 +95,19 @@ public class LevelKeywordsTests
         Assert.Contains("повод для doubtful, а не для reject", system);
     }
 
+    // #146: одна недостающая технология, опыт до ~2 лет и английский при совпадающих роли и стеке — doubtful
+    [Fact]
+    public void Prompt_SoftGapsAreDoubtfulNotReject()
+    {
+        var system = VacancyAssessment.BuildRequest(V("C# разработчик", "between3And6"), Resumes, Level).Messages[0].Content;
+
+        Assert.Contains("reject — только явное несовпадение", system);
+        Assert.Contains("не хватает одной технологии или фреймворка", system);
+        Assert.Contains("примерно до 2 лет", system);
+        Assert.Contains("требование к английскому", system);
+        Assert.Contains("не дают reject вакансии на стеке, который есть в его резюме или профиле", system);
+    }
+
     [Fact]
     public void Prompt_DoesNotListLevelWordsAsNotInteresting()
     {
