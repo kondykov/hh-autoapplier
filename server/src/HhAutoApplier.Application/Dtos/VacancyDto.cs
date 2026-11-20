@@ -54,6 +54,13 @@ public record VacancyDto
 
     public DateTimeOffset? AppliedAt { get; init; }
 
+    // Число откликов на вакансию при сборе и перед своим откликом (#148); новые поля — прежние клиенты их не читают
+    public int? ResponsesAtCollect { get; init; }
+
+    public DateTimeOffset? ResponsesAtCollectAt { get; init; }
+
+    public int? ResponsesAtApply { get; init; }
+
     public LlmVerdict? LlmVerdict { get; init; }
 
     public int? LlmScore { get; init; }

@@ -1,0 +1,21 @@
+{
+  "name": "@hh-autoapplier/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/ui.ts",
+    "./icons.svg": "./src/icons.svg",
+    "./tokens.css": "./src/tokens.css",
+    "./ui.css": "./src/ui.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

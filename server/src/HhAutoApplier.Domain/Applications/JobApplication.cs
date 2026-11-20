@@ -42,6 +42,10 @@ public class JobApplication
 
     public DateTimeOffset? AppliedAt { get; private set; }
 
+    // Сколько откликов было на вакансию перед своим (#148): расширение читает со страницы вакансии перед «Отправить».
+    // null — отправлено раньше #148, восстановлено по чату или число не прочиталось
+    public int? ResponsesAtApply { get; private set; }
+
     public LlmVerdict? LlmVerdict { get; private set; }
 
     public int? LlmScore { get; private set; }
@@ -114,6 +118,16 @@ public class JobApplication
 
     // Страницы вакансии больше нет: шире MarkVacancyUnavailable, закрывает и уже оценённые отклики (#70)
     public void CloseVacancyUnavailable(DateTimeOffset at) => CloseWaiting(VacancyUnavailable, at);
+
+    // Переоценка не состоялась: вакансия в архиве или её страницы нет (#147). Отклик остаётся отсеянным,
+    // причина — по вакансии, а не прежняя (LLM или правила): оценивать его больше незачем
+    public void KeepDismissedVacancyGone(bool archived, DateTimeOffset at)
+    {
+        if (!Dismissed)
+            throw new DomainException($"Из статуса {Status} оценить заново нельзя");
+
+        MoveTo(VacancyStatus.Skipped, archived ? VacancyArchived : VacancyUnavailable, at);
+    }
 
     // Только незавершённые: отправленные остаются как есть, а Skipped и Failed уже решены
     private void CloseWaiting(string reason, DateTimeOffset at)
@@ -383,7 +397,7 @@ public class JobApplication
     }
 
     // Отклик отправлен из очереди. Только из Queued и Questionnaire: не прошедший оценку или проверку отметить отправленным нельзя (#60)
-    public void MarkApplied(string? resume, DateTimeOffset at)
+    public void MarkApplied(string? resume, DateTimeOffset at, int? responses = null)
     {
         if (Sent)
             throw new DomainException("Отклик на вакансию уже отправлен");
@@ -392,6 +406,8 @@ public class JobApplication
             throw new DomainException($"Отправленным можно отметить только отклик в очереди или с анкетой, сейчас {Status}");
 
         AppliedAt = at;
+        if (responses is >= 0)
+            ResponsesAtApply = responses;
         if (!string.IsNullOrWhiteSpace(resume))
             ResumeProfile = resume;
         MoveTo(VacancyStatus.Applied, null, at);
@@ -525,7 +541,7 @@ public class JobApplication
     // Причина пропуска, когда страница вакансии не открылась при подтверждении импортной карточки
     public const string VacancyUnavailable = "вакансия недоступна";
 
-    // Причина пропуска архивной вакансии: такую же шлёт расширение (src/queue/queue-mode.ts)
+    // Причина пропуска архивной вакансии: такую же шлёт расширение (extensions/hh/src/queue/queue-mode.ts)
     public const string VacancyArchived = "вакансия в архиве";
 
     // Причина в истории, когда человек вернул отклик на оценку

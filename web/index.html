@@ -10,8 +10,8 @@
     // Тема (#120): system | dark | light, выбор в localStorage; до отрисовки, чтобы не мигало
     try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
   </script>
-  <!-- Шаблон (#130): scripts/build-web.mjs подставляет файлы сборки с отпечатком в имени (app.[hash].css / .js) — новая сборка
-       меняет имена, и браузер берёт новые файлы без сброса кэша. Стили — UI kit (ui/) и каркас (app.css) одним файлом -->
+  <!-- Шаблон (#130): web/scripts/build.mjs подставляет файлы сборки с отпечатком в имени (app.[hash].css / .js) — новая сборка
+       меняет имена, и браузер берёт новые файлы без сброса кэша. Стили — UI kit (packages/ui) и каркас (app.css) одним файлом -->
   <link rel="stylesheet" href="{{css}}">
 </head>
 <body>

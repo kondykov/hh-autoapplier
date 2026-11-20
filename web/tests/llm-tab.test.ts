@@ -1,6 +1,6 @@
 // «LLM → Отсев» (#127): фильтры в адресе, итог массового действия, строки с выбором и панель выбора kit
 import { describe, expect, it, vi } from "vitest";
-import { PickRow, SelectionBar } from "../src/ui/ui";
+import { PickRow, SelectionBar } from "@hh-autoapplier/ui";
 import { rejectsFilter, rejectsPath, rejectsQuery, summary, vacancies } from "../src/pages/llm-tab";
 
 describe("фильтры «Отсева» в адресе", () => {
@@ -32,6 +32,13 @@ describe("итог массового действия", () => {
     expect(vacancies(12)).toBe("12 вакансий");
     expect(summary("Вернули в очередь", { done: ["1", "2"], failed: [] })).toBe("Вернули в очередь: 2 вакансии");
     expect(summary("Скрыли", { done: ["1"], failed: [{ id: "2", error: "не найдена" }] })).toBe("Скрыли: 1 вакансия; не вышло 1: не найдена");
+  });
+
+  it("переоценка: в архиве и недоступные — отдельно (#147)", () => {
+    expect(summary("Отправили на оценку заново", { done: ["1"], failed: [], archived: ["2", "3"], unavailable: ["4"] }))
+      .toBe("Отправили на оценку заново: 1 вакансия; в архиве 2; недоступно 1");
+    expect(summary("Отправили на оценку заново", { done: ["1"], failed: [], archived: [], unavailable: [] }))
+      .toBe("Отправили на оценку заново: 1 вакансия");
   });
 });
 

@@ -1,4 +1,5 @@
-# Проверка расширения, веба (web/, #130) и backend на каждый push и pull request
+# Проверка расширения (extensions/hh), веба (web/), UI kit (packages/ui) и backend на каждый push и pull request.
+# npm — workspaces корня (#131): typecheck и test идут по всем проектам
 name: CI
 
 on:
@@ -11,7 +12,7 @@ concurrency:
 
 jobs:
   extension:
-    name: Расширение и веб (typecheck, test, build)
+    name: Расширение, веб и UI kit (typecheck, test, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +28,8 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
       - run: npm run typecheck
-      - run: npm run typecheck:web
-      # tests/ — расширение, web/tests/ — веб
       - run: npm test
-      # Без letter.local.txt сборка берёт письмо по умолчанию
+      # Расширение — extensions/hh/dist; без letter.local.txt сборка берёт письмо по умолчанию
       - run: npm run build
       - run: npm run build:web
 
@@ -43,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Тесты API открывают веб-интерфейс: нужна сборка web/ в wwwroot (npm run build:web в корне)
+      # Тесты API открывают веб-интерфейс: нужна сборка web/ в wwwroot (npm run build:web в корне, UI kit — packages/ui)
       - uses: actions/setup-node@v4
         with:
           node-version: 22

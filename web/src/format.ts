@@ -1,5 +1,5 @@
 // Подписи и форматы, общие для разделов
-import { el, Pill } from "./ui/ui";
+import { el, Pill } from "@hh-autoapplier/ui";
 import type { Vacancy } from "./api/types";
 
 export const STATUSES: Record<string, string> = {
@@ -25,6 +25,15 @@ export const sourcePill = (v: Pick<Vacancy, "source">) => {
   const s = SOURCES[v.source ?? "hh"] ?? { name: v.source ?? "", color: "var(--src-other)" };
   return Pill(s.name, { dot: s.color, title: "Источник вакансии" });
 };
+
+// Конкуренция (#148): метка с числом откликов на hh.ru — при сборе и, если был свой отклик, перед ним («156 → 180»)
+export function responsesPill(v: Pick<Vacancy, "responsesAtCollect" | "responsesAtApply">): HTMLSpanElement | null {
+  const { responsesAtCollect: collect, responsesAtApply: apply } = v;
+  if (collect == null && apply == null) return null;
+  const text = collect != null && apply != null ? `${collect} → ${apply}` : String(collect ?? apply);
+  const title = [collect != null && `откликов на hh.ru при сборе: ${collect}`, apply != null && `перед своим откликом: ${apply}`].filter(Boolean).join("; ");
+  return Pill(`откликов ${text}`, { title });
+}
 
 export function salary(v: Pick<Vacancy, "salaryFrom" | "salaryTo" | "salaryCurrency">): string | null {
   if (v.salaryFrom == null && v.salaryTo == null) return null;

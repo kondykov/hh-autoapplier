@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bindReviewKeys, reviewKey } from "../src/pages/review-keys";
 import { parseVacancyFilter, vacancyApiQuery, vacancyFilterPath, type VacancyFilter } from "../src/pages/vacancies";
-import { Confirm, el, Toast } from "../src/ui/ui";
+import { Confirm, el, Toast } from "@hh-autoapplier/ui";
 import { undoable } from "../src/undo";
 
 afterEach(() => {

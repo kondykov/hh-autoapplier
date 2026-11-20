@@ -192,6 +192,11 @@ public sealed class FakeVacancySource : IVacancySource
     // Требуемый опыт со страницы вакансии (#72)
     public Dictionary<string, string> WorkExperience { get; } = [];
 
+    // Число откликов в выдаче и на странице вакансии (#148)
+    public Dictionary<string, int> SearchResponses { get; } = [];
+
+    public Dictionary<string, int> PageResponses { get; } = [];
+
     // Пока грузится страница вакансии: действие пользователя в это время
     public Func<string, Task>? WhileLoadingDetails { get; set; }
 
@@ -224,6 +229,8 @@ public sealed class FakeVacancySource : IVacancySource
         ErrorPages.Clear();
         BlockedDetails.Clear();
         WorkExperience.Clear();
+        SearchResponses.Clear();
+        PageResponses.Clear();
         WhileLoadingDetails = null;
         Blocked = false;
         Hold = null;
@@ -241,7 +248,12 @@ public sealed class FakeVacancySource : IVacancySource
             throw new SourceBlockedException(Name, "капча");
 
         return _cards.Where(c => c.Listed && c.Page == page)
-            .Select(c => Vacancy.Create(c.Id, c.Title, $"https://hh.ru/vacancy/{c.Id}", search.Name, DateTimeOffset.UtcNow)).ToList();
+            .Select(c =>
+            {
+                var v = Vacancy.Create(c.Id, c.Title, $"https://hh.ru/vacancy/{c.Id}", search.Name, DateTimeOffset.UtcNow);
+                v.RecordResponses(SearchResponses.TryGetValue(c.Id, out var n) ? n : null, DateTimeOffset.UtcNow);
+                return v;
+            }).ToList();
     }
 
     // Как HhWebSource: страница вакансии даёт и название, и описание, и зарплату
@@ -270,6 +282,7 @@ public sealed class FakeVacancySource : IVacancySource
 
         vacancy.UpdateCard(null, null, Salary.From(card.SalaryFrom, null, card.SalaryFrom is null ? null : "RUR"), null, null, null);
         vacancy.UpdateDetails(card.Title, card.Description, [], WorkExperience.GetValueOrDefault(vacancy.Id));
+        vacancy.RecordResponses(PageResponses.TryGetValue(vacancy.Id, out var responses) ? responses : null, DateTimeOffset.UtcNow);
         return ArchivedPages.Contains(vacancy.Id) ? VacancyPageState.Archived : VacancyPageState.Available;
     }
 }

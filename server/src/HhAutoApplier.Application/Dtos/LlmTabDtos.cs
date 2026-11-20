@@ -43,8 +43,14 @@ public record LlmRejectItemDto(string Id, string Title, string Company, string? 
 // Итог возвратов: сколько вернули вручную, по скольким откликнулись и сколько из них пригласили
 public record LlmReturnedDto(int Returned, int Applied, int Invited);
 
-// Массовое действие (#127): что получилось и что нет — по id с причиной
-public record BulkVacanciesResultDto(IReadOnlyList<string> Done, IReadOnlyList<BulkFailureDto> Failed);
+// Массовое действие (#127): что получилось и что нет — по id с причиной.
+// Переоценка (#147): Done — переоценённые; Archived и Unavailable — не переоценены, вакансия в архиве или её страницы нет
+public record BulkVacanciesResultDto(IReadOnlyList<string> Done, IReadOnlyList<BulkFailureDto> Failed)
+{
+    public IReadOnlyList<string> Archived { get; init; } = [];
+
+    public IReadOnlyList<string> Unavailable { get; init; } = [];
+}
 
 public record BulkFailureDto(string Id, string Error);
 

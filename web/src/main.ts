@@ -1,7 +1,7 @@
 // Единый веб-интерфейс (#46, на TS — #130): разделы по пути адреса (History API) поверх того же API, что у расширения.
-// Вход — пароль, дальше cookie. Разметка — компонентами UI kit (ui/ui.ts, #129); данные с hh.ru и от LLM — только текстом
+// Вход — пароль, дальше cookie. Разметка — компонентами UI kit (packages/ui, #129); данные с hh.ru и от LLM — только текстом
 import "./styles.css";
-import iconsUrl from "./ui/icons.svg";
+import iconsUrl from "@hh-autoapplier/ui/icons.svg";
 import { api, post, Unauthorized } from "./api/http";
 import type { Dialog, LlmOverview, Me, Stats, User, Vacancy } from "./api/types";
 import { llmAlert, paletteGroups, vacancySource, visibleSections, type Section } from "./commands";
@@ -20,7 +20,7 @@ import { isAppLink, legacyHashPath, parseRoute, path, renamedPath, type Route, t
 import { act, app, page, scoped, session, setStatus } from "./state";
 import { cycleTheme, initThemeButton, themeLabel } from "./theme";
 import { Alert, Caption, Card, CommandPalette, el, Icon, Menu, MenuItems, nodes, SearchButton, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child,
-  type MenuElement, type MenuEntry, type NavAlert, type NavItem, type PaletteElement, Skeleton } from "./ui/ui";
+  type MenuElement, type MenuEntry, type NavAlert, type NavItem, type PaletteElement, Skeleton } from "@hh-autoapplier/ui";
 
 setIconSprite(iconsUrl);
 

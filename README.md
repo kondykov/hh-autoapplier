@@ -53,10 +53,10 @@ flowchart LR
 Расширение:
 
 ```
-npm install
+npm install                                    # в корне: npm workspaces (extensions/hh, web, packages/ui)
 # создайте letter.local.txt с текстом письма (в git не попадает)
-npm run build
-node scripts/dev-browser.mjs                   # Chromium с расширением, войдите в hh.ru
+npm run build                                  # extensions/hh/dist
+node extensions/hh/scripts/dev-browser.mjs     # Chromium с расширением, войдите в hh.ru
 ```
 
 Backend:
@@ -66,6 +66,14 @@ cd server
 copy .env.example .env
 docker compose up -d --build                   # http://127.0.0.1:8080/health
 ```
+
+## Структура
+
+- `server/` — backend (ASP.NET Core, DDD + CQRS), Docker и деплой (`server/deploy/`)
+- `web/` — веб-интерфейс backend (TypeScript)
+- `extensions/hh/` — расширение Chrome для hh.ru
+- `packages/ui/` — UI kit, общий для веба и расширений
+- `scripts/` — инструменты репозитория (сервер, база, задачи GitHub)
 
 ## Документация
 

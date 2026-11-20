@@ -4,7 +4,7 @@ import type { Vacancy } from "../src/api/types";
 import { llmAlert, paletteGroups, vacancyHref, vacancySource, type CommandActions } from "../src/commands";
 import { features } from "../src/config";
 import { parseVacancyFilter, vacancyApiQuery } from "../src/pages/vacancies";
-import { CommandPalette, filterPalette, Tabs, type PaletteGroup, type PaletteItem } from "../src/ui/ui";
+import { CommandPalette, filterPalette, Tabs, type PaletteGroup, type PaletteItem } from "@hh-autoapplier/ui";
 
 const actions: CommandActions = { theme: { label: "Тема: тёмная", icon: "moon", run: () => {} }, logout: () => {}, collect: () => {}, checkLlm: () => {} };
 const labels = (groups: PaletteGroup[]) => groups.flatMap((g) => g.items.map((i) => i.label));

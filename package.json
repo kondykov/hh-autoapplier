@@ -1,22 +1,17 @@
 {
-  "name": "hh-autoapplier-extension",
-  "version": "0.8.0",
+  "name": "hh-autoapplier",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "web",
+    "extensions/*"
+  ],
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "build:web": "node scripts/build-web.mjs",
-    "watch": "node scripts/build.mjs --watch",
-    "typecheck": "tsc --noEmit",
-    "typecheck:web": "tsc --noEmit -p web",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "@types/chrome": "^0.0.280",
-    "esbuild": "^0.24.0",
-    "happy-dom": "^15.0.0",
-    "playwright": "^1.64.1",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "build": "node extensions/hh/scripts/build.mjs",
+    "watch": "node extensions/hh/scripts/build.mjs --watch",
+    "build:web": "node web/scripts/build.mjs"
   }
 }

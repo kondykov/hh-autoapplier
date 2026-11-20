@@ -16,10 +16,10 @@ server/
                                     (Identity — в Infrastructure/Identity, роли — Domain/Users)
   tests/HhAutoApplier.Tests         xunit: домен, правила, разбор страниц hh.ru; Api/ — интеграционные тесты
                                     API (WebApplicationFactory + Postgres 17 в Testcontainers, нужен Docker)
-  docker-compose.yml, Dockerfile    postgres:17 + api; контекст образа — корень репозитория: шаг Node собирает веб из web/
+  docker-compose.yml, Dockerfile    postgres:17 + api; контекст образа — корень репозитория: шаг Node собирает веб из web/ и UI kit packages/ui
 ```
 
-Веб-интерфейс (#46) — отдельный проект `web/` на TypeScript (#130): `npm run build:web` в корне собирает его в `src/HhAutoApplier.Api/wwwroot` (каталог генерируется, в git его нет), и тот же API отдаёт его с того же адреса — cookie и вход общие, CORS не нужен. Без Docker (`dotnet run`, `dotnet test`) сборку веба делают заранее, иначе страницы нет (предупреждение при сборке API). Раздача — `Api/WebInterface.cs`: файлы с отпечатком в имени (`app.[hash].js`) — с кэшем на год, `index.html` — `no-cache`, поэтому после выката браузер берёт новые файлы без сброса кэша.
+Веб-интерфейс (#46) — отдельный проект `web/` на TypeScript (#130, UI kit — `packages/ui`, #131): `npm run build:web` в корне репозитория собирает его в `src/HhAutoApplier.Api/wwwroot` (каталог генерируется, в git его нет), и тот же API отдаёт его с того же адреса — cookie и вход общие, CORS не нужен. Без Docker (`dotnet run`, `dotnet test`) сборку веба делают заранее, иначе страницы нет (предупреждение при сборке API). Раздача — `Api/WebInterface.cs`: файлы с отпечатком в имени (`app.[hash].js`) — с кэшем на год, `index.html` — `no-cache`, поэтому после выката браузер берёт новые файлы без сброса кэша.
 
 ## Запуск
 

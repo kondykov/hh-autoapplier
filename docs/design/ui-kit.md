@@ -4,7 +4,7 @@
 
 ## Где лежит
 
-`web/src/ui/` — единственная копия (с #130; до него — `wwwroot/ui/`):
+`packages/ui/src/` — единственная копия, пакет `@hh-autoapplier/ui` в npm workspaces (с #131; до него — `web/src/ui/`, ещё раньше — `wwwroot/ui/`):
 
 | Файл | Что внутри |
 |---|---|
@@ -15,7 +15,7 @@
 
 Каркас веба (шапка, `main`, строка статуса, витрина) — `web/src/app.css`, в kit не входит.
 
-Веб собирается (`npm run build:web`, `scripts/build-web.mjs`): `tokens.css`, `ui.css` и `app.css` склеиваются в `app.[hash].css`, спрайт копируется как `icons.[hash].svg`, код — `app.[hash].js`; всё — в `server/src/HhAutoApplier.Api/wwwroot` (генерируется, в git его нет). Отпечаток в имени решает кэш браузера: новая сборка — новые имена, `index.html` отдаётся с `no-cache`. Esbuild расширения читает файлы kit из `web/src/ui/` по относительному пути.
+Веб собирается (`npm run build:web`, `web/scripts/build.mjs`): `tokens.css`, `ui.css` и `app.css` склеиваются в `app.[hash].css`, спрайт копируется как `icons.[hash].svg`, код — `app.[hash].js`; всё — в `server/src/HhAutoApplier.Api/wwwroot` (генерируется, в git его нет). Отпечаток в имени решает кэш браузера: новая сборка — новые имена, `index.html` отдаётся с `no-cache`. Esbuild расширения читает файлы kit из `web/src/ui/` по относительному пути.
 
 ## Правила kit
 
@@ -31,9 +31,9 @@
 
 ```ts
 // web/src/main.ts: стили — импортом (сборка вынесет их в app.[hash].css), спрайт — адресом файла сборки
-import "./styles.css";                       // @import ui/tokens.css, ui/ui.css, app.css
-import iconsUrl from "./ui/icons.svg";       // "/icons.[hash].svg"
-import { Button, Card, setIconSprite } from "./ui/ui";
+import "./styles.css";                       // @import @hh-autoapplier/ui/tokens.css, @hh-autoapplier/ui/ui.css, app.css
+import iconsUrl from "@hh-autoapplier/ui/icons.svg"; // "/icons.[hash].svg"
+import { Button, Card, setIconSprite } from "@hh-autoapplier/ui";
 setIconSprite(iconsUrl);
 ```
 
@@ -43,11 +43,11 @@ setIconSprite(iconsUrl);
 
 Панель расширения (боковая, плавающая, плашка) и страница настроек — на kit, без своей палитры:
 
-- `src/shared/kit.ts` — `mountKit(root, ...свои стили)`: `injectStyles` с `tokens.css` + `ui.css` и `injectIcons` со спрайтом. `root` — shadow root панели на странице сайта или `document` страницы расширения (боковая панель, настройки). Спрайт всегда встраивается: внешний файл на чужом сайте не загрузится, а в `dist` копировать нечего.
-- Сборка (`scripts/build.mjs`): `*.css` и `*.svg` импортируются текстом; CSS сжимается esbuild, у SVG схлопываются пробелы. Объявления модулей для `tsc` — `src/assets.d.ts` (в расширении — текст, в вебе `*.svg` — адрес файла, `web/src/env.d.ts`).
-- Компоненты панели — `Button`, `Segmented` (вид панели), `Stat` (сводка очереди), `Callout` (капча), `Icon` (настройки, свернуть); свои стили — только раскладка: `src/shared/panel/panel.css`, `src/options/options.css`. Цвета в них — только токены.
+- `extensions/hh/src/shared/kit.ts` — `mountKit(root, ...свои стили)`: `injectStyles` с `tokens.css` + `ui.css` и `injectIcons` со спрайтом. `root` — shadow root панели на странице сайта или `document` страницы расширения (боковая панель, настройки). Спрайт всегда встраивается: внешний файл на чужом сайте не загрузится, а в `dist` копировать нечего.
+- Сборка (`extensions/hh/scripts/build.mjs`): `*.css` и `*.svg` импортируются текстом; CSS сжимается esbuild, у SVG схлопываются пробелы. Объявления модулей для `tsc` — `extensions/hh/src/assets.d.ts` (в расширении — текст, в вебе `*.svg` — адрес файла, `web/src/env.d.ts`).
+- Компоненты панели — `Button`, `Segmented` (вид панели), `Stat` (сводка очереди), `Callout` (капча), `Icon` (настройки, свернуть); свои стили — только раскладка: `extensions/hh/src/shared/panel/panel.css`, `extensions/hh/src/options/options.css`. Цвета в них — только токены.
 - Тема — по системе (`prefers-color-scheme`), как в вебе; вручную — `data-theme` на хосте панели или на `<html>` страницы расширения.
 - Панель — интерфейс для мыши: высоты касания kit на ширине ≤720px (`--tap`) в ней сняты, иначе узкая боковая панель получала кнопки телефона.
-- Граница общего кода (`tests/settings.test.ts`): `src/shared` и `src/infra` импортируют только общий код и kit, а сам kit не импортирует ничего.
+- Граница общего кода (`extensions/hh/tests/settings.test.ts`): `src/shared` и `src/infra` импортируют только общий код и kit (`@hh-autoapplier/ui`), а сам kit не импортирует ничего (`packages/ui/tests/ui.test.ts`).
 
 Размер `dist/content.js` (несжатый IIFE): 150 КБ → 182 КБ. Основное — текст `ui.css` (~21 КБ сжатым), спрайт (~4 КБ) и используемые функции `ui.ts`; своя палитра панели (~5,5 КБ) ушла.

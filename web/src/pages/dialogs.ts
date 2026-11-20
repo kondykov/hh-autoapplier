@@ -4,7 +4,7 @@ import type { Dialog } from "../api/types";
 import { date, options } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped } from "../state";
-import { Badge, Button, Callout, Card, el, EmptyState, Field, Meta, PageHead, Quote, Result, Toolbar, type Child, type Tone } from "../ui/ui";
+import { Badge, Button, Callout, Card, el, EmptyState, Field, Meta, PageHead, Quote, Result, Toolbar, type Child, type Tone } from "@hh-autoapplier/ui";
 
 const KINDS: Record<string, string> = { Invitation: "Приглашение", Question: "Вопрос", Rejection: "Отказ", Other: "Прочее" };
 const KIND_TONES: Record<string, Tone> = { Invitation: "ok", Question: "accent" };

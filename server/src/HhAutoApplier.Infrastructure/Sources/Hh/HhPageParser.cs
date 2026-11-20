@@ -59,18 +59,20 @@ public static partial class HhPageParser
                 var v = Vacancy.Create(id, Str(i, "name"), $"https://hh.ru/vacancy/{id}", searchName, now);
                 var hasTest = i.TryGetProperty("userTestPresent", out var t) && t.ValueKind == JsonValueKind.True;
                 UpdateCard(v, i, hasTest, Date(i, "publicationTime"));
+                v.RecordResponses(Responses(i, "totalResponsesCount", "responsesCount"), now);
                 return v;
             })
             .ToList();
     }
 
     // false — на странице нет вакансии
-    public static bool ParseVacancy(JsonElement state, Vacancy vacancy)
+    public static bool ParseVacancy(JsonElement state, Vacancy vacancy, DateTimeOffset now)
     {
         if (!TryVacancy(state, out var v))
             return false;
 
         UpdateCard(vacancy, v, null, Date(v, "publicationTimeIso"));
+        vacancy.RecordResponses(PageResponses(state), now);
 
         var skills = v.TryGetProperty("keySkills", out var ks) && ks.ValueKind == JsonValueKind.Array
             ? ks.EnumerateArray().Select(k => k.ValueKind == JsonValueKind.String ? k.GetString() ?? "" : Str(k, "name"))
@@ -87,6 +89,19 @@ public static partial class HhPageParser
         TryVacancy(state, out var v)
         && v.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Object
         && status.TryGetProperty("archived", out var archived) && archived.ValueKind == JsonValueKind.True;
+
+    // Число откликов на вакансию (#148). Текстом соискателю hh.ru его не показывает — только в данных страницы, точным числом
+    // (проверено 2026-11-20 без входа): на странице vacancyFull.extraVacancyFields.{vacancyResponsesCount, totalResponsesCount},
+    // в выдаче у карточки responsesCount и totalResponsesCount. Поля расходятся на единицы–десятки (разные кэши hh.ru),
+    // а responsesCount в выдаче бывает устаревшим (14 при 176 на странице) — берётся большее. null — ни одного числа нет
+    public static int? PageResponses(JsonElement state) =>
+        state.TryGetProperty("vacancyView", out var view) && view.TryGetProperty("vacancyFull", out var full)
+                                                         && full.TryGetProperty("extraVacancyFields", out var extra)
+            ? Responses(extra, "vacancyResponsesCount", "totalResponsesCount")
+            : null;
+
+    private static int? Responses(JsonElement e, params string[] names) =>
+        e.ValueKind == JsonValueKind.Object ? names.Select(n => Int(e, n)).Where(n => n >= 0).Max() : null;
 
     private static bool TryVacancy(JsonElement state, out JsonElement vacancy)
     {
