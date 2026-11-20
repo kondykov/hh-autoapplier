@@ -79,7 +79,8 @@ public class AnswerQuestionnairesCommandHandler(
                 catch (LlmUnavailableException e)
                 {
                     // Лимит или провайдер недоступен: остальные ждут следующего запуска
-                    db.LlmCalls.Add(LlmCall.Failed(QuestionnaireAnswering.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
+                    if (!e.NotSent)
+                        db.LlmCalls.Add(LlmCall.Failed(QuestionnaireAnswering.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
                     await db.SaveChangesAsync(ct);
                     stoppedBy = e.Message;
                     break;

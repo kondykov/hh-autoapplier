@@ -63,7 +63,8 @@ public class EvaluatePendingVacanciesCommandHandler(
             catch (LlmUnavailableException e)
             {
                 // Лимит или провайдер недоступен: остальные остаются Pending до следующего запуска
-                db.LlmCalls.Add(LlmCall.Failed(VacancyAssessment.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
+                if (!e.NotSent)
+                    db.LlmCalls.Add(LlmCall.Failed(VacancyAssessment.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
                 await db.SaveChangesAsync(ct);
                 stoppedBy = e.Message;
                 break;
@@ -152,7 +153,8 @@ public class EvaluatePendingVacanciesCommandHandler(
             }
             catch (LlmUnavailableException e)
             {
-                db.LlmCalls.Add(LlmCall.Failed(LetterRequestExtraction.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
+                if (!e.NotSent)
+                    db.LlmCalls.Add(LlmCall.Failed(LetterRequestExtraction.Purpose, application.VacancyId, "", prompt, e.Message, clock.GetUtcNow()).For(application.UserId));
                 return (false, e.Message);
             }
 

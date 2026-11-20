@@ -52,8 +52,20 @@ public class LlmPipelineHostedService(
         }
     }
 
+    // День последней очистки журнала LlmCalls (#113): раз в сутки, первым проходом дня
+    private DateOnly _purgedOn;
+
     private async Task RunOnceAsync(IServiceProvider services, CancellationToken stop)
     {
+        var today = DateOnly.FromDateTime(services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime);
+        if (today != _purgedOn)
+        {
+            var purged = await services.GetRequiredService<PurgeLlmCallsCommandHandler>().Handle(new PurgeLlmCallsCommand(), stop);
+            _purgedOn = today;
+            if (purged > 0)
+                logger.LogInformation("Журнал LlmCalls: удалено {Count} записей старше {Days} дней", purged, PurgeLlmCallsCommand.Retention.TotalDays);
+        }
+
         if (services.GetRequiredService<ILlmClient>().IsConfigured)
         {
             // Без работы — без вызовов: обработчики пишут сводку в лог, раз в минуту это был бы шум

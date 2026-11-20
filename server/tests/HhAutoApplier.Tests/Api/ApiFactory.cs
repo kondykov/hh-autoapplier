@@ -298,6 +298,9 @@ public sealed class FakeLlmClient : ILlmClient
 
     public bool Configured { get; set; }
 
+    // Ответы кончились — отказ «до запроса», как у настоящего клиента на паузе и лимите (#113); иначе — сбой провайдера
+    public bool UnsentWhenEmpty { get; set; }
+
     public int Calls { get; private set; }
 
     // Запросы к LLM по порядку: что попало в промпт
@@ -313,6 +316,7 @@ public sealed class FakeLlmClient : ILlmClient
         Answers.Clear();
         WhileThinking = null;
         Configured = false;
+        UnsentWhenEmpty = false;
         Calls = 0;
         Requests.Clear();
     }
@@ -325,7 +329,7 @@ public sealed class FakeLlmClient : ILlmClient
         Calls++;
         Requests.Add(request);
         if (!Answers.TryDequeue(out var answer))
-            throw new LlmUnavailableException("дневной лимит запросов исчерпан");
+            throw new LlmUnavailableException("дневной лимит запросов исчерпан", notSent: UnsentWhenEmpty);
 
         if (WhileThinking is { } action)
             await action();
