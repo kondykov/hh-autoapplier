@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<!-- Концепт #126: ссылки вне hh.ru в сообщениях работодателей. Данные выдуманные -->
+<style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c222b;--line:#263040;--grid:#1a222d;--text:#e6edf3;--muted:#8b98a8;--accent:#f0a3a8;--ok:#7ee2a8;--bad:#ff8b8b;--warn:#f2c66d;--warn-bg:#2b2414;--info:#8fb4ff;--mono:"Cascadia Mono",Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#e9ecf1;font:14px/1.45 var(--sans);color:var(--text);width:1600px}
+.row{display:flex;gap:28px;padding:28px 28px 0;align-items:flex-start}
+.cap{font:600 15px var(--sans);color:#1d2330;margin:0 0 10px}.cap small{display:block;font-weight:400;color:#5b6576;font-size:13px;margin-top:2px;max-width:560px}
+.app{background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line)}
+.mark{font:700 14px var(--mono);border:1px solid var(--line);border-radius:6px;padding:3px 7px;background:#0d1117}.mark b{color:var(--accent)}
+.nav{display:flex;gap:4px}.nav span{padding:6px 10px;border-radius:8px;color:var(--muted);font-size:13px}.nav span.on{color:var(--text);background:var(--card);border:1px solid var(--line)}
+.cnt{font:600 11px var(--mono);background:var(--accent);color:#2a0f12;border-radius:999px;padding:0 6px;margin-left:4px}
+.cnt.link{background:var(--info);color:#0b1830}
+.muted{color:var(--muted)}.mono{font-family:var(--mono)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{margin:0 0 4px;font-size:20px}h3{margin:0 0 10px;font:600 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font:12px var(--mono)}.seg span{padding:6px 12px;color:var(--muted)}.seg span.on{background:var(--accent);color:#2a0f12;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 11px var(--mono);border-radius:6px;padding:2px 7px;border:1px solid var(--line);color:var(--muted);background:var(--card2)}
+.pill.form{color:var(--info);border-color:#2c3f63}.pill.test{color:#c9a7ff;border-color:#43345f}.pill.meet{color:var(--ok);border-color:#24503a}.pill.due{color:var(--warn);border-color:#5a4a1e}
+.domain{display:inline-flex;align-items:center;gap:8px;font:700 15px var(--mono);color:var(--text)}
+.domain i{width:22px;height:22px;border-radius:6px;background:#1f2a3d;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;color:var(--info)}
+.quote{font-size:13px;color:#cdd6df;border-left:3px solid var(--line);padding:4px 0 4px 10px;margin:10px 0}
+.quote u{color:var(--info);text-decoration:none;background:#1a2538;border-radius:4px;padding:0 3px;font-family:var(--mono);font-size:12px}
+.safe{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:flex-start;margin-top:4px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:13px;color:var(--text)}
+.btn.primary{background:var(--info);border-color:var(--info);color:#0b1830}.btn.ok{color:var(--ok);border-color:#24503a}.btn.ghost{color:var(--muted)}
+.lnk{border-color:#2c3f63}
+.done{opacity:.55}
+.note{font-size:12px;color:#5b6576;margin:8px 0 0;max-width:560px}
+/* Telegram */
+.tg{width:420px;background:#0e1621;border-radius:14px;padding:16px;border:1px solid #1c2733;font-family:var(--sans)}
+.tg .hd{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid #1c2733;margin-bottom:12px}
+.tg .ava{width:36px;height:36px;border-radius:50%;background:#0d1117;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font:700 11px var(--mono)}.tg .ava b{color:var(--accent)}
+.bubble{background:#182533;border-radius:12px 12px 12px 4px;padding:10px 12px;font-size:13.5px;line-height:1.5;color:#e6edf3}
+.bubble .t{font-weight:700}
+.bubble code{font-family:var(--mono);background:#0f1a26;border-radius:4px;padding:0 4px;color:var(--info)}
+.kb{display:grid;gap:4px;margin-top:4px}.kb div{display:grid;gap:4px}
+.kb span{background:#1d2c3c;border-radius:8px;text-align:center;padding:8px 6px;font-size:13px;color:#cfe3ff}
+.time{font-size:11px;color:#6d8399;text-align:right;margin-top:4px}
+/* Телефон */
+.phone{width:390px;height:844px;border-radius:44px;border:10px solid #1b1f26;background:var(--bg);overflow:hidden;position:relative;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.phone .status{height:34px;display:flex;justify-content:space-between;padding:8px 22px;font:600 12px var(--sans)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:64px;border-top:1px solid var(--line);background:#0b0f14;display:grid;grid-template-columns:repeat(5,1fr);font-size:10px;color:var(--muted);text-align:center;padding-top:9px}
+.tabbar b{display:block;font:700 15px var(--mono);color:var(--muted)}.tabbar .on,.tabbar .on b{color:var(--accent)}
+.phone .btn{height:44px;width:100%}
+/* Панель расширения */
+.side{width:340px;background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.side .sec{padding:12px 14px;border-bottom:1px solid var(--line)}
+.side .bigbtn{display:flex;align-items:center;justify-content:center;height:40px;border-radius:8px;background:var(--accent);color:#2a0f12;font-weight:600;font-size:13px}
+.alertline{display:flex;align-items:center;gap:8px;background:#121b2a;border:1px solid #2c3f63;border-radius:8px;padding:9px 10px;font-size:12.5px;margin-top:10px}
+.log{font:11.5px var(--mono);color:var(--ok)}
+</style>
+<body>
+<div class="row">
+  <div>
+    <p class="cap">1. Telegram: отдельное важное сообщение<small>Не в сводке, а сразу, как приглашение. Домен — крупно; что просят и срок — из разбора LLM; кнопка-ссылка ведёт ровно на адрес из сообщения</small></p>
+    <div class="tg">
+      <div class="hd"><div class="ava">hh<b>=#</b></div><div><b style="font-size:14px">hh-autoapplier</b><div style="font-size:12px;color:#6d8399">бот</div></div></div>
+      <div class="bubble">
+        <div class="t">🔗 Ссылка вне hh.ru: анкета</div>
+        <div>Облако-9 · Middle .NET разработчик</div>
+        <div style="margin-top:8px">Адрес: <code>forms.gle</code> — Google Формы</div>
+        <div>Что просят: ответить на 8 вопросов, лучше с компьютера</div>
+        <div>⏰ Срок: до 21.11 (через 3 дня)</div>
+        <div style="margin-top:8px;color:#9fb3c8;font-size:12.5px">«…Предлагаем следующий этап отбора — анкетирование. Просим ответить на несколько вопросов по ссылке…»</div>
+        <div class="time">12:41</div>
+      </div>
+      <div class="kb">
+        <div style="grid-template-columns:1fr"><span>🔗 Открыть forms.gle ↗</span></div>
+        <div style="grid-template-columns:1fr 1fr"><span>✅ Заполнил</span><span>🙈 Не буду</span></div>
+        <div style="grid-template-columns:1fr 1fr"><span>💬 Чат на hh.ru ↗</span><span>⏰ Напомнить завтра</span></div>
+      </div>
+      <div style="height:14px"></div>
+      <div class="bubble" style="border-radius:12px">
+        <div class="t">☰ hh-autoapplier</div>
+        <div>На проверке: 2 · ответов работодателей: 3 · в очереди: 5</div>
+        <div style="color:var(--info)">🔗 Ссылки вне hh.ru ждут: 2 (одна — до 21.11)</div>
+      </div>
+      <div class="kb"><div style="grid-template-columns:1fr 1fr"><span>📝 Проверка (2)</span><span>🔗 Ссылки (2)</span></div></div>
+    </div>
+    <p class="note">Экран бота («один экран») получает строку и кнопку «🔗 Ссылки»: список ждущих, по одной на экран, как «Проверка». Напоминание — одно, за сутки до срока или через сутки без срока.</p>
+  </div>
+
+  <div>
+    <p class="cap">2. Веб: «Ответы работодателей» → вкладка «Ссылки вне hh.ru»<small>Счётчик в навигации — отдельным цветом. Карточка: домен, что за ссылка, срок, цитата со ссылкой, подсказка о безопасности, решения</small></p>
+    <div class="app" style="width:1080px">
+      <div class="top"><span class="mark">hh<b>=#</b></span><div class="nav"><span>Дашборд</span><span>Проверка<span class="cnt">2</span></span><span class="on">Ответы<span class="cnt">3</span><span class="cnt link">🔗2</span></span><span>Вакансии</span><span>Поиски</span><span>Резюме</span></div><span style="margin-left:auto" class="muted mono">tester ▾ · ◐</span></div>
+      <div style="padding:20px;display:grid;gap:14px">
+        <div style="display:flex;align-items:flex-end;gap:12px"><div><h2>Ответы работодателей</h2><div class="muted" style="font-size:13px">Чаты синхронизированы 40 мин назад</div></div>
+          <div class="seg" style="margin-left:auto"><span>Ждут ответа · 3</span><span class="on">🔗 Ссылки вне hh.ru · 2</span><span>Все</span></div></div>
+
+        <div class="card lnk">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="domain"><i>G</i>forms.gle</span><span class="pill form">анкета</span><span class="pill due">⏰ до 21.11 · 3 дня</span>
+            <span class="muted" style="margin-left:auto;font-size:12px">пришло сегодня 12:41 · приглашение</span>
+          </div>
+          <div style="margin-top:8px;font-weight:600">Middle .NET разработчик <span class="muted" style="font-weight:400">· Облако-9 · СПб · 160–230 тыс ₽</span></div>
+          <div class="muted" style="font-size:13px;margin-top:2px">LLM: просят ответить на 8 вопросов перед собеседованием, лучше с компьютера</div>
+          <div class="quote">…Предлагаем следующий этап отбора — анкетирование. Просим ответить на несколько вопросов по ссылке: <u>https://forms.gle/Xk2…F9</u> Заполнять лучше с компьютера…</div>
+          <div class="safe">🛡 Google Формы. Адрес взят из сообщения как есть; перед вводом личных данных проверьте его в браузере.</div>
+          <div class="btns"><span class="btn primary">Открыть forms.gle ↗</span><span class="btn ok">✅ Заполнил</span><span class="btn">⏰ Напомнить</span><span class="btn ghost">Не буду</span><span class="btn ghost" style="margin-left:auto">💬 Чат на hh.ru ↗</span></div>
+        </div>
+
+        <div class="card lnk">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="domain"><i style="color:#c9a7ff">AI</i>hiringscore.ai</span><span class="pill test">тест / ИИ-интервью</span><span class="pill">срок не указан</span>
+            <span class="muted" style="margin-left:auto;font-size:12px">пришло вчера 18:05</span>
+          </div>
+          <div style="margin-top:8px;font-weight:600">Senior Product Engineer <span class="muted" style="font-weight:400">· Северный ветер · удалённо</span></div>
+          <div class="muted" style="font-size:13px;margin-top:2px">LLM: следующий этап — видеоинтервью с ИИ на внешней платформе, ~30 минут</div>
+          <div class="safe">⚠ Незнакомый домен. Ссылка ведёт за пределы hh.ru — откройте, только если ждали этот этап.</div>
+          <div class="btns"><span class="btn primary">Открыть hiringscore.ai ↗</span><span class="btn ok">✅ Прошёл</span><span class="btn">⏰ Напомнить</span><span class="btn ghost">Не буду</span><span class="btn ghost" style="margin-left:auto">💬 Чат на hh.ru ↗</span></div>
+        </div>
+
+        <div class="card done" style="padding:12px 16px;display:flex;gap:12px;align-items:center">
+          <span class="mono muted" style="font-size:12px">ГОТОВО · 3</span>
+          <span class="pill form">анкета</span><span style="font-size:13px">forms.yandex.ru — Альфа-Код, Backend C#</span><span class="pill" style="color:var(--ok)">заполнено 16.11</span>
+          <span class="muted" style="margin-left:auto;font-size:12px">ещё 2 ▾</span>
+        </div>
+        <div class="muted" style="font-size:12px">Не показываются: сайты компаний в отказах и подписях, ссылки на hh.ru, ссылки без просьбы что-то сделать — они остаются в тексте сообщения.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row" style="padding-bottom:28px">
+  <div>
+    <p class="cap">3. Веб на телефоне<small>Та же карточка: «Открыть» во всю ширину, решения — ниже; бейдж 🔗 на вкладке «Ответы»</small></p>
+    <div class="phone">
+      <div class="status"><span>12:44</span><span>◔ ▮▮▮</span></div>
+      <div style="padding:6px 16px 0;display:flex;align-items:center;gap:10px"><span class="mark">hh<b>=#</b></span><b style="font-size:17px">Ответы</b><span class="muted mono" style="margin-left:auto;font-size:12px">🔗 2</span></div>
+      <div style="padding:10px 16px 0"><div class="seg" style="display:flex"><span style="flex:1;text-align:center">Ждут · 3</span><span class="on" style="flex:1;text-align:center">🔗 Ссылки · 2</span><span style="flex:1;text-align:center">Все</span></div></div>
+      <div style="padding:12px 16px;display:grid;gap:10px">
+        <div class="card lnk" style="padding:14px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="domain" style="font-size:14px"><i>G</i>forms.gle</span><span class="pill form">анкета</span></div>
+          <div style="margin-top:6px"><span class="pill due">⏰ до 21.11 · 3 дня</span></div>
+          <div style="margin-top:8px;font-weight:600;font-size:14px">Middle .NET разработчик</div>
+          <div class="muted" style="font-size:12px">Облако-9 · приглашение · сегодня 12:41</div>
+          <div class="muted" style="font-size:12.5px;margin-top:6px">LLM: 8 вопросов перед собеседованием, лучше с компьютера</div>
+          <div class="safe" style="margin-top:8px">🛡 Google Формы. Адрес — из сообщения как есть.</div>
+          <div style="display:grid;gap:8px;margin-top:12px"><span class="btn primary">Открыть forms.gle ↗</span>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><span class="btn ok">✅ Заполнил</span><span class="btn">⏰ Завтра</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><span class="btn ghost">Не буду</span><span class="btn ghost">💬 Чат ↗</span></div></div>
+        </div>
+        <div class="card lnk" style="padding:12px 14px"><div style="display:flex;gap:8px;align-items:center"><span class="domain" style="font-size:13px"><i style="color:#c9a7ff">AI</i>hiringscore.ai</span><span class="pill test">ИИ-интервью</span></div><div class="muted" style="font-size:12px;margin-top:4px">Северный ветер · вчера</div></div>
+      </div>
+      <div class="tabbar"><div><b>◫</b>Дашборд</div><div><b>✎</b>Проверка</div><div class="on"><b>✉</b>Ответы</div><div><b>☰</b>Вакансии</div><div><b>⋯</b>Ещё</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">4. Расширение: после «Синхронизировать чаты»<small>Сами ссылки расширение не открывает; только сообщает, что нашлись новые, и ведёт в веб</small></p>
+    <div class="side">
+      <div class="top" style="padding:10px 14px"><span class="mark">hh<b>=#</b></span><b style="font-size:13px">Чаты</b><span class="muted mono" style="font-size:11px">v0.8</span><span class="mono" style="margin-left:auto;font-size:11px;color:var(--ok)">● 0.5.0</span></div>
+      <div class="sec"><h3>Чаты</h3><div class="bigbtn">Синхронизировать чаты с сервером</div>
+        <div class="alertline">🔗 <span>Новые ссылки вне hh.ru: <b>2</b> (анкета, ИИ-интервью)</span><span style="margin-left:auto;color:var(--info)">в вебе ↗</span></div></div>
+      <div class="sec" style="border-bottom:0"><div class="log">12:43 Чатов: 14, новых сообщений: 4, приглашений: 1, ссылок вне hh.ru: 2</div></div>
+    </div>
+    <p class="note" style="max-width:340px">Дашборд (#121): плитка «Ждут действий вне hh.ru: 2» рядом с «на проверке»; в воронке анкета вне hh.ru не отдельный шаг.</p>
+  </div>
+
+  <div style="width:520px">
+    <p class="cap">Что считается «ссылкой вне hh.ru»<small>Сервер при импорте чатов находит адреса в тексте; LLM (маршрут Dialogs) решает, просят ли что-то по ссылке</small></p>
+    <div class="card" style="font-size:13px;line-height:1.6">
+      <h3>Виды</h3>
+      <div><span class="pill form">анкета</span> forms.gle, docs.google.com/forms, forms.yandex.ru, typeform, anketolog, testograf…</div>
+      <div style="margin-top:6px"><span class="pill test">тест / ИИ-интервью</span> hiringscore.ai, hackerrank, codility, testgorilla, skillaz…</div>
+      <div style="margin-top:6px"><span class="pill meet">встреча</span> calendly, cal.com, ссылки на звонок (telemost, zoom, meet) — если назначают время</div>
+      <div style="margin-top:6px"><span class="pill">портал / другое</span> карьерный сайт работодателя с просьбой заполнить заявку</div>
+      <h3 style="margin-top:14px">Не уведомляем</h3>
+      <div class="muted">hh.ru и его домены; ссылки в отказах; сайт компании «для знакомства»; ссылки, о которых LLM говорит «действий не нужно».</div>
+      <h3 style="margin-top:14px">Безопасность</h3>
+      <div class="muted">Адрес — только из текста сообщения: LLM не может подставить свой (принимаются лишь найденные сервером). Показываем домен крупно, предупреждаем о незнакомых доменах, сокращателях и http. Ничего не открываем и не заполняем автоматически.</div>
+    </div>
+  </div>
+</div>
+</body></html>
