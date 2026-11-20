@@ -5,7 +5,7 @@ import type { Stats as StatusStats, Telegram, VacancyStatus } from "../api/types
 import { STATUSES } from "../format";
 import { path } from "../router";
 import { readOnly, scoped } from "../state";
-import { Card, el, EmptyState, PageHead, Stat, Stats, type Child } from "../ui/ui";
+import { Card, el, EmptyState, PageHead, Stat, Stats, type Child } from "@hh-autoapplier/ui";
 import { attentionItems, AttentionList } from "./attention";
 
 export async function overview(): Promise<Child> {

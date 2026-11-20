@@ -7,7 +7,7 @@ import { journal, letters } from "./llm-log";
 import { overview, rejects } from "./llm-tab";
 import { path, type Route } from "../router";
 import { act, app, me, readOnly, scoped, session } from "../state";
-import { Button, Card, el, EmptyState, Form, PageHead, StackTable, Tabs, Toolbar, type Child } from "../ui/ui";
+import { Button, Card, el, EmptyState, Form, PageHead, StackTable, Tabs, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 // Задачи — как маршруты сервера (#104)
 export const LLM_TASKS: [string, string][] = [

@@ -1,4 +1,4 @@
-/* Каркас веба (#46, #120): шапка, навигация, main, строка статуса и витрина /kit. Компоненты — ui/ui.css, токены — ui/tokens.css */
+/* Каркас веба (#46, #120): шапка, навигация, main, строка статуса и витрина /kit. Компоненты и токены — UI kit (packages/ui) */
 
 header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
 /* Шапка в одну строку (#128): логотип · разделы · поиск · аккаунт · тема. Разделы не переносятся — ряд прокручивается вбок */

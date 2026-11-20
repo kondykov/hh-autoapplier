@@ -27,7 +27,7 @@ public class SetVacancyStatusCommandHandler(
             switch (command.Status)
             {
                 case VacancyStatus.Applied:
-                    application.MarkApplied(command.Resume, now);
+                    application.MarkApplied(command.Resume, now, command.Responses);
                     break;
                 case VacancyStatus.Skipped:
                     application.Skip(command.Reason, now);

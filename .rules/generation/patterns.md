@@ -9,7 +9,7 @@
 
 ## Новая функция в расширении
 ```ts
-// ✅ чистая логика в модуле + тест рядом по смыслу в tests/
+// ✅ чистая логика в модуле + тест рядом по смыслу в extensions/hh/tests/
 export const isCaptchaVisible = (root: ParentNode = document) => root.querySelector(SEL) !== null;
 // ✅ тест на happy-dom, без реального браузера
 // ❌ логика, которую можно проверить только руками на hh.ru

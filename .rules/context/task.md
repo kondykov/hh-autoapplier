@@ -69,6 +69,6 @@
 
 ## 7. Полезное
 - `node scripts/gh-task.mjs status|done|ci --wait` — статусы Project #5 и CI.
-- `node scripts/cdp-inspect.mjs` — dev-браузер (очередь, пробный режим, вкладки); живые проверки — только read-only.
+- `node extensions/hh/scripts/cdp-inspect.mjs` — dev-браузер (очередь, пробный режим, вкладки); живые проверки — только read-only.
 - В git добавлять файлы поимённо (в корне лежат неотслеживаемые `avatar/`, `kondykov/`, `libs/`). Многострочные правки — Edit/Write, не sed/heredoc.
 - Ключи и токены не выводить; секреты между машинами — по SSH из файла.

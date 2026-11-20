@@ -50,6 +50,12 @@ public class Vacancy
     // одни и те же вакансии проверялись бы каждый проход (#70). null — ещё не проверяли
     public DateTimeOffset? ArchiveCheckedAt { get; private set; }
 
+    // Сколько откликов было на вакансию, когда её собрали (#148): точное число из данных страницы hh.ru.
+    // null — источник числа не дал или вакансия собрана раньше #148
+    public int? ResponsesAtCollect { get; private set; }
+
+    public DateTimeOffset? ResponsesAtCollectAt { get; private set; }
+
     public string SearchName { get; private set; } = "";
 
     // Карточка пришла от клиента (импорт), а не от источника: карточка общая, поэтому первый же сбор,
@@ -107,6 +113,19 @@ public class Vacancy
         (SalaryFrom, SalaryTo, SalaryCurrency) = (card.SalaryFrom, card.SalaryTo, card.SalaryCurrency);
         (Description, Stack, WorkExperience) = (card.Description, card.Stack, card.WorkExperience);
         Imported = false;
+        // Число при сборе — первое известное: у импортной его не было, у собранной оно уже есть и не переписывается
+        if (ResponsesAtCollect is null && card.ResponsesAtCollect is not null)
+            (ResponsesAtCollect, ResponsesAtCollectAt) = (card.ResponsesAtCollect, card.ResponsesAtCollectAt);
+    }
+
+    // Число откликов со страницы источника (#148): карточка выдачи, затем страница вакансии — запоминается последнее.
+    // Известную вакансию сбор заново не разбирает, так что это число на момент первого сбора
+    public void RecordResponses(int? count, DateTimeOffset at)
+    {
+        if (count is not { } n || n < 0)
+            return;
+
+        (ResponsesAtCollect, ResponsesAtCollectAt) = (n, at);
     }
 
     // Дата не откатывается: сбор и импорт могут идти одновременно

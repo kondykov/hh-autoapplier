@@ -8,7 +8,7 @@ import { undoable } from "../undo";
 import {
   Badge, Button, Caption, Card, Chips, Confirm, el, EmptyState, FilterList, KeyHints, Menu, Meter, Pill, PickRow, Segmented, SelectionBar, StackTable, Stat, Stats, Toast, Toolbar,
   type Child, type PickElement, type SelectionBarElement, type Tone,
-} from "../ui/ui";
+} from "@hh-autoapplier/ui";
 import { connectionState, LLM_TASKS } from "./llm";
 import { isTyping } from "./review-keys";
 
@@ -146,13 +146,13 @@ export async function rejects(route: Route): Promise<Child> {
     } }),
     Button("Оценить заново", { onClick: async () => {
       const ids = selected();
-      if (await confirmed(ids, "Оценить заново", "Правила и затем LLM: каждая вакансия — запрос дневного лимита. Письма LLM сбросятся.")) await reevaluate(ids);
+      if (await confirmed(ids, "Оценить заново", "Сначала — не в архиве ли вакансия на hh.ru (с паузами, как при сборе), затем правила и LLM: каждая вакансия — запрос дневного лимита. Письма LLM сбросятся.")) await reevaluate(ids);
     } }),
     providers?.providers.length ? Menu("Оценить заново через", providers.providers.map((c) => ({
       label: `${c.name} · ${c.model}${c.available ? "" : ` — ${connectionState(c)}`}`,
       onClick: async () => {
         const ids = selected();
-        if (await confirmed(ids, `Оценить через ${c.name}`, "Каждая вакансия — запрос к этому подключению сразу, это займёт время.")) await reevaluate(ids, c.name);
+        if (await confirmed(ids, `Оценить через ${c.name}`, "Сначала — не в архиве ли вакансия на hh.ru, затем запрос к этому подключению сразу: это займёт время.")) await reevaluate(ids, c.name);
       },
     })), { button: true, label: "Оценить заново через подключение" }) : null,
     Button("Скрыть", { onClick: async () => {
@@ -198,9 +198,12 @@ const GROUP_SHORT: Record<string, string> = { stack: "стек", level: "уро�
 
 const bulk = (action: string, ids: string[], provider?: string) => post<BulkResult>("/api/vacancies/bulk", { action, ids, provider });
 
+// Переоценка (#147) добавляет «в архиве M, недоступно K»: такие не оценивались
 export function summary(done: string, r: BulkResult): string {
+  const gone = [r.archived?.length ? `в архиве ${r.archived.length}` : "", r.unavailable?.length ? `недоступно ${r.unavailable.length}` : ""]
+    .filter(Boolean).map((s) => `; ${s}`).join("");
   const failed = r.failed.length ? `; не вышло ${r.failed.length}: ${r.failed[0].error}` : "";
-  return `${done}: ${vacancies(r.done.length)}${failed}`;
+  return `${done}: ${vacancies(r.done.length)}${gone}${failed}`;
 }
 
 // Клавиши «Отсева» (#128): J/K — строка, X — выбрать текущую. По физической кнопке, вне полей ввода и диалогов

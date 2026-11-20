@@ -14,7 +14,9 @@ public record DashboardRow(
     DateTimeOffset? AppliedAt,
     string Search,
     string Source,
-    IReadOnlyList<ApplicationEvent> History);
+    IReadOnlyList<ApplicationEvent> History,
+    int? ResponsesAtCollect = null,
+    int? ResponsesAtApply = null);
 
 // Расчёт дашборда по откликам без базы — проверяется тестами на наборе данных
 public static partial class DashboardMath
@@ -88,7 +90,47 @@ public static partial class DashboardMath
                 g.Count(r => interview(r) is not null)))
             .OrderByDescending(s => s.Collected).ToList();
 
-        return new DashboardDto(period, source, from, now, totals, funnel, Series(rows, period, now), bySearch, reasons, sources, llm, chats);
+        var sentInPeriod = rows.Where(r => In(sent(r), from, now)).ToList();
+        return new DashboardDto(period, source, from, now, totals, funnel, Series(rows, period, now), bySearch, reasons, sources, llm, chats,
+            Competition(sentInPeriod));
+    }
+
+    // Корзины числа откликов (#148): нижняя граница включительно, верхняя — нет
+    public static readonly int[] ResponseBuckets = [0, 10, 50, 200];
+
+    public const string NoData = "нет данных";
+
+    public static string ResponsesBucket(int? count)
+    {
+        if (count is not { } n)
+            return NoData;
+
+        // Прирост бывает отрицательным: поля hh.ru из разных кэшей расходятся на единицы — это «почти не выросло»
+        var i = Array.FindLastIndex(ResponseBuckets, b => Math.Max(n, 0) >= b);
+        return i == ResponseBuckets.Length - 1 ? $"{ResponseBuckets[i]}+" : $"{ResponseBuckets[i]}–{ResponseBuckets[i + 1]}";
+    }
+
+    // Прирост между сбором и своим откликом; нет одного из чисел — нет данных
+    public static int? ResponsesGrowth(DashboardRow row) =>
+        row is { ResponsesAtCollect: { } collected, ResponsesAtApply: { } applied } ? applied - collected : null;
+
+    // Исходы отправленных: приглашение (или сразу собеседование), иначе отказ, иначе молчание. Все корзины — всегда, «нет данных» — последней
+    public static DashboardCompetitionDto Competition(IReadOnlyList<DashboardRow> sent)
+    {
+        IReadOnlyList<DashboardCompetitionRowDto> Slice(Func<DashboardRow, int?> count)
+        {
+            var labels = ResponseBuckets.Select(b => ResponsesBucket(b)).Append(NoData);
+            var groups = sent.ToLookup(r => ResponsesBucket(count(r)));
+            return labels.Select(label =>
+            {
+                var g = groups[label].ToList();
+                var invited = g.Count(r => Invited(r) is not null);
+                var rejected = g.Count(r => Invited(r) is null && Reached(r, VacancyStatus.Rejected) is not null);
+                return new DashboardCompetitionRowDto(label, g.Count, invited, rejected, g.Count - invited - rejected);
+            }).ToList();
+        }
+
+        return new DashboardCompetitionDto(Slice(r => r.ResponsesAtCollect), Slice(r => r.ResponsesAtApply), Slice(ResponsesGrowth));
     }
 
     // По дням, за 90 дней — по неделям; последний столбец кончается сегодня

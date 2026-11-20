@@ -5,7 +5,7 @@ import { date, options } from "../format";
 import { path } from "../router";
 import { act, app, me, page as pageState } from "../state";
 import { undoable } from "../undo";
-import { Actions, busy, Button, Card, Confirm, el, EmptyState, Form, StackTable, Toolbar, type Child } from "../ui/ui";
+import { Actions, busy, Button, Card, Confirm, el, EmptyState, Form, StackTable, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 const collectionCounts = (r: CollectCounts) => `просмотрено ${r.seen}, новых ${r.added}, в очередь ${r.queued}, отсеяно ${r.skipped}`;
 

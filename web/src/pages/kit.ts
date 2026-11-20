@@ -9,7 +9,7 @@ import {
   Menu, Note, PageHead, Pill, Pre, Quote, RankList, Result, Secret, Segmented, Sheet, SheetLinks, Skeleton, StackTable, Stat, Stats, Tabs, Toast,
   FilterList, PickRow, SelectionBar, type PickElement, Alert, CommandPalette, SearchButton,
   type Child, type MenuElement, type PaletteElement, type SelectionBarElement, type SheetElement,
-} from "../ui/ui";
+} from "@hh-autoapplier/ui";
 import { AGGREGATORS } from "./dashboard";
 import { PERIODS } from "./dashboard-data";
 
@@ -182,5 +182,5 @@ export async function kit(route: Route): Promise<Child> {
     Segmented<typeof kitState.themes>([{ value: "one", label: "одна" }, { value: "both", label: "обе рядом" }], kitState.themes, (v) => { kitState.themes = v; draw(); }, { label: "Темы" }),
     Segmented<typeof kitState.width>([{ value: "auto", label: "окно" }, { value: 375, label: "375" }, { value: 720, label: "720" }], kitState.width, (v) => { kitState.width = v; draw(); }, { label: "Ширина" }));
   draw();
-  return [PageHead("UI kit", "Компоненты web/src/ui/ui.ts во всех состояниях · данные выдуманные · только для администратора", aside), body];
+  return [PageHead("UI kit", "Компоненты packages/ui/src/ui.ts во всех состояниях · данные выдуманные · только для администратора", aside), body];
 }

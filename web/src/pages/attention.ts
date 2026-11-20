@@ -1,7 +1,7 @@
 // «Требует внимания» (#128): что ждёт решения — на дашборде; раньше — «Что дальше» в «Обзоре»
 import type { Stats, Telegram } from "../api/types";
 import { path } from "../router";
-import { Card, el, EmptyState, type Child } from "../ui/ui";
+import { Card, el, EmptyState, type Child } from "@hh-autoapplier/ui";
 
 export interface AttentionItem {
   text: string;

@@ -2,9 +2,9 @@
 // «Одобрить» — в очередь с письмом и ответами из полей, «Отклонить» — пропуск с причиной
 import { api, post, Unauthorized } from "../api/http";
 import type { Question, Vacancy } from "../api/types";
-import { options, salary } from "../format";
+import { options, responsesPill, salary } from "../format";
 import { act, app, readOnly, scoped, setStatus } from "../state";
-import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, KeyHints, Meta, PageHead, Pre, Result, type Child } from "../ui/ui";
+import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, KeyHints, Meta, PageHead, Pre, Result, safeUrl, type Child } from "@hh-autoapplier/ui";
 import { bindReviewKeys, REVIEW_KEY_HINTS } from "./review-keys";
 import { letterRequestLine, letterRequestsBlock, vacancyPath } from "./vacancies";
 
@@ -111,7 +111,8 @@ function reviewCard(v: Vacancy): HTMLElement {
   approve.dataset.key = "approve";
   decline.dataset.key = "decline";
   // tabIndex -1 — карточку можно сделать текущей клавишами J/K и кликом
-  const node = Card({ as: "article", title: v.title, href: v.url, tabIndex: -1,
+  const node = Card({ as: "article", tabIndex: -1,
+    head: el("h2", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title }), responsesPill(v) ? [" ", responsesPill(v)] : null),
     meta: [v.company, v.area, salary(v) ?? "зарплата не указана", v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.hasTest && "есть тест"],
     actions: readOnly() ? null : [approve, reason, decline, result] },
   Callout(v.statusReason ?? v.llmReason ?? "LLM сомневается"),

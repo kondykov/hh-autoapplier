@@ -3,10 +3,10 @@
 import { api, post } from "../api/http";
 import type { LetterRequest, LlmConnection, LlmProviders, Search, Vacancy } from "../api/types";
 import { connectionState } from "./llm";
-import { date, salary, sourcePill, STATUSES } from "../format";
+import { date, responsesPill, salary, sourcePill, STATUSES } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped } from "../state";
-import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "../ui/ui";
+import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 // Подключения LLM сервера — для «Оценить заново через» на карточках текущего списка
 let connections: LlmConnection[] = [];
@@ -149,7 +149,9 @@ function vacancyActions(v: Vacancy, pill: HTMLElement): HTMLElement | null {
     } });
     const reevaluated = (r: Vacancy) => {
       clear();
-      return finish(r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
+      // Вакансия в архиве или её страницы нет (#147): сервер не оценивал её заново
+      const gone = r.statusReason === "вакансия в архиве" || r.statusReason === "вакансия недоступна";
+      return finish(r.status === "Skipped" ? `${gone ? "не оценивалась" : "снова отсеяна"}: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
     };
     const reevaluate = v.dismissed ? Button("Оценить заново", {
       onClick: () => act(() => post<Vacancy>(vacancyPath(v, "reevaluate")), reevaluated) }) : null;
@@ -194,7 +196,7 @@ function vacancyCard(v: Vacancy): HTMLElement {
   const pill = Pill(STATUSES[v.status] ?? v.status);
   return Card({ as: "article",
     head: el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title, title: "Открыть вакансию" }), " ", pill, " ", sourcePill(v),
-      v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
+      responsesPill(v) ? [" ", responsesPill(v)] : null, v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
     meta: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`] },
   // Вакансия общая: даты — когда её нашли впервые и когда она встретилась в сборе или импорте последний раз (#70)
   Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`]),

@@ -1,7 +1,7 @@
 // Ревизия разделов (#128): «Требует внимания» на дашборде и меню аккаунта (Menu из kit)
 import { describe, expect, it } from "vitest";
 import { attentionItems } from "../src/pages/attention";
-import { Menu } from "../src/ui/ui";
+import { Menu } from "@hh-autoapplier/ui";
 
 describe("attentionItems", () => {
   const telegram = { configured: true, linked: false } as Parameters<typeof attentionItems>[1];

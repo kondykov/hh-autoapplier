@@ -1,5 +1,5 @@
-// Ответы API, которые читает веб (#130). У расширения свой клиент (src/api) с типами только своих запросов:
-// общий пакет типов — при реорганизации репозитория (#131). Поля — как в JSON контроллеров backend (camelCase, enum строкой)
+// Ответы API, которые читает веб (#130). У расширения свой клиент (extensions/hh/src/api) с типами только своих запросов:
+// общих типов с вебом у него почти нет, поэтому пакета packages/api при #131 не заводили. Поля — как в JSON контроллеров backend (camelCase, enum строкой)
 
 export type VacancyStatus = "New" | "Pending" | "Review" | "Questionnaire" | "Queued" | "Applied" | "Invited" | "Interview" | "Rejected" | "Skipped" | "Failed";
 
@@ -47,6 +47,9 @@ export interface Vacancy {
   status: VacancyStatus | string;
   statusReason?: string | null;
   appliedAt?: string | null;
+  // Число откликов на вакансию при сборе и перед своим откликом (#148); null — нет данных
+  responsesAtCollect?: number | null;
+  responsesAtApply?: number | null;
   collectedAt?: string | null;
   lastSeenAt?: string | null;
   updatedAt?: string | null;
@@ -226,6 +229,9 @@ export interface LlmRejects {
 export interface BulkResult {
   done: string[];
   failed: { id: string; error: string }[];
+  // Переоценка (#147): не переоценены — вакансия в архиве или её страницы на hh.ru нет; старый backend полей не отдаёт
+  archived?: string[];
+  unavailable?: string[];
 }
 
 // GET /api/llm/calls (#127): count > 1 — свёрнутые повторы одной ошибки подряд (since — первый из них)
@@ -340,6 +346,15 @@ export interface DashboardSearch {
   interviews: number;
 }
 
+// sent = invited + rejected + silent
+export interface CompetitionRow {
+  bucket: string;
+  sent: number;
+  invited: number;
+  rejected: number;
+  silent: number;
+}
+
 export interface Dashboard {
   period: number;
   source: string;
@@ -357,6 +372,8 @@ export interface Dashboard {
   llm: { requests: number; errors: number; limit: number };
   // syncedAt — когда пришло последнее новое сообщение работодателя (время синхронизации сервер не хранит)
   chats: { syncedAt: string | null; messages: number };
+  // Исходы отправленных за период по числу откликов на вакансию (#148); последняя строка — «нет данных»
+  competition?: { atCollect: CompetitionRow[]; atApply: CompetitionRow[]; growth: CompetitionRow[] };
 }
 
 // GET /api/dashboard/system — только администратору

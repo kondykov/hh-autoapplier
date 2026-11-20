@@ -70,6 +70,9 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<int?>("ResponsesAtApply")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ResumeProfile")
                         .HasColumnType("text");
 
@@ -654,6 +657,12 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ResponsesAtCollect")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ResponsesAtCollectAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SalaryCurrency")

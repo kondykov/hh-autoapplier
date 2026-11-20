@@ -1,4 +1,4 @@
-// Транспорт веба (#130): fetch с того же адреса, вход — cookie. Расширение ходит через service worker (src/api/transport.ts),
+// Транспорт веба (#130): fetch с того же адреса, вход — cookie. Расширение ходит через service worker (extensions/hh/src/api/transport.ts),
 // здесь это не нужно: страница и API — один источник, CORS нет
 
 export class Unauthorized extends Error {}

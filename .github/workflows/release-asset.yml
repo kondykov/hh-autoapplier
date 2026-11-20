@@ -40,7 +40,8 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
-      # Без letter.local.txt — письмо по умолчанию: личное письмо в публичный релиз не попадает
+      # Без letter.local.txt — письмо по умолчанию: личное письмо в публичный релиз не попадает.
+      # Сборка расширения — extensions/hh/dist (#131); npm run build в корне собирает расширение
       - run: npm run build
 
       - name: Упаковать и приложить
@@ -48,5 +49,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           name="hh-autoapplier-${TAG#ext-v}.zip"
-          (cd dist && zip -qr "../$name" . -x '*.map')
+          # Теги до #131 (ручной запуск для старого релиза) собирают расширение в dist/ корня
+          dir=extensions/hh/dist; [[ -d "$dir" ]] || dir=dist
+          (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/$name" . -x '*.map')
           gh release upload "$TAG" "$name" --clobber

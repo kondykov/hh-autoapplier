@@ -5,7 +5,7 @@ import type { LlmCall, LlmCallEntry, LlmCalls, LlmLetter } from "../api/types";
 import { date } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped, session } from "../state";
-import { Badge, Button, Caption, Card, Chips, el, EmptyState, Meta, Note, Pill, Pre, Quote, StackTable, Stat, Stats, Toolbar, type Child, type Tone } from "../ui/ui";
+import { Badge, Button, Caption, Card, Chips, el, EmptyState, Meta, Note, Pill, Pre, Quote, StackTable, Stat, Stats, Toolbar, type Child, type Tone } from "@hh-autoapplier/ui";
 
 const PAGE = 100;
 

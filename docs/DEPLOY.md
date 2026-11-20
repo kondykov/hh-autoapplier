@@ -2,7 +2,7 @@
 
 Деплой запускается только вручную: Actions → **Deploy** → **Run workflow**. Автоматического выката после push нет. На сервере работает self-hosted GitHub runner: он сам подключается к GitHub, входящие порты не нужны.
 
-Workflow — [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), логика — [`deploy/deploy.sh`](../deploy/deploy.sh).
+Workflow — [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), логика — [`server/deploy/deploy.sh`](../server/deploy/deploy.sh).
 
 ## Как запустить
 
@@ -48,11 +48,11 @@ docker compose start api
 
 С российского IP Groq и Telegram напрямую не работают, hh.ru работает. VPN — окружение машины (#84): на home-server это Happ, его HTTP-прокси слушает только `127.0.0.1:10809`, и контейнеру он не виден. Relay `hh-proxy-relay` принимает соединения на `172.17.0.1:10810` (адрес хоста в docker0) и передаёт их в Happ. API получает `HTTPS_PROXY` из `server/.env`, hh.ru идёт напрямую через `NO_PROXY`. Ежедневный бэкап базы — `hh-backup.timer`, хранится 7 дней.
 
-Файлы — в [`deploy/`](../deploy/), ставит их [`install-host-units.sh`](../deploy/install-host-units.sh). `РЕВИЗИЯ` — ветка или тег с этими файлами:
+Файлы — в [`server/deploy/`](../server/deploy/), ставит их [`install-host-units.sh`](../server/deploy/install-host-units.sh). `РЕВИЗИЯ` — ветка или тег с этими файлами:
 
 ```bash
 git -C /opt/hh-autoapplier fetch origin РЕВИЗИЯ
-mkdir /root/hh-units && git -C /opt/hh-autoapplier archive FETCH_HEAD deploy | tar -x -C /root/hh-units
+mkdir /root/hh-units && git -C /opt/hh-autoapplier archive FETCH_HEAD server/deploy | tar -x --strip-components=1 -C /root/hh-units
 bash /root/hh-units/deploy/install-host-units.sh
 rm -rf /root/hh-units
 ```
@@ -87,13 +87,13 @@ Relay зависит от Happ: после перезагрузки Happ сам 
 
 ### Runner (сервер, root)
 
-Скрипт [`deploy/install-runner.sh`](../deploy/install-runner.sh) скачивает runner в `/opt/actions-runner`, сверяет SHA256, ставит unit и хук. Версия и хеш записаны в скрипте (значения — со [страницы релиза actions/runner](https://github.com/actions/runner/releases)). Дальше runner обновляется сам.
+Скрипт [`server/deploy/install-runner.sh`](../server/deploy/install-runner.sh) скачивает runner в `/opt/actions-runner`, сверяет SHA256, ставит unit и хук. Версия и хеш записаны в скрипте (значения — со [страницы релиза actions/runner](https://github.com/actions/runner/releases)). Дальше runner обновляется сам.
 
-Рабочая копия приложения не трогается, скрипт берётся из коммита во временный каталог. `РЕВИЗИЯ` — ветка с `deploy/`, после слияния `master`:
+Рабочая копия приложения не трогается, скрипт берётся из коммита во временный каталог. `РЕВИЗИЯ` — ветка с `server/deploy/`, после слияния `master`:
 
 ```bash
 git -C /opt/hh-autoapplier fetch origin РЕВИЗИЯ
-mkdir /root/hh-deploy && git -C /opt/hh-autoapplier archive FETCH_HEAD deploy | tar -x -C /root/hh-deploy
+mkdir /root/hh-deploy && git -C /opt/hh-autoapplier archive FETCH_HEAD server/deploy | tar -x --strip-components=1 -C /root/hh-deploy
 bash /root/hh-deploy/deploy/install-runner.sh
 rm -rf /root/hh-deploy
 ```
