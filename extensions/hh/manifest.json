@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "HH AutoApplier",
   "version": "0.8.1",
-  "version_name": "0.8.1-rc.1",
   "description": "Полуавтоматические отклики на hh.ru",
   "permissions": [
     "storage",
