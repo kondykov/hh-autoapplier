@@ -231,6 +231,45 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(1, (await Json(await _api.PostAsync("/api/collect", null))).GetProperty("added").GetInt32());
     }
 
+    // Число откликов (#148): при сборе — со страницы вакансии, потом не переписывается; при отклике — из отчёта расширения
+    [Fact]
+    public async Task Collect_SavesResponses_AndApplyReportSavesOwn()
+    {
+        await SaveSearch();
+        factory.Source.Add("10", "C# разработчик", "ASP.NET Core");
+        factory.Source.SearchResponses["10"] = 40;
+        factory.Source.PageResponses["10"] = 55;
+        await Json(await _api.PostAsync("/api/collect", null));
+
+        // Повторный сбор встречает известную вакансию: число на момент первого сбора остаётся
+        factory.Source.SearchResponses["10"] = 300;
+        factory.Source.PageResponses["10"] = 310;
+        await Json(await _api.PostAsync("/api/collect", null));
+
+        var applied = await Json(await _api.PostAsJsonAsync("/api/vacancies/10/status", new { status = "Applied", responses = 120 }));
+        Assert.Equal(55, applied.GetProperty("responsesAtCollect").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, applied.GetProperty("responsesAtCollectAt").ValueKind);
+        Assert.Equal(120, applied.GetProperty("responsesAtApply").GetInt32());
+
+        var lines = Encoding.UTF8.GetString((await (await _api.GetAsync("/api/report?format=csv")).Content.ReadAsByteArrayAsync())[3..]).Split("\r\n");
+        Assert.EndsWith(";55;120", lines[1]);
+    }
+
+    // Прежний клиент не шлёт число, отрицательное — тоже «нет данных»
+    [Fact]
+    public async Task ApplyReport_WithoutResponses_LeavesNoData()
+    {
+        await SaveSearch();
+        await Json(await Import("dotnet", Card("1", "C# разработчик"), Card("2", "C# разработчик")));
+
+        var applied = await Json(await SetStatus("1", "Applied"));
+        Assert.Equal(JsonValueKind.Null, applied.GetProperty("responsesAtApply").ValueKind);
+        Assert.Equal(JsonValueKind.Null, applied.GetProperty("responsesAtCollect").ValueKind);
+
+        var negative = await Json(await _api.PostAsJsonAsync("/api/vacancies/2/status", new { status = "Applied", responses = -1 }));
+        Assert.Equal(JsonValueKind.Null, negative.GetProperty("responsesAtApply").ValueKind);
+    }
+
     // Кнопка только запускает сбор, состояние читается отдельно (#74)
     [Fact]
     public async Task CollectStart_RunsInBackground_OneAtATime_AndReportsState()
@@ -614,9 +653,9 @@ public class ApiTests(ApiFactory factory) : IAsyncLifetime
         var bytes = await csv.Content.ReadAsByteArrayAsync();
         Assert.Equal(Encoding.UTF8.GetPreamble(), bytes[..3]);
         var lines = Encoding.UTF8.GetString(bytes[3..]).Split("\r\n");
-        Assert.Equal("Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус", lines[0]);
+        Assert.Equal("Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус;Откликов при сборе;Откликов при отклике", lines[0]);
         Assert.Contains("\"от 250000 RUR\"", lines[1]);
-        Assert.EndsWith(";\"отклик отправлен\"", lines[1]);
+        Assert.EndsWith(";\"отклик отправлен\";;", lines[1]);
         Assert.Equal(2, lines.Length);
     }
 

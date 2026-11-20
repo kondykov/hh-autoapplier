@@ -155,7 +155,8 @@ export class BackendClient {
       type: "hh-api",
       path: `/api/vacancies/${encodeURIComponent(id)}/status`,
       method: "POST",
-      body: { status: report.status, reason: report.reason, resume },
+      // responses — новое необязательное поле (#148): прежний сервер его не читает, контракт не меняется
+      body: { status: report.status, reason: report.reason, resume, responses: report.responses },
     });
     return res.status === 200 ? { ok: true } : { ok: false, error: describe(res) };
   }

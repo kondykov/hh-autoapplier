@@ -4,7 +4,20 @@ import { SELECTORS } from "../core/selectors";
 // письмом и кнопкой отправки, признака там нет (проверено 2026-11-10). Страница /vacancy/{id} отдаётся с кодом 200
 // и со входом, и без; признак — status.archived в JSON HH-Lux-InitialState, closedForApplicants у архивных false
 // unavailable — вакансию закрыл hh.ru: страница отдаёт 403, а главная открывается (#99)
-export type ArchiveCheck = { state: "archived" } | { state: "open" } | { state: "unavailable" } | { state: "unknown"; error: string };
+// responses — число откликов на вакансию с той же страницы (#148); нет в данных — поля нет
+export type ArchiveCheck = { state: "archived" } | { state: "open"; responses?: number } | { state: "unavailable" } | { state: "unknown"; error: string };
+
+type PageState = { vacancyView?: { vacancyFull?: { vacancy?: unknown; extraVacancyFields?: Record<string, unknown> } } };
+
+// Число откликов (#148): текстом соискателю hh.ru его не показывает, только в данных страницы — точным числом
+// (проверено 2026-11-20 без входа): vacancyFull.extraVacancyFields.vacancyResponsesCount и totalResponsesCount.
+// Поля расходятся на единицы–десятки (разные кэши hh.ru) — берётся большее, как и при сборе на сервере (HhPageParser)
+export function parseResponses(state: PageState | null | undefined): number | undefined {
+  const extra = state?.vacancyView?.vacancyFull?.extraVacancyFields;
+  const counts = [extra?.vacancyResponsesCount, extra?.totalResponsesCount]
+    .filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0);
+  return counts.length ? Math.max(...counts) : undefined;
+}
 
 export interface ArchiveChecker {
   check(id: string): Promise<ArchiveCheck>;
@@ -19,8 +32,10 @@ export function parseArchiveState(html: string, id: string): ArchiveCheck {
   if (!json) return { state: "unknown", error: "на странице нет данных" };
 
   let vacancy: { vacancyId?: unknown; status?: { archived?: unknown } } | undefined;
+  let state: PageState | undefined;
   try {
-    vacancy = JSON.parse(json)?.vacancyView?.vacancyFull?.vacancy;
+    state = JSON.parse(json) as PageState;
+    vacancy = state?.vacancyView?.vacancyFull?.vacancy as typeof vacancy;
   } catch {
     return { state: "unknown", error: "данные страницы не разобраны" };
   }
@@ -29,7 +44,10 @@ export function parseArchiveState(html: string, id: string): ArchiveCheck {
 
   const archived = vacancy.status?.archived;
   if (archived === true) return { state: "archived" };
-  if (archived === false) return { state: "open" };
+  if (archived === false) {
+    const responses = parseResponses(state);
+    return responses === undefined ? { state: "open" } : { state: "open", responses };
+  }
   return { state: "unknown", error: "нет признака архива" };
 }
 

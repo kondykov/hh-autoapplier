@@ -629,6 +629,26 @@ describe("QueueStep", () => {
       expect(ctx.pipeline.applyOnPage).toHaveBeenCalledTimes(1);
     });
 
+    // #148: число откликов с той же страницы — в отчёт об отправке, только у Applied
+    it("число откликов со страницы уходит в отчёт Applied и в журнал", async () => {
+      const { ctx, step, messages } = queueRun(["success"]);
+      ctx.archive.check.mockResolvedValue({ state: "open", responses: 176 });
+
+      await run(step.resume());
+
+      expect(ctx.backend.reportStatus).toHaveBeenCalledWith("1", { status: "Applied", reason: null, responses: 176 }, ".NET");
+      expect(messages.some((m) => m.includes("откликов на hh.ru — 176"))).toBe(true);
+    });
+
+    it("неудачный отклик — без числа откликов", async () => {
+      const { ctx, step } = queueRun(["failed"]);
+      ctx.archive.check.mockResolvedValue({ state: "open", responses: 176 });
+
+      await run(step.resume());
+
+      expect(ctx.backend.reportStatus).toHaveBeenCalledWith("1", toStatusReport("failed"), ".NET");
+    });
+
     it("очередь остановили, пока шла проверка, — статус не уходит, дальше не идёт", async () => {
       const { ctx, step, visited } = archived();
       ctx.archive.check.mockImplementation(async () => {

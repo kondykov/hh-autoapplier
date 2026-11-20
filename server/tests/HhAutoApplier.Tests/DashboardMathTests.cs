@@ -116,4 +116,68 @@ public class DashboardMathTests
     {
         Assert.Equal(key, DashboardMath.ReasonKey(reason));
     }
+
+    // Корзины числа откликов (#148): нижняя граница включительно; отрицательный прирост — в первой корзине
+    [Theory]
+    [InlineData(0, "0–10")]
+    [InlineData(9, "0–10")]
+    [InlineData(10, "10–50")]
+    [InlineData(49, "10–50")]
+    [InlineData(50, "50–200")]
+    [InlineData(199, "50–200")]
+    [InlineData(200, "200+")]
+    [InlineData(1536, "200+")]
+    [InlineData(-3, "0–10")]
+    [InlineData(null, DashboardMath.NoData)]
+    public void ResponsesBucket_Bounds(int? count, string bucket)
+    {
+        Assert.Equal(bucket, DashboardMath.ResponsesBucket(count));
+    }
+
+    private static DashboardCompetitionRowDto R(string bucket, int sent, int invited, int rejected, int silent) =>
+        new(bucket, sent, invited, rejected, silent);
+
+    private static DashboardRow Sent(double appliedAgo, int? atCollect, int? atApply, VacancyStatus? answer = null)
+    {
+        var path = new List<(double, VacancyStatus)> { (appliedAgo, VacancyStatus.Applied) };
+        if (answer is { } a)
+            path.Add((appliedAgo - 0.5, a));
+        return Row(appliedAgo + 1, path: [.. path]) with { ResponsesAtCollect = atCollect, ResponsesAtApply = atApply };
+    }
+
+    [Fact]
+    public void Competition_OutcomesByResponses_AtCollectApplyAndGrowth()
+    {
+        DashboardRow[] rows =
+        [
+            Sent(3, 5, 8, VacancyStatus.Invited),
+            Sent(4, 5, 30, VacancyStatus.Rejected),
+            Sent(5, 120, 400),
+            Sent(6, 300, 290, VacancyStatus.Interview),
+            // До #148: чисел нет
+            Sent(7, null, null, VacancyStatus.Rejected),
+            // Только при сборе: расширение ещё старое
+            Sent(8, 60, null),
+            // Отправлена в прошлом периоде — не считается
+            Sent(40, 5, 8, VacancyStatus.Invited),
+            // Не отправлена — не считается
+            Row(2, path: [(2, VacancyStatus.Queued)]) with { ResponsesAtCollect = 5 },
+        ];
+
+        var c = DashboardMath.Build(rows, 30, "hh", Now, Llm, Chats).Competition;
+
+        Assert.Equal<DashboardCompetitionRowDto>([
+            R("0–10", 2, 1, 1, 0), R("10–50", 0, 0, 0, 0), R("50–200", 2, 0, 0, 2), R("200+", 1, 1, 0, 0),
+            R(DashboardMath.NoData, 1, 0, 1, 0),
+        ], c.AtCollect);
+        Assert.Equal<DashboardCompetitionRowDto>([
+            R("0–10", 1, 1, 0, 0), R("10–50", 1, 0, 1, 0), R("50–200", 0, 0, 0, 0), R("200+", 2, 1, 0, 1),
+            R(DashboardMath.NoData, 2, 0, 1, 1),
+        ], c.AtApply);
+        // Прирост: +3 и −10 → 0–10, +25 → 10–50, +280 → 200+; без одного из чисел — нет данных
+        Assert.Equal<DashboardCompetitionRowDto>([
+            R("0–10", 2, 2, 0, 0), R("10–50", 1, 0, 1, 0), R("50–200", 0, 0, 0, 0), R("200+", 1, 0, 0, 1),
+            R(DashboardMath.NoData, 2, 0, 1, 1),
+        ], c.Growth);
+    }
 }

@@ -2,7 +2,9 @@
 // JSON лежит HTML-экранированным в <template id="HH-Lux-InitialState">; status и closedForApplicants — как на живой странице, остальное сокращено
 const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function vacancyPageHtml(id: string, archived: boolean | undefined, extra: Record<string, unknown> = {}): string {
+// extraVacancyFields — число откликов (#148), как на живой 139181359 (2026-11-20, без входа): два поля расходятся, берётся большее
+export function vacancyPageHtml(id: string, archived: boolean | undefined, extra: Record<string, unknown> = {},
+  extraVacancyFields?: Record<string, unknown>): string {
   const status = archived === undefined ? undefined : {
     archived, disabled: false, hiddenInArchive: false, premoderationStatus: "APPROVED", approved: true, moderatePriorityScore: 0,
   };
@@ -13,6 +15,7 @@ export function vacancyPageHtml(id: string, archived: boolean | undefined, extra
           vacancyId: Number(id), name: "Senior .NET-разработчик", description: "<p>ASP.NET Core &amp; PostgreSQL</p>",
           ...(status ? { status } : {}), closedForApplicants: false, ...extra,
         },
+        ...(extraVacancyFields ? { extraVacancyFields } : {}),
       },
     },
   };
