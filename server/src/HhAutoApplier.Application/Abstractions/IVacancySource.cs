@@ -30,4 +30,10 @@ public enum VacancyPageState
 }
 
 // Источник перестал отдавать данные: капча, 403/429 или неожиданная страница. Сбор останавливается до следующего запуска
-public class SourceBlockedException(string source, string reason) : Exception($"{source}: сбор остановлен — {reason}. Повтор при следующем запуске");
+public class SourceBlockedException(string source, string reason) : Exception($"{source}: сбор остановлен — {reason}. Повтор при следующем запуске")
+{
+    // Для сообщений вне сбора (переоценка, #147): там «сбор остановлен» неверно
+    public string SourceName { get; } = source;
+
+    public string Reason { get; } = reason;
+}

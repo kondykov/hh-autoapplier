@@ -226,6 +226,9 @@ export interface LlmRejects {
 export interface BulkResult {
   done: string[];
   failed: { id: string; error: string }[];
+  // Переоценка (#147): не переоценены — вакансия в архиве или её страницы на hh.ru нет; старый backend полей не отдаёт
+  archived?: string[];
+  unavailable?: string[];
 }
 
 // GET /api/llm/calls (#127): count > 1 — свёрнутые повторы одной ошибки подряд (since — первый из них)

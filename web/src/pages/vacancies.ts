@@ -149,7 +149,9 @@ function vacancyActions(v: Vacancy, pill: HTMLElement): HTMLElement | null {
     } });
     const reevaluated = (r: Vacancy) => {
       clear();
-      return finish(r.status === "Skipped" ? `снова отсеяна: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
+      // Вакансия в архиве или её страницы нет (#147): сервер не оценивал её заново
+      const gone = r.statusReason === "вакансия в архиве" || r.statusReason === "вакансия недоступна";
+      return finish(r.status === "Skipped" ? `${gone ? "не оценивалась" : "снова отсеяна"}: ${r.statusReason ?? ""}` : STATUSES[r.status], r.status);
     };
     const reevaluate = v.dismissed ? Button("Оценить заново", {
       onClick: () => act(() => post<Vacancy>(vacancyPath(v, "reevaluate")), reevaluated) }) : null;

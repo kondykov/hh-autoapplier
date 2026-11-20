@@ -18,6 +18,7 @@ public class ReevaluateVacancyCommandHandler(
     ILlmClient llm,
     ILlmConnections connections,
     EvaluatePendingVacanciesCommandHandler evaluate,
+    VacancyArchiveCheck archive,
     TimeProvider clock,
     ICurrentUser current
 ) : ICommandHandler<ReevaluateVacancyCommand, ReevaluateVacancyResult>
@@ -36,6 +37,22 @@ public class ReevaluateVacancyCommandHandler(
         // В том числе для импортной карточки: без LLM после подтверждения она ушла бы в очередь мимо оценки
         if (!llm.IsConfigured)
             return new LlmUnavailableError("LLM не настроена: оценить заново нельзя, задайте LLM_API_KEY");
+
+        // До запроса к hh.ru: неотсеянный отклик всё равно не переоценить
+        if (!application.Dismissed)
+            return new ConflictError($"Из статуса {application.Status} оценить заново нельзя");
+
+        // Вакансия могла уйти в архив, пока отклик лежал в отсеве (#147): такую не оцениваем — ни правилами, ни LLM
+        var (state, error) = await archive.CheckAsync(application.Vacancy, ct);
+        if (error is not null)
+            return error;
+
+        if (state is VacancyPageState.Archived or VacancyPageState.Unavailable)
+        {
+            application.KeepDismissedVacancyGone(state == VacancyPageState.Archived, clock.GetUtcNow());
+            await db.SaveChangesAsync(ct);
+            return extractor.Extract(application);
+        }
 
         var resumes = await db.Resumes.AsNoTracking().Where(r => r.UserId == current.Id).ToListAsync(ct);
         try

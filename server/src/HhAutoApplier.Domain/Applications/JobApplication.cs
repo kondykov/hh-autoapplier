@@ -115,6 +115,16 @@ public class JobApplication
     // Страницы вакансии больше нет: шире MarkVacancyUnavailable, закрывает и уже оценённые отклики (#70)
     public void CloseVacancyUnavailable(DateTimeOffset at) => CloseWaiting(VacancyUnavailable, at);
 
+    // Переоценка не состоялась: вакансия в архиве или её страницы нет (#147). Отклик остаётся отсеянным,
+    // причина — по вакансии, а не прежняя (LLM или правила): оценивать его больше незачем
+    public void KeepDismissedVacancyGone(bool archived, DateTimeOffset at)
+    {
+        if (!Dismissed)
+            throw new DomainException($"Из статуса {Status} оценить заново нельзя");
+
+        MoveTo(VacancyStatus.Skipped, archived ? VacancyArchived : VacancyUnavailable, at);
+    }
+
     // Только незавершённые: отправленные остаются как есть, а Skipped и Failed уже решены
     private void CloseWaiting(string reason, DateTimeOffset at)
     {

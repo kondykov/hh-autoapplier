@@ -14,6 +14,7 @@ public record ReevaluateVacancyCommand
     public string? Provider { get; init; }
 }
 
-// На .NET 11: public union ReevaluateVacancyResult(VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError);
+// Вакансия в архиве или недоступна (#147) — VacancyDto отклика в Skipped с причиной по вакансии; hh.ru не ответил — SourceUnavailableError
+// На .NET 11: public union ReevaluateVacancyResult(VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError, SourceUnavailableError);
 [GenerateOneOf]
-public partial class ReevaluateVacancyResult : OneOfBase<VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError>;
+public partial class ReevaluateVacancyResult : OneOfBase<VacancyDto, ValidationError, NotFoundError, ConflictError, LlmUnavailableError, SourceUnavailableError>;

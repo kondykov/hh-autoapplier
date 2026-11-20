@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
+using HhAutoApplier.Domain.Applications;
 using HhAutoApplier.Domain.Vacancies;
 
 namespace HhAutoApplier.Application.Commands.Vacancies;
@@ -45,8 +46,25 @@ public class BulkVacanciesCommandHandler(
     {
         var done = new List<string>();
         var failed = new List<BulkFailureDto>();
+        var archived = new List<string>();
+        var unavailable = new List<string>();
         foreach (var id in command.Ids.Distinct())
         {
+            if (command.Action == BulkVacancyAction.Reevaluate)
+            {
+                // Вакансию в архиве не переоцениваем (#147): отклик остаётся в отсеве с причиной по вакансии
+                var result = (await reevaluate.Handle(new ReevaluateVacancyCommand { VacancyId = id, Provider = command.Provider }, ct)).Value;
+                if (result is Errors.Error e)
+                    failed.Add(new BulkFailureDto(id, e.Message));
+                else if (result is VacancyDto { Status: VacancyStatus.Skipped, StatusReason: JobApplication.VacancyArchived })
+                    archived.Add(id);
+                else if (result is VacancyDto { Status: VacancyStatus.Skipped, StatusReason: JobApplication.VacancyUnavailable })
+                    unavailable.Add(id);
+                else
+                    done.Add(id);
+                continue;
+            }
+
             var error = await Run(command, id, ct);
             if (error is null)
                 done.Add(id);
@@ -54,7 +72,7 @@ public class BulkVacanciesCommandHandler(
                 failed.Add(new BulkFailureDto(id, error));
         }
 
-        return new BulkVacanciesResultDto(done, failed);
+        return new BulkVacanciesResultDto(done, failed) { Archived = archived, Unavailable = unavailable };
     }
 
     private async Task<string?> Run(BulkVacanciesCommand command, string id, CancellationToken ct)
@@ -68,9 +86,6 @@ public class BulkVacanciesCommandHandler(
                 var reason = application?.LlmRejectReason ?? "пропущено вручную";
                 return (await status.Handle(new SetVacancyStatusCommand { VacancyId = id, Status = VacancyStatus.Skipped, Reason = reason }, ct))
                     .Match(_ => (string?)null, e => e.Message, e => e.Message);
-            case BulkVacancyAction.Reevaluate:
-                return (await reevaluate.Handle(new ReevaluateVacancyCommand { VacancyId = id, Provider = command.Provider }, ct))
-                    .Match(_ => (string?)null, e => e.Message, e => e.Message, e => e.Message, e => e.Message);
             case BulkVacancyAction.Hide:
             case BulkVacancyAction.Unhide:
                 return (await hidden.Handle(new SetVacancyHiddenCommand { VacancyId = id, Hidden = command.Action == BulkVacancyAction.Hide }, ct))
