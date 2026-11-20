@@ -110,7 +110,7 @@ chown -R root:root /opt/actions-runner/hooks
 
 ```bash
 cd /opt/actions-runner
-runuser -u deploy -- ./config.sh --url https://github.com/kondykov/hh-autoapplier-extension --token ТОКЕН --name home-server --labels home-server --work _work --unattended
+runuser -u deploy -- ./config.sh --url https://github.com/kondykov/hh-autoapplier --token ТОКЕН --name home-server --labels home-server --work _work --unattended
 chmod 600 /opt/actions-runner/.credentials /opt/actions-runner/.credentials_rsaparams   # config.sh создаёт их читаемыми всеми
 systemctl enable --now actions-runner.service
 systemctl status actions-runner --no-pager

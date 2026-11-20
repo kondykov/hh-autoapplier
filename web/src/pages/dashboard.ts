@@ -77,7 +77,7 @@ export async function dashboard(): Promise<HTMLElement> {
         ]),
         el("div", { className: "cols" },
           Card({}, Caption(`Воронка за ${d.period} дней · ${sourceName}`),
-            Funnel(funnelRows(d), { max: d.funnel[0]?.count, note: "% — от предыдущего шага; отказ — от отправленных" })),
+            Funnel(funnelRows(d), { max: d.funnel[0]?.count, note: "% — от предыдущего шага; приглашение, собеседование и отказ — от отправленных" })),
           Card({}, Caption(bars.week ? "Отклики по неделям" : "Отклики по дням"),
             Bars(bars.items, {
               from: bars.from, to: "сегодня",

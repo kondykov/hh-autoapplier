@@ -61,7 +61,7 @@ public class DashboardMathTests
         Assert.Equal([("collected", 6), ("llm", 3), ("queued", 3), ("sent", 3), ("invited", 2), ("interview", 2), ("rejected", 1)],
             d.Funnel.Select(s => (s.Key, s.Count)));
         Assert.Equal("sent", d.Funnel.Single(s => s.Key == "rejected").Base);
-        Assert.Equal("invited", d.Funnel.Single(s => s.Key == "interview").Base);
+        Assert.Equal("sent", d.Funnel.Single(s => s.Key == "interview").Base);
     }
 
     [Fact]

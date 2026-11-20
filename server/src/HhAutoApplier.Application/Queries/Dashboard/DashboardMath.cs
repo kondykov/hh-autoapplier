@@ -69,7 +69,7 @@ public static partial class DashboardMath
             new("queued", "В очередь", Step(r => Reached(r, VacancyStatus.Queued) is not null || sent(r) is not null), "llm"),
             new("sent", "Отправлено", Step(r => sent(r) is not null), "queued"),
             new("invited", "Приглашение", Step(r => Invited(r) is not null), "sent"),
-            new("interview", "Собеседование", Step(r => interview(r) is not null), "invited"),
+            new("interview", "Собеседование", Step(r => interview(r) is not null), "sent"),
             new("rejected", "Отказ", Step(r => rejected(r) is not null), "sent"),
         ];
 
