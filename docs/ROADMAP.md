@@ -119,7 +119,7 @@ flowchart LR
 Telegram-бот на backend (#28, первая итерация): чат привязывается одноразовым кодом после входа по паролю; уведомления — отклик на проверке (кнопки «Одобрить» / «Отклонить»), капча и дневной лимит в расширении, анкета без ответа LLM, администратору — сбои сбора и LLM; команды `/status`, `/review`, `/stop`. Ответы работодателей — после разбора диалогов #26. Подробно — `BACKEND.md`, «Telegram».
 
 ### G. Ведение задач
-- Задачи — GitHub Issues в [kondykov/hh-autoapplier-extension](https://github.com/kondykov/hh-autoapplier-extension/issues) (позже переименуется в `hh-autoapplier`); статус, сроки и шкала — в [GitHub Project «hh-autoapplier»](https://github.com/users/kondykov/projects/5) (поля «Приоритет», «Начало», «Срок»); этот файл — схема, решения и порядок.
+- Задачи — GitHub Issues в [kondykov/hh-autoapplier](https://github.com/kondykov/hh-autoapplier/issues) (позже переименуется в `hh-autoapplier`); статус, сроки и шкала — в [GitHub Project «hh-autoapplier»](https://github.com/users/kondykov/projects/5) (поля «Приоритет», «Начало», «Срок»); этот файл — схема, решения и порядок.
 - Метки: направление (`backend`, `extension`, `llm`, `rbac`, `infra`, `docs`), тип (`feature`, `chore`, `question`), приоритет (`p1`–`p3`); этапы — milestones.
 - В коммите `refs #N`, в PR `closes #N`. Создавать и закрывать issues — по просьбе владельца.
 
@@ -136,13 +136,13 @@ Telegram-бот на backend (#28, первая итерация): чат при
 
 ## Порядок
 
-Этапы — milestones в GitHub, задачи — issues в [kondykov/hh-autoapplier-extension](https://github.com/kondykov/hh-autoapplier-extension/issues), шкала и статусы — [Project](https://github.com/users/kondykov/projects/5). Сроков у этапов нет: работа идёт по спринтам до их завершения.
+Этапы — milestones в GitHub, задачи — issues в [kondykov/hh-autoapplier](https://github.com/kondykov/hh-autoapplier/issues), шкала и статусы — [Project](https://github.com/users/kondykov/projects/5). Сроков у этапов нет: работа идёт по спринтам до их завершения.
 
-1. **Основа** ([milestone](https://github.com/kondykov/hh-autoapplier-extension/milestone/1), готово). CI #1, живая проверка выбора резюме и автопаузы #2, ADR #3, решения владельца #4.
-2. **Связка расширения и backend** ([milestone](https://github.com/kondykov/hh-autoapplier-extension/milestone/2), локально). Сборщик с источниками-плагинами и источник hh.ru #31 (готово), настройки сервера #13 (готово), режим «из очереди» #15, тесты конвейера отклика #17, `PageStep` #18 (готово), модули backend и логика вне `Program.cs` #11, интеграционные тесты API #12, CORS #20, разброс задержек #19.
-3. **LLM** ([milestone](https://github.com/kondykov/hh-autoapplier-extension/milestone/3)). `ILlmClient` #21 (готово), оценка #22 (готово), письма #23 (готово), ответы на анкеты #24 (готово), ручная проверка #25 (готово), удаление локальных правил из расширения #27; затем сбор переписки и разбор диалогов #26.
-4. **Пользователи и сервер дома** ([milestone](https://github.com/kondykov/hh-autoapplier-extension/milestone/4)). Identity и роли #7 (готово), отклик пользователя `JobApplication` #8 (готово), владельцы данных #9 (готово), персональные токены #10 (готово), развёртывание #5, VPN, firewall и TLS #6.
-5. **Уведомления** ([milestone](https://github.com/kondykov/hh-autoapplier-extension/milestone/5)). Telegram #28 (первая итерация готова, ждёт проверки кнопок); сообщение работодателю после решения — #43 (подзадача #26).
+1. **Основа** ([milestone](https://github.com/kondykov/hh-autoapplier/milestone/1), готово). CI #1, живая проверка выбора резюме и автопаузы #2, ADR #3, решения владельца #4.
+2. **Связка расширения и backend** ([milestone](https://github.com/kondykov/hh-autoapplier/milestone/2), локально). Сборщик с источниками-плагинами и источник hh.ru #31 (готово), настройки сервера #13 (готово), режим «из очереди» #15, тесты конвейера отклика #17, `PageStep` #18 (готово), модули backend и логика вне `Program.cs` #11, интеграционные тесты API #12, CORS #20, разброс задержек #19.
+3. **LLM** ([milestone](https://github.com/kondykov/hh-autoapplier/milestone/3)). `ILlmClient` #21 (готово), оценка #22 (готово), письма #23 (готово), ответы на анкеты #24 (готово), ручная проверка #25 (готово), удаление локальных правил из расширения #27; затем сбор переписки и разбор диалогов #26.
+4. **Пользователи и сервер дома** ([milestone](https://github.com/kondykov/hh-autoapplier/milestone/4)). Identity и роли #7 (готово), отклик пользователя `JobApplication` #8 (готово), владельцы данных #9 (готово), персональные токены #10 (готово), развёртывание #5, VPN, firewall и TLS #6.
+5. **Уведомления** ([milestone](https://github.com/kondykov/hh-autoapplier/milestone/5)). Telegram #28 (первая итерация готова, ждёт проверки кнопок); сообщение работодателю после решения — #43 (подзадача #26).
 
 ### Спринты
 
