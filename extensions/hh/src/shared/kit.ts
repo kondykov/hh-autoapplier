@@ -1,9 +1,9 @@
-import icons from "../../web/src/ui/icons.svg";
-import tokens from "../../web/src/ui/tokens.css";
-import ui from "../../web/src/ui/ui.css";
-import { injectIcons, injectStyles } from "../../web/src/ui/ui";
+import icons from "@hh-autoapplier/ui/icons.svg";
+import tokens from "@hh-autoapplier/ui/tokens.css";
+import ui from "@hh-autoapplier/ui/ui.css";
+import { injectIcons, injectStyles } from "@hh-autoapplier/ui";
 
-// UI kit в расширении (#129, #123): токены, стили и иконки — те же файлы web/src/ui, что и в вебе, без копий.
+// UI kit в расширении (#129, #123): токены, стили и иконки — те же файлы packages/ui, что и в вебе, без копий.
 // Сборка (scripts/build.mjs) отдаёт их текстом; тема — по системе, как в вебе (data-theme на хосте или <html> — вручную).
 // root — shadow root панели на странице сайта или document страницы расширения; extra — свои стили поверх kit
 

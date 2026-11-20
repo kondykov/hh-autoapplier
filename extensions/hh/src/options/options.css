@@ -1,5 +1,5 @@
 /* Страница настроек расширения (#101, #123): только раскладка страницы. Палитра, шрифты, поля, кнопки, карточка и тема
-   (по системе) — UI kit (#129, web/src/ui), их вставляет options.js; своих цветов здесь нет */
+   (по системе) — UI kit (#129, packages/ui), их вставляет options.js; своих цветов здесь нет */
 
 main.card { max-width: 760px; margin: 32px auto; padding: 0; background: color-mix(in srgb, var(--card) 94%, transparent); }
 header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }

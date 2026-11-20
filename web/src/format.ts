@@ -1,5 +1,5 @@
 // Подписи и форматы, общие для разделов
-import { el, Pill } from "./ui/ui";
+import { el, Pill } from "@hh-autoapplier/ui";
 import type { Vacancy } from "./api/types";
 
 export const STATUSES: Record<string, string> = {

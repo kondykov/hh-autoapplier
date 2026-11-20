@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from "vitest";
-import source from "../server/src/HhAutoApplier.Application/ApiContract.cs?raw";
+import source from "../../../server/src/HhAutoApplier.Application/ApiContract.cs?raw";
 import { BackendClient, type ApiSender } from "../src/api/client";
 import type { ApiResponse } from "../src/api/transport";
 import { API_VERSION } from "../src/api/version";

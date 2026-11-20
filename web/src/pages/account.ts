@@ -4,7 +4,7 @@ import { api, del, post } from "../api/http";
 import type { ApiToken, Telegram, TelegramLink } from "../api/types";
 import { date } from "../format";
 import { act, app, me } from "../state";
-import { Button, Card, Confirm, el, Field, Form, FormGrid, PageHead, safeUrl, Secret, StackTable, Toolbar, type Child } from "../ui/ui";
+import { Button, Card, Confirm, el, Field, Form, FormGrid, PageHead, safeUrl, Secret, StackTable, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 export async function account(): Promise<Child> {
   const user = me();

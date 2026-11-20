@@ -3,7 +3,7 @@ import { api, del, put } from "../api/http";
 import type { Search } from "../api/types";
 import { lines } from "../format";
 import { act, app, readOnly, scoped } from "../state";
-import { Button, Confirm, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "../ui/ui";
+import { Button, Confirm, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 export async function searches(): Promise<Child> {
   const items = await api<Search[]>(scoped("/api/searches"));

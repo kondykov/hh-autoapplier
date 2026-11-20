@@ -1,5 +1,5 @@
-// Ответы API, которые читает веб (#130). У расширения свой клиент (src/api) с типами только своих запросов:
-// общий пакет типов — при реорганизации репозитория (#131). Поля — как в JSON контроллеров backend (camelCase, enum строкой)
+// Ответы API, которые читает веб (#130). У расширения свой клиент (extensions/hh/src/api) с типами только своих запросов:
+// общих типов с вебом у него почти нет, поэтому пакета packages/api при #131 не заводили. Поля — как в JSON контроллеров backend (camelCase, enum строкой)
 
 export type VacancyStatus = "New" | "Pending" | "Review" | "Questionnaire" | "Queued" | "Applied" | "Invited" | "Interview" | "Rejected" | "Skipped" | "Failed";
 

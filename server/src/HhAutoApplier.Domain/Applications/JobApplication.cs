@@ -525,7 +525,7 @@ public class JobApplication
     // Причина пропуска, когда страница вакансии не открылась при подтверждении импортной карточки
     public const string VacancyUnavailable = "вакансия недоступна";
 
-    // Причина пропуска архивной вакансии: такую же шлёт расширение (src/queue/queue-mode.ts)
+    // Причина пропуска архивной вакансии: такую же шлёт расширение (extensions/hh/src/queue/queue-mode.ts)
     public const string VacancyArchived = "вакансия в архиве";
 
     // Причина в истории, когда человек вернул отклик на оценку

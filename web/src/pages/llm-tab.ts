@@ -8,7 +8,7 @@ import { undoable } from "../undo";
 import {
   Badge, Button, Caption, Card, Chips, Confirm, el, EmptyState, FilterList, KeyHints, Menu, Meter, Pill, PickRow, Segmented, SelectionBar, StackTable, Stat, Stats, Toast, Toolbar,
   type Child, type PickElement, type SelectionBarElement, type Tone,
-} from "../ui/ui";
+} from "@hh-autoapplier/ui";
 import { connectionState, LLM_TASKS } from "./llm";
 import { isTyping } from "./review-keys";
 

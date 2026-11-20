@@ -1,4 +1,4 @@
-import { Button, Callout, el, Segmented, Stat, type Child } from "../../../web/src/ui/ui";
+import { Button, Callout, el, Segmented, Stat, type Child } from "@hh-autoapplier/ui";
 import { mountKit } from "../kit";
 import { PANEL_MODES, sectionsFor, type PanelCommand, type PanelMode, type PanelSection, type PanelState } from "./model";
 import PANEL_CSS from "./panel.css";

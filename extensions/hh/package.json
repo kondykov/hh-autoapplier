@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:web": "node scripts/build-web.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "typecheck:web": "tsc --noEmit -p web",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@hh-autoapplier/ui": "*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.280",

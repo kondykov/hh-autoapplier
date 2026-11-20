@@ -6,7 +6,7 @@ import { connectionState } from "./llm";
 import { date, salary, sourcePill, STATUSES } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped } from "../state";
-import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "../ui/ui";
+import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 // Подключения LLM сервера — для «Оценить заново через» на карточках текущего списка
 let connections: LlmConnection[] = [];

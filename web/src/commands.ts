@@ -5,7 +5,7 @@ import { features } from "./config";
 import { STATUSES } from "./format";
 import { LLM_SUBS } from "./pages/llm";
 import { path, type RouteName } from "./router";
-import type { IconName, NavAlert, PaletteGroup, PaletteItem, PaletteSource } from "./ui/ui";
+import type { IconName, NavAlert, PaletteGroup, PaletteItem, PaletteSource } from "@hh-autoapplier/ui";
 
 // Разделы (#120): tab — место в нижней панели телефона (остальные — в «Ещё»), icon — значок там же.
 // Разделы после ревизии (#128): «Обзор» (/overview) и витрина /kit (#129) — только по адресу; аккаунт (/account) — из меню

@@ -1,9 +1,12 @@
 import { chromium } from "playwright";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Dev-браузер: Chromium с загруженным расширением, постоянным профилем и портом CDP 9222
-const ext = resolve("dist");
-const ctx = await chromium.launchPersistentContext(resolve(".profile"), {
+// Dev-браузер: Chromium с загруженным расширением, постоянным профилем и портом CDP 9222.
+// Расширение — extensions/hh/dist, профиль — .profile в корне репозитория (как до #131: вход на hh.ru сохраняется)
+const here = dirname(fileURLToPath(import.meta.url));
+const ext = resolve(here, "../dist");
+const ctx = await chromium.launchPersistentContext(resolve(here, "../../../.profile"), {
   headless: false,
   viewport: null,
   locale: "ru-RU",

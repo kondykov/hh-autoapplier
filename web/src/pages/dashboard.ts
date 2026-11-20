@@ -5,7 +5,7 @@ import { ago, date } from "../format";
 import { page, readOnly, scoped, session } from "../state";
 import { AttentionCard, attentionItems } from "./attention";
 import { Bars, Caption, Card, Chips, el, EmptyState, Funnel, Meter, Meta, nodes, Note, PageHead, pct, Pill, RankList, Segmented, Skeleton, StackTable, Stat, Stats,
-  type ChoiceOption } from "../ui/ui";
+  type ChoiceOption } from "@hh-autoapplier/ui";
 import { delta, funnelRows, PERIODS, seriesBars } from "./dashboard-data";
 
 export const AGGREGATORS: ChoiceOption<string>[] = [

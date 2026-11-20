@@ -109,9 +109,9 @@ describe("Синхронизация чатов с любой страницы",
 });
 
 // Общий код (#123) не тянет hh-специфичное: второе расширение должно собираться из src/shared и src/infra.
-// UI kit (#129, web/src/ui) — тоже общий: один для веба и всех расширений
-const SHARED = ["shared", "infra", "../web/src/ui"];
-const KIT = (import.meta.glob("../web/src/ui/ui.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>)["../web/src/ui/ui.ts"];
+// UI kit (#129, packages/ui) — тоже общий: один для веба и всех расширений, импортируется как пакет @hh-autoapplier/ui (#131)
+const SHARED = ["shared", "infra"];
+const SHARED_PACKAGES = ["@hh-autoapplier/ui"];
 const SOURCES = import.meta.glob("../src/{shared,infra}/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
 // Путь относительно src: "../src/shared/panel/view.ts" + "./model" → "shared/panel/model"; выше src — с "../"
@@ -131,15 +131,15 @@ describe("Граница общего кода", () => {
 
   it("src/shared и src/infra импортируют только общий код", () => {
     for (const [file, text] of Object.entries(SOURCES)) {
-      for (const m of text.matchAll(/from\s+"(\.[^"]+)"/g)) {
-        const target = resolveFrom(file, m[1]);
+      for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
+        const spec = m[1];
+        if (!spec.startsWith(".")) {
+          expect(SHARED_PACKAGES.some((p) => spec === p || spec.startsWith(`${p}/`)), `${file} → ${spec}`).toBe(true);
+          continue;
+        }
+        const target = resolveFrom(file, spec);
         expect(SHARED.some((d) => target.startsWith(`${d}/`)), `${file} → ${target}`).toBe(true);
       }
     }
-  });
-
-  it("UI kit ничего не импортирует: в нём нет кода приложений", () => {
-    expect(KIT.length).toBeGreaterThan(0);
-    expect(KIT).not.toMatch(/^\s*import\s/m);
   });
 });

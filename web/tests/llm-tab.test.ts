@@ -1,6 +1,6 @@
 // «LLM → Отсев» (#127): фильтры в адресе, итог массового действия, строки с выбором и панель выбора kit
 import { describe, expect, it, vi } from "vitest";
-import { PickRow, SelectionBar } from "../src/ui/ui";
+import { PickRow, SelectionBar } from "@hh-autoapplier/ui";
 import { rejectsFilter, rejectsPath, rejectsQuery, summary, vacancies } from "../src/pages/llm-tab";
 
 describe("фильтры «Отсева» в адресе", () => {

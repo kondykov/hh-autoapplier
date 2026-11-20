@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-// Read-only осмотр запущенного dev-браузера (scripts/dev-browser.mjs) через CDP :9222.
+// Read-only осмотр запущенного dev-браузера (extensions/hh/scripts/dev-browser.mjs) через CDP :9222.
 // Печатает вкладки, флаги очереди и пробного режима; с --form ещё снимок формы отклика на вкладке hh.ru.
 // Ничего не нажимает и не закрывает.
 const withForm = process.argv.includes("--form");

@@ -1,6 +1,6 @@
 // Тема: системная → тёмная → светлая; выбор — в localStorage (может быть недоступен — тогда только на эту вкладку).
 // До отрисовки тему ставит встроенный скрипт index.html, чтобы страница не мигала
-import { Icon, type IconName } from "./ui/ui";
+import { Icon, type IconName } from "@hh-autoapplier/ui";
 
 export type Theme = "system" | "dark" | "light";
 const THEMES: [Theme, IconName, string][] = [["system", "theme", "Тема: как в системе"], ["dark", "moon", "Тема: тёмная"], ["light", "sun", "Тема: светлая"]];

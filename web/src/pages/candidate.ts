@@ -3,7 +3,7 @@ import { api, put } from "../api/http";
 import type { Profile, Resume } from "../api/types";
 import { lines, options } from "../format";
 import { act, app, readOnly, scoped } from "../state";
-import { Actions, Button, Card, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "../ui/ui";
+import { Actions, Button, Card, el, Field, Form, FormGrid, PageHead, Toolbar, type Child } from "@hh-autoapplier/ui";
 
 export async function candidate(): Promise<Child> {
   const [items, profile] = await Promise.all([api<Resume[]>(scoped("/api/resumes")), api<Profile>(scoped("/api/profile"))]);

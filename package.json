@@ -1,0 +1,17 @@
+{
+  "name": "hh-autoapplier",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "web",
+    "extensions/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "build": "node extensions/hh/scripts/build.mjs",
+    "watch": "node extensions/hh/scripts/build.mjs --watch",
+    "build:web": "node web/scripts/build.mjs"
+  }
+}

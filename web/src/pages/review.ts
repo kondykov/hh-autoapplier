@@ -4,7 +4,7 @@ import { api, post, Unauthorized } from "../api/http";
 import type { Question, Vacancy } from "../api/types";
 import { options, salary } from "../format";
 import { act, app, readOnly, scoped, setStatus } from "../state";
-import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, KeyHints, Meta, PageHead, Pre, Result, type Child } from "../ui/ui";
+import { Actions, Button, Callout, Card, Disclosure, el, EmptyState, Field, KeyHints, Meta, PageHead, Pre, Result, type Child } from "@hh-autoapplier/ui";
 import { bindReviewKeys, REVIEW_KEY_HINTS } from "./review-keys";
 import { letterRequestLine, letterRequestsBlock, vacancyPath } from "./vacancies";
 

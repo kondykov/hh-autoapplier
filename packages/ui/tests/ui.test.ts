@@ -1,5 +1,7 @@
+/// <reference types="vite/client" />
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Button, Card, el, safeUrl, StackTable, Toast } from "../src/ui/ui";
+import { Button, Card, el, safeUrl, StackTable, Toast } from "../src/ui";
+import KIT from "../src/ui.ts?raw";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -79,5 +81,13 @@ describe("Button", () => {
     finish();
     await new Promise((r) => setTimeout(r));
     expect(b.disabled).toBe(false);
+  });
+});
+
+// UI kit общий для веба и всех расширений (#129, #131): своего состояния и чужого кода в нём нет
+describe("Граница UI kit", () => {
+  it("ничего не импортирует: в нём нет кода приложений", () => {
+    expect(KIT.length).toBeGreaterThan(0);
+    expect(KIT).not.toMatch(/^\s*import\s/m);
   });
 });
