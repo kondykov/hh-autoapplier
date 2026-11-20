@@ -1,67 +1,56 @@
 import type { BackendClient } from "../api/client";
-import type { KeyValueStorage } from "../infra/storage";
+import { fetchLink } from "../api/server-link";
 import type { Logger } from "../infra/logger";
-import type { Panel } from "../ui/panel";
+import type { KeyValueStorage } from "../infra/storage";
+import type { PanelMode } from "../shared/panel/model";
+import type { PanelStore } from "../shared/panel/store";
 import { saveConfig, type AppConfig } from "./config";
-import type { DailyLimit } from "./daily-limit";
 
-// Настройки из панели: сохраняются в chrome.storage сразу при изменении
+// Настройки, которые меняются из панели: пробный режим очереди и вид панели. Остальное (сервер, лимиты, тексты) —
+// на странице настроек расширения (#123); их изменения приходят через watchConfig
 export class Settings {
   constructor(
     private config: AppConfig,
     private storage: KeyValueStorage,
-    private panel: Panel,
+    private panel: PanelStore,
     private logger: Logger,
-    private limit: DailyLimit,
-    private backend: BackendClient,
-    private refresh: () => Promise<void>,
+    private backend: Pick<BackendClient, "getServerVersion" | "getStats">,
   ) {}
 
   private save = () => saveConfig(this.storage, this.config);
 
-  async setLimit(limit: number) {
-    this.config.dailyLimit = limit;
-    this.limit.limit = limit;
-    await this.save();
-    await this.refresh();
+  // Индикатор связи и сводка очереди. quiet — фоновая проверка: без лишнего в журнале и без открытия настроек
+  async refreshServer(quiet: boolean) {
+    if (!quiet) this.panel.setServer({ state: "checking", label: "проверяю", detail: "Проверяю связь с сервером…" });
+    const { link, queue } = await fetchLink(this.backend, quiet);
+    this.panel.setServer(link, queue);
+    if (!quiet) this.logger.log(link.detail, link.state === "ok" ? "success" : "warn");
   }
 
-  async setQueueRunLimit(value: number) {
-    this.config.queueRunLimit = Math.max(0, Math.floor(value));
-    await this.save();
-  }
-
-  async setLetter(text: string) {
-    this.config.coverLetterTemplate = text;
-    await this.save();
-  }
-
-  // apiKey: null — оставить сохранённый ключ
-  async setServer(url: string, apiKey: string | null) {
-    this.config.server = { url, apiKey: apiKey ?? this.config.server.apiKey };
-    await this.save();
-  }
-
-  async setImportSearch(name: string) {
-    this.config.importSearch = name;
-    await this.save();
-  }
-
-  async setRejectionReply(text: string) {
-    this.config.rejectionReply = text.trim() || this.config.rejectionReply;
-    await this.save();
-  }
-
-  async checkServer() {
-    this.panel.setServerStatus("Проверяю...", true);
-    const result = await this.backend.check();
-    this.panel.setServerStatus(result.message, result.ok);
-    this.logger.log(result.message, result.ok ? "success" : "warn");
+  checkServer() {
+    return this.refreshServer(false);
   }
 
   async setQueueDryRun(enabled: boolean) {
     this.config.queueDryRun = enabled;
     await this.save();
+    this.panel.setSettings(panelSettings(this.config));
     this.logger.log(enabled ? "Пробный режим очереди включён" : "Пробный режим очереди выключен: отклики будут отправляться", enabled ? "info" : "warn");
   }
+
+  async setPanelMode(mode: PanelMode) {
+    if (this.config.panelMode === mode) return;
+    this.config.panelMode = mode;
+    await this.save();
+    this.panel.setSettings(panelSettings(this.config));
+  }
 }
+
+export const panelSettings = (c: AppConfig) => ({
+  dryRun: c.queueDryRun,
+  dailyLimit: c.dailyLimit,
+  runLimit: c.queueRunLimit,
+  importSearch: c.importSearch,
+  thanksOnReject: c.thanksOnReject,
+  mode: c.panelMode,
+});

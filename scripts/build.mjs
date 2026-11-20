@@ -1,9 +1,10 @@
-import { build, context } from "esbuild";
+import { build, context, transform } from "esbuild";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 
 mkdirSync("dist", { recursive: true });
 copyFileSync("manifest.json", "dist/manifest.json");
 copyFileSync("src/options/options.html", "dist/options.html");
+copyFileSync("src/sidepanel/sidepanel.html", "dist/sidepanel.html");
 
 // Личное письмо лежит в gitignored letter.local.txt и вшивается только в локальную сборку
 const defaultLetter = existsSync("letter.local.txt") ? readFileSync("letter.local.txt", "utf8").trim() : "";
@@ -12,10 +13,31 @@ const defaultLetter = existsSync("letter.local.txt") ? readFileSync("letter.loca
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 const version = manifest.version_name ?? manifest.version;
 
+// UI kit (#129, web/src/ui) и свои стили панели: CSS и SVG импортируются текстом (import css from "….css") —
+// панель на странице сайта вставляет их в свой shadow root (injectStyles, injectIcons), страницы расширения — в документ.
+// CSS сжимается, у SVG схлопываются пробелы: текст целиком попадает в content.js
+const textAssets = {
+  name: "text-assets",
+  setup(b) {
+    b.onLoad({ filter: /\.css$/ }, async (args) => {
+      const { code } = await transform(readFileSync(args.path, "utf8"), { loader: "css", minify: true, target: "chrome120" });
+      return { contents: code.trim(), loader: "text" };
+    });
+    b.onLoad({ filter: /\.svg$/ }, (args) => ({ contents: readFileSync(args.path, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/>\s+</g, "><").trim(), loader: "text" }));
+  },
+};
+
 const options = {
+  plugins: [textAssets],
   define: { __DEFAULT_LETTER__: JSON.stringify(defaultLetter), __VERSION__: JSON.stringify(version) },
-  // content.js — на страницах hh.ru, background.js — service worker для запросов к backend, options.js — страница настроек (#101)
-  entryPoints: { content: "src/content/main.ts", background: "src/background/main.ts", options: "src/options/main.ts" },
+  // content.js — на страницах hh.ru, background.js — service worker для запросов к backend, options.js — страница настроек (#101),
+  // sidepanel.js — боковая панель браузера (#123). Общий код — src/shared: второе расширение соберётся из него своим набором входов
+  entryPoints: {
+    content: "src/content/main.ts",
+    background: "src/background/main.ts",
+    options: "src/options/main.ts",
+    sidepanel: "src/sidepanel/main.ts",
+  },
   outdir: "dist",
   bundle: true,
   format: "iife",
