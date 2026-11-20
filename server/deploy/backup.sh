@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ежедневный бэкап базы (#5): запускает hh-backup.timer, ставится deploy/install-host-units.sh в /usr/local/lib/hh-autoapplier.
+# Ежедневный бэкап базы (#5): запускает hh-backup.timer, ставится server/deploy/install-host-units.sh в /usr/local/lib/hh-autoapplier.
 # Хранит KEEP_DAYS дней только свои файлы hhapplier-daily-*; дампы перед выкатом (deploy.sh) не трогает.
 # Восстановление — docs/DEPLOY.md, «Как откатить».
 set -euo pipefail

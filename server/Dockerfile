@@ -2,12 +2,16 @@
 # Сборка: из server/ — docker compose build (context: ..), вручную — docker build -f server/Dockerfile . из корня.
 # Что не попадает в контекст — .dockerignore в корне
 
-# Веб: esbuild из зависимостей корня (package-lock.json), браузеры Playwright не нужны
+# Веб: npm workspaces корня (#131) — web/ и UI kit packages/ui. npm ci сверяет package-lock.json со всеми package.json
+# workspaces, поэтому копируется и package.json расширения (его исходники не нужны). Браузеры Playwright не нужны
 FROM node:22-alpine AS web
 WORKDIR /repo
 COPY package.json package-lock.json ./
+COPY web/package.json web/
+COPY packages/ui/package.json packages/ui/
+COPY extensions/hh/package.json extensions/hh/
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --no-audit --no-fund
-COPY scripts/build-web.mjs scripts/
+COPY packages/ui/ packages/ui/
 COPY web/ web/
 RUN npm run build:web -- --out /web
 

@@ -44,4 +44,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           DEPLOY_REF: ${{ inputs.ref }}
           DEPLOY_BACKUP: ${{ inputs.backup }}
-        run: bash deploy/deploy.sh
+        run: bash server/deploy/deploy.sh
