@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { pageArchiveChecker, parseArchiveState } from "../src/apply/archive-check";
+import { pageArchiveChecker, parseArchiveState, parseResponses } from "../src/apply/archive-check";
 import { vacancyPageHtml } from "./fixtures/vacancy-page";
 
 describe("parseArchiveState (#70)", () => {
@@ -21,6 +21,30 @@ describe("parseArchiveState (#70)", () => {
     ["archived не true", vacancyPageHtml("1", "yes" as unknown as boolean)],
   ])("%s — unknown, не архив", (_name, html) => {
     expect(parseArchiveState(html, "1").state).toBe("unknown");
+  });
+});
+
+describe("число откликов со страницы вакансии (#148)", () => {
+  it("открытая вакансия — большее из двух полей", () => {
+    const html = vacancyPageHtml("139181359", false, {}, { totalResponsesCount: 1054, vacancyResponsesCount: 1099 });
+    expect(parseArchiveState(html, "139181359")).toEqual({ state: "open", responses: 1099 });
+  });
+
+  it("одно поле, ноль — тоже число", () => {
+    expect(parseArchiveState(vacancyPageHtml("1", false, {}, { totalResponsesCount: 0 }), "1")).toEqual({ state: "open", responses: 0 });
+  });
+
+  it.each<[string, Record<string, unknown> | undefined]>([
+    ["полей нет", undefined],
+    ["не числа", { vacancyResponsesCount: "много", totalResponsesCount: null }],
+    ["отрицательное и дробное", { vacancyResponsesCount: -1, totalResponsesCount: 1.5 }],
+  ])("%s — без числа", (_name, fields) => {
+    expect(parseArchiveState(vacancyPageHtml("1", false, {}, fields), "1")).toStrictEqual({ state: "open" });
+  });
+
+  it("parseResponses без данных страницы — undefined", () => {
+    expect(parseResponses(undefined)).toBeUndefined();
+    expect(parseResponses({})).toBeUndefined();
   });
 });
 

@@ -13,7 +13,19 @@ public record DashboardDto(
     IReadOnlyList<DashboardReasonDto> Reasons,
     IReadOnlyList<DashboardSourceDto> Sources,
     DashboardLlmDto Llm,
-    DashboardChatsDto Chats);
+    DashboardChatsDto Chats,
+    DashboardCompetitionDto Competition);
+
+// Конкуренция (#148): исходы откликов, отправленных за период, по числу откликов на вакансию — при сборе, перед своим
+// и по приросту между ними. Последняя строка каждого разреза — «нет данных»: отклики до #148 и без числа
+public record DashboardCompetitionDto(
+    IReadOnlyList<DashboardCompetitionRowDto> AtCollect,
+    IReadOnlyList<DashboardCompetitionRowDto> AtApply,
+    IReadOnlyList<DashboardCompetitionRowDto> Growth);
+
+// Bucket — корзина («0–10», «200+», «нет данных»); Sent = Invited + Rejected + Silent. Приглашение — и сразу собеседование,
+// молчание — ни приглашения, ни отказа
+public record DashboardCompetitionRowDto(string Bucket, int Sent, int Invited, int Rejected, int Silent);
 
 // Ключевые числа за период и за прошлый период той же длины (Prev*): собрано, отправлено, приглашений (приглашение
 // или сразу собеседование), собеседований и отказов — по времени события

@@ -6,7 +6,7 @@ import { page, readOnly, scoped, session } from "../state";
 import { AttentionCard, attentionItems } from "./attention";
 import { Bars, Caption, Card, Chips, el, EmptyState, Funnel, Meter, Meta, nodes, Note, PageHead, pct, Pill, RankList, Segmented, Skeleton, StackTable, Stat, Stats,
   type ChoiceOption } from "@hh-autoapplier/ui";
-import { delta, funnelRows, PERIODS, seriesBars } from "./dashboard-data";
+import { COMPETITION_SLICES, competitionRows, delta, funnelRows, PERIODS, seriesBars, type CompetitionSlice } from "./dashboard-data";
 
 export const AGGREGATORS: ChoiceOption<string>[] = [
   { value: "all", label: "Все" },
@@ -14,7 +14,7 @@ export const AGGREGATORS: ChoiceOption<string>[] = [
   { value: "hirify", label: "hirify", color: "var(--src-hirify)", disabled: true, title: "После подключения (#32)" },
   { value: "getmatch", label: "getmatch", color: "var(--src-getmatch)", disabled: true, title: "После подключения (#32)" },
 ];
-const state = { period: 30, source: "hh" };
+const state: { period: number; source: string; competition: CompetitionSlice } = { period: 30, source: "hh", competition: "atApply" };
 
 const load = (period: number, source: string) => api<Dashboard>(scoped(`/api/dashboard?period=${period}&source=${source}`));
 
@@ -93,12 +93,34 @@ export async function dashboard(): Promise<HTMLElement> {
             el("p", { className: "muted small", style: "margin:8px 0 0", textContent: `Поисков включено: ${searchList.filter((s) => s.enabled).length} из ${searchList.length}` })),
           Card({}, Caption("Почему отсеяно"),
             d.reasons.length ? RankList(d.reasons.map((r) => [r.reason, r.count])) : EmptyState("Отсеянных за период нет."))),
+        CompetitionCard(d),
         Note("Ответы работодателей — на момент последней синхронизации чатов в расширении: время — по последнему новому сообщению."),
         sys ? SystemBlock(sys) : null)));
   }
 
   draw(first);
   return root;
+}
+
+// Конкуренция (#148): исходы откликов, отправленных за период, по числу откликов на вакансию.
+// Переключатель меняет только таблицу — без запроса, все три разреза уже пришли с сервера
+function CompetitionCard(d: Dashboard): HTMLElement {
+  const body = el("div");
+  const draw = () => {
+    const rows = competitionRows(d, state.competition);
+    body.replaceChildren(rows.length
+      ? StackTable([{ title: "Откликов на вакансию" }, { title: "Отправлено", num: true }, { title: "Приглашение", num: true },
+        { title: "Отказ", num: true }, { title: "Молчание", num: true }, { title: "В приглашение", num: true }],
+      rows.map(([bucket, sent, invited, rejected, silent, share]) => [bucket, sent, invited, rejected, silent, `${share}%`]))
+      : EmptyState("За период нет отправленных откликов."));
+  };
+  draw();
+  return Card({ style: "margin-top:var(--sp-3)" }, Caption(`Конкуренция: исходы по числу откликов · ${d.period} дней`),
+    Segmented(COMPETITION_SLICES.map((s) => ({ value: s.value as CompetitionSlice, label: s.label })), state.competition,
+      (s) => { state.competition = s; draw(); }, { label: "Число откликов" }),
+    body,
+    el("p", { className: "muted small", style: "margin:8px 0 0",
+      textContent: "Число откликов — из данных страницы hh.ru: при сборе — когда вакансию нашли, перед откликом — перед «Отправить», прирост — между ними. «нет данных» — отклики, отправленные до этого учёта." }));
 }
 
 // Блок «Система» (#121): сборка, сбор, LLM сервера, пользователи, уведомления

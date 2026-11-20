@@ -29,7 +29,8 @@ public class GetDashboardQueryHandler(IAppDbContext db, ICurrentUser current, IO
         var rows = await db.JobApplications.AsNoTracking()
             .Where(a => a.UserId == owner && (a.CreatedAt >= prevFrom || a.AppliedAt != null))
             .Select(a => new DashboardRow(a.CreatedAt, a.Status, a.StatusReason, a.LlmScore, a.AppliedAt,
-                a.Search != null ? a.Search.Name : a.Vacancy.SearchName, HhSource, a.History))
+                a.Search != null ? a.Search.Name : a.Vacancy.SearchName, HhSource, a.History,
+                a.Vacancy.ResponsesAtCollect, a.ResponsesAtApply))
             .ToListAsync(ct);
 
         var source = string.IsNullOrWhiteSpace(query.Source) ? DashboardMath.AllSources : query.Source.Trim().ToLowerInvariant();

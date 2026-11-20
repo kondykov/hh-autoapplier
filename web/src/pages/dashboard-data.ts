@@ -1,5 +1,22 @@
 // Дашборд (#121): числа считает сервер (GET /api/dashboard), здесь — подписи и раскладка для kit. Без DOM — проверяется тестами
-import type { Dashboard } from "../api/types";
+import type { CompetitionRow, Dashboard } from "../api/types";
+
+// Конкуренция (#148): разрезы исходов по числу откликов на вакансию
+export const COMPETITION_SLICES = [
+  { value: "atApply", label: "перед откликом" },
+  { value: "atCollect", label: "при сборе" },
+  { value: "growth", label: "прирост" },
+] as const;
+
+export type CompetitionSlice = (typeof COMPETITION_SLICES)[number]["value"];
+
+// Строки таблицы: корзина, отправлено, приглашение, отказ, молчание, доля приглашений. Старый сервер без разреза — пусто;
+// ничего не отправлено за период — тоже пусто (таблица из нулей ничего не говорит)
+export function competitionRows(d: Dashboard, slice: CompetitionSlice): [string, number, number, number, number, number][] {
+  const rows: CompetitionRow[] = d.competition?.[slice] ?? [];
+  if (!rows.some((r) => r.sent)) return [];
+  return rows.map((r) => [r.bucket, r.sent, r.invited, r.rejected, r.silent, r.sent ? Math.round((r.invited / r.sent) * 100) : 0]);
+}
 
 export const PERIODS = [7, 30, 90] as const;
 

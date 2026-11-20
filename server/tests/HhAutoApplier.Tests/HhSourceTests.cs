@@ -65,7 +65,7 @@ public class HhSourceTests
         var v = Card("101", "C# разработчик");
         using var state = HhPageParser.ExtractState(Page(VacancyJson))!;
 
-        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v));
+        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v, DateTimeOffset.UtcNow));
         Assert.Equal("Senior C# разработчик", v.Title);
         Assert.Contains("ASP.NET & PostgreSQL", v.Description);
         Assert.Contains("- Docker", v.Description);
@@ -105,7 +105,7 @@ public class HhSourceTests
         var v = Card("1", "x");
         using var state = HhPageParser.ExtractState(Page(json))!;
 
-        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v));
+        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v, DateTimeOffset.UtcNow));
 
         Assert.Equal((experience, entryLevel), (v.WorkExperience, v.EntryLevel));
     }
@@ -116,7 +116,59 @@ public class HhSourceTests
         Assert.Null(HhPageParser.ExtractState("<html>Подтвердите, что вы не робот</html>"));
         using var state = HhPageParser.ExtractState(Page("""{"other":1}"""))!;
         Assert.Null(HhPageParser.ParseSearch(state.RootElement, "x", DateTimeOffset.UtcNow));
-        Assert.False(HhPageParser.ParseVacancy(state.RootElement, Card("1", "x")));
+        Assert.False(HhPageParser.ParseVacancy(state.RootElement, Card("1", "x"), DateTimeOffset.UtcNow));
+    }
+
+    // Число откликов (#148), живые страницы 2026-11-20 без входа, только нужные поля: в выдаче responsesCount бывает устаревшим
+    // (139705653: 14 при 176), на странице два поля расходятся (139181359: 1099 и 1054) — берётся большее
+    private const string ResponsesSearchJson = """
+        {"vacancySearchResult":{"vacancies":[
+          {"vacancyId":139705653,"name":"C# разработчик","responsesCount":14,"totalResponsesCount":176},
+          {"vacancyId":138723123,"name":"Backend","responsesCount":0,"totalResponsesCount":1536},
+          {"vacancyId":3,"name":"Без числа"},
+          {"vacancyId":4,"name":"Не число","totalResponsesCount":"много"}
+        ]}}
+        """;
+
+    private const string ResponsesPageJson = """
+        {"vacancyView":{"vacancyFull":{
+          "vacancy":{"vacancyId":139181359,"name":"C# разработчик","description":"<p>C#</p>"},
+          "extraVacancyFields":{"totalResponsesCount":1054,"vacancyResponsesCount":1099}}}}
+        """;
+
+    [Fact]
+    public void Search_ReadsResponsesCount_LargerOfTwoFields()
+    {
+        var at = new DateTimeOffset(2026, 11, 20, 17, 0, 0, TimeSpan.Zero);
+        using var state = HhPageParser.ExtractState(Page(ResponsesSearchJson))!;
+        var list = HhPageParser.ParseSearch(state.RootElement, "dotnet", at)!;
+
+        Assert.Equal([176, 1536, null, null], list.Select(v => v.ResponsesAtCollect));
+        Assert.Equal([at, at, null, null], list.Select(v => v.ResponsesAtCollectAt));
+    }
+
+    [Fact]
+    public void Vacancy_ReadsResponsesCount_FromExtraFields()
+    {
+        var v = Card("139181359", "x");
+        var at = new DateTimeOffset(2026, 11, 20, 17, 5, 0, TimeSpan.Zero);
+        using var state = HhPageParser.ExtractState(Page(ResponsesPageJson))!;
+
+        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v, at));
+        Assert.Equal((1099, at), (v.ResponsesAtCollect, v.ResponsesAtCollectAt));
+    }
+
+    // Страница без числа не стирает число из выдачи
+    [Fact]
+    public void Vacancy_WithoutResponses_KeepsCardCount()
+    {
+        var v = Card("101", "x");
+        var cardAt = new DateTimeOffset(2026, 11, 20, 17, 0, 0, TimeSpan.Zero);
+        v.RecordResponses(176, cardAt);
+        using var state = HhPageParser.ExtractState(Page(VacancyJson))!;
+
+        Assert.True(HhPageParser.ParseVacancy(state.RootElement, v, cardAt.AddMinutes(1)));
+        Assert.Equal((176, cardAt), (v.ResponsesAtCollect, v.ResponsesAtCollectAt));
     }
 
     private sealed class StubHandler(HttpStatusCode status, string body = "", string? finalPath = null) : HttpMessageHandler

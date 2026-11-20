@@ -64,6 +64,7 @@ public class VacanciesController : ApiController
             Status = request.Status,
             Reason = request.Reason,
             Resume = request.Resume,
+            Responses = request.Responses,
         };
         return FromResult((await handler.Handle(command, ct)).Value);
     }
@@ -235,7 +236,8 @@ public class VacanciesController : ApiController
     }
 }
 
-public record SetVacancyStatusRequest(VacancyStatus Status, string? Reason, string? Resume);
+// Responses — число откликов на вакансию перед своим (#148), только с Applied; необязательное — прежние клиенты его не шлют
+public record SetVacancyStatusRequest(VacancyStatus Status, string? Reason, string? Resume, int? Responses = null);
 
 public record ResolveLetterRequestsRequest([MaxLength(10)] List<int>? ConfirmCodeWords = null);
 

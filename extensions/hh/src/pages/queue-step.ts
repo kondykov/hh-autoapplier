@@ -156,7 +156,7 @@ export class QueueStep implements PageStep {
     };
     panel.setStep(`Очередь: отклик на "${vacancy.title}"`);
 
-    const closed = await this.closedOnHh(current);
+    const { closed, responses } = await this.checkOnHh(current);
     if (closed) {
       // Пока шёл запрос, очередь остановили или перезапустили с другой вакансией — её не трогаем
       if (!state.queueRunning || state.queueCurrent?.id !== current.id) return;
@@ -197,23 +197,27 @@ export class QueueStep implements PageStep {
         return;
       }
     }
-    await this.finish(current, result, vacancy.resume);
+    await this.finish(current, result, vacancy.resume, responses);
   }
 
   // Форма архивной вакансии открывается как обычно (проверено 2026-11-10): признак — только на странице вакансии.
   // Архив закрывает только явный признак; ошибка проверки — отклик идёт как обычно.
   // Закрытая hh.ru вакансия (403 при открытой главной, #99) — тоже без «Отправить»: hh.ru ответил бы ошибкой
-  private async closedOnHh(item: QueueItem): Promise<"archived" | "unavailable" | null> {
+  // Та же страница даёт число откликов на вакансию перед своим (#148) — оно уходит в отчёт об отправке
+  private async checkOnHh(item: QueueItem): Promise<{ closed: "archived" | "unavailable" | null; responses?: number }> {
     const { logger, config } = this.ctx;
     const check = await this.ctx.archive.check(item.id);
     if (check.state === "unknown") {
       logger.log(`Проверка архива "${item.title}" не удалась (${check.error}) — отклик как обычно`, "warn");
-      return null;
+      return { closed: null };
     }
-    if (check.state === "open") return null;
+    if (check.state === "open") {
+      logger.log(`"${item.title}": откликов на hh.ru — ${check.responses ?? "нет данных"}`, "step");
+      return { closed: null, responses: check.responses };
+    }
     const what = check.state === "archived" ? "вакансия в архиве" : "вакансия недоступна на hh.ru";
     logger.log(`"${item.title}": ${what} — «Отправить» не нажимается${config.queueDryRun ? ", пробный режим: статус не отправляется" : ""}`, "warn");
-    return check.state;
+    return { closed: check.state };
   }
 
   // «Отправить» уже нажата, и hh.ru загрузил новую страницу раньше, чем пришёл исход (#52): отклик, скорее всего, ушёл
@@ -311,11 +315,12 @@ export class QueueStep implements PageStep {
 
   // Сообщить исход на сервер (кроме пробного режима) и перейти к следующей вакансии.
   // Отклик, ушедший на hh.ru, сообщается всегда: очередь могли остановить или включить пробный режим, пока ждали подтверждения
-  private async finish(item: QueueItem, result: ApplyResult, resume?: string): Promise<void> {
+  private async finish(item: QueueItem, result: ApplyResult, resume?: string, responses?: number): Promise<void> {
     const { state, logger, backend, config } = this.ctx;
     // Лимит запуска учтён в момент нажатия (onSubmit)
     const sentToHh = result === "success" || result === "unclear";
     const report = sentToHh || (state.queueRunning && !config.queueDryRun) ? toStatusReport(result) : null;
+    if (report?.status === "Applied" && responses !== undefined) report.responses = responses;
     if (report) {
       const sent = await backend.reportStatus(item.id, report, resume ?? item.resume);
       if (!sent.ok) {

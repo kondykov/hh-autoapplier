@@ -14,7 +14,7 @@ public class GetApplicationsReportQueryHandler(
     ICurrentUser current
 ) : IQueryHandler<GetApplicationsReportQuery, ApplicationsReportResult>
 {
-    private const string Header = "Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус";
+    private const string Header = "Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус;Откликов при сборе;Откликов при отклике";
 
     private const string FormulaStart = "=+-@\t\r\n";
 
@@ -41,7 +41,9 @@ public class GetApplicationsReportQueryHandler(
         var lines = new List<string> { Header };
         lines.AddRange(rows.Select(a => string.Join(';',
             Quote(a.Vacancy.Title), Quote(string.Join(", ", a.Vacancy.Stack)), Quote(a.Vacancy.Company), Quote(a.Vacancy.Salary?.ToString() ?? "не указана"),
-            Quote(a.Vacancy.WorkFormat), Quote(a.Vacancy.Url), Quote(a.AppliedAt?.ToString("yyyy-MM-dd")), Quote(a.ResumeProfile), Quote(Application.Telegram.BotHtml.Status(a.Status)))));
+            Quote(a.Vacancy.WorkFormat), Quote(a.Vacancy.Url), Quote(a.AppliedAt?.ToString("yyyy-MM-dd")), Quote(a.ResumeProfile), Quote(Application.Telegram.BotHtml.Status(a.Status)),
+            // Число откликов на вакансию (#148): пусто — нет данных
+            a.Vacancy.ResponsesAtCollect?.ToString() ?? "", a.ResponsesAtApply?.ToString() ?? "")));
 
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(string.Join("\r\n", lines))];
     }

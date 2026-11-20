@@ -197,7 +197,10 @@ function vacancyCard(v: Vacancy): HTMLElement {
       v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
     meta: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`] },
   // Вакансия общая: даты — когда её нашли впервые и когда она встретилась в сборе или импорте последний раз (#70)
-  Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`]),
+  Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`,
+    // Конкуренция (#148): сколько откликов было при сборе и перед своим
+    v.responsesAtCollect != null && `откликов при сборе ${v.responsesAtCollect}`,
+    v.responsesAtApply != null && `перед своим ${v.responsesAtApply}`]),
   v.statusReason || v.llmReason ? el("div", { className: "reason", textContent: v.statusReason ?? v.llmReason }) : null,
   letterRequestsBlock(v),
   v.coverLetter ? Disclosure("Письмо", Pre(v.coverLetter)) : null,

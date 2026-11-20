@@ -42,6 +42,10 @@ public class JobApplication
 
     public DateTimeOffset? AppliedAt { get; private set; }
 
+    // Сколько откликов было на вакансию перед своим (#148): расширение читает со страницы вакансии перед «Отправить».
+    // null — отправлено раньше #148, восстановлено по чату или число не прочиталось
+    public int? ResponsesAtApply { get; private set; }
+
     public LlmVerdict? LlmVerdict { get; private set; }
 
     public int? LlmScore { get; private set; }
@@ -383,7 +387,7 @@ public class JobApplication
     }
 
     // Отклик отправлен из очереди. Только из Queued и Questionnaire: не прошедший оценку или проверку отметить отправленным нельзя (#60)
-    public void MarkApplied(string? resume, DateTimeOffset at)
+    public void MarkApplied(string? resume, DateTimeOffset at, int? responses = null)
     {
         if (Sent)
             throw new DomainException("Отклик на вакансию уже отправлен");
@@ -392,6 +396,8 @@ public class JobApplication
             throw new DomainException($"Отправленным можно отметить только отклик в очереди или с анкетой, сейчас {Status}");
 
         AppliedAt = at;
+        if (responses is >= 0)
+            ResponsesAtApply = responses;
         if (!string.IsNullOrWhiteSpace(resume))
             ResumeProfile = resume;
         MoveTo(VacancyStatus.Applied, null, at);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Dashboard } from "../src/api/types";
 import { ago } from "../src/format";
-import { delta, funnelRows, seriesBars } from "../src/pages/dashboard-data";
+import { competitionRows, delta, funnelRows, seriesBars } from "../src/pages/dashboard-data";
 
 const NOW = new Date("2026-11-18T12:00:00Z").getTime();
 
@@ -31,6 +31,31 @@ const dashboard: Dashboard = {
   llm: { requests: 3, errors: 0, limit: 150 },
   chats: { syncedAt: null, messages: 0 },
 };
+
+// Конкуренция (#148): строки таблицы по разрезу с сервера
+describe("competitionRows", () => {
+  const row = (bucket: string, sent: number, invited: number, rejected: number) => ({ bucket, sent, invited, rejected, silent: sent - invited - rejected });
+  const withCompetition: Dashboard = {
+    ...dashboard,
+    competition: {
+      atApply: [row("0–10", 4, 1, 2), row("10–50", 0, 0, 0), row("50–200", 0, 0, 0), row("200+", 3, 0, 1), row("нет данных", 2, 0, 0)],
+      atCollect: [row("0–10", 0, 0, 0), row("нет данных", 0, 0, 0)],
+      growth: [],
+    },
+  };
+
+  it("корзины с долей приглашений, «нет данных» — как есть", () => {
+    expect(competitionRows(withCompetition, "atApply")).toEqual([
+      ["0–10", 4, 1, 2, 1, 25], ["10–50", 0, 0, 0, 0, 0], ["50–200", 0, 0, 0, 0, 0], ["200+", 3, 0, 1, 2, 0], ["нет данных", 2, 0, 0, 2, 0],
+    ]);
+  });
+
+  it("ничего не отправлено или старый сервер без разреза — пусто", () => {
+    expect(competitionRows(withCompetition, "atCollect")).toEqual([]);
+    expect(competitionRows(withCompetition, "growth")).toEqual([]);
+    expect(competitionRows(dashboard, "atApply")).toEqual([]);
+  });
+});
 
 describe("delta", () => {
   it("к прошлому периоду той же длины", () => {

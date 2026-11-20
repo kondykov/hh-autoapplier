@@ -18,6 +18,9 @@ public record SetVacancyStatusCommand
     public string? Reason { get; init; }
 
     public string? Resume { get; init; }
+
+    // Число откликов на вакансию перед своим (#148): учитывается только с Applied, отрицательное — как нет данных
+    public int? Responses { get; init; }
 }
 
 // На .NET 11: public union SetVacancyStatusResult(VacancyDto, NotFoundError, ConflictError);

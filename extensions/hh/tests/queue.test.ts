@@ -80,6 +80,9 @@ describe("BackendClient: очередь и статусы", () => {
     });
     expect(await ok.reportStatus("5", { status: "Applied", reason: null }, ".NET")).toEqual({ ok: true });
     expect(calls[0]).toEqual({ type: "hh-api", path: "/api/vacancies/5/status", method: "POST", body: { status: "Applied", reason: null, resume: ".NET" } });
+    // Число откликов перед своим (#148) — необязательное поле тела
+    await ok.reportStatus("5", { status: "Applied", reason: null, responses: 176 }, ".NET");
+    expect((calls[1] as { body: unknown }).body).toEqual({ status: "Applied", reason: null, resume: ".NET", responses: 176 });
 
     const conflict = new BackendClient(async () => ({ status: 409, body: '{"message":"Отклик на вакансию уже отправлен"}' }));
     const res = await conflict.reportStatus("5", { status: "Applied", reason: null }, null);

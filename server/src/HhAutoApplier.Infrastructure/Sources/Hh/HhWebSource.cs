@@ -73,7 +73,7 @@ public class HhWebSource : IVacancySource
         using (state)
         {
             // Чужая страница с тем же JSON (вход, мягкий антибот) — не повод закрывать отклики
-            if (!HhPageParser.ParseVacancy(state.RootElement, vacancy))
+            if (!HhPageParser.ParseVacancy(state.RootElement, vacancy, _clock.GetUtcNow()))
                 throw Blocked("на странице нет вакансии");
 
             return HhPageParser.IsArchived(state.RootElement) ? VacancyPageState.Archived : VacancyPageState.Available;

@@ -20,6 +20,8 @@ export type VacancyStatus = "Applied" | "Skipped" | "Failed";
 export interface StatusReport {
   status: VacancyStatus;
   reason: string | null;
+  // Число откликов на вакансию перед своим (#148): только у Applied и только когда прочиталось со страницы
+  responses?: number;
 }
 
 // Страница отклика сразу с формой: резюме, письмо, кнопка отправки (или анкета работодателя)
