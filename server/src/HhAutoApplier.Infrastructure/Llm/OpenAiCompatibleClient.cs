@@ -56,11 +56,11 @@ public class OpenAiCompatibleClient : ILlmClient
     public async Task<LlmResult> CompleteAsync(LlmRequest request, CancellationToken ct)
     {
         if (!IsConfigured)
-            throw new LlmUnavailableException("не задан ключ API (LLM_API_KEY) или модель");
+            throw new LlmUnavailableException("не задан ключ API (LLM_API_KEY) или модель", notSent: true);
         if (_budget.Throttle is { } throttle)
-            throw new LlmUnavailableException(Throttled(throttle.Reason, throttle.Until));
+            throw new LlmUnavailableException(Throttled(throttle.Reason, throttle.Until), notSent: true);
         if (!_budget.TryTake(_opt.DailyRequestLimit))
-            throw new LlmUnavailableException($"исчерпан дневной лимит запросов ({_opt.DailyRequestLimit})");
+            throw new LlmUnavailableException($"исчерпан дневной лимит запросов ({_opt.DailyRequestLimit})", notSent: true);
 
         var body = new ChatRequest(
             _opt.Model,

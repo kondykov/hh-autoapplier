@@ -129,9 +129,12 @@ public class LlmClientTests
         Assert.Contains("сеть", e.Message);
         Assert.Contains("15:05 МСК", e.Message);
         Assert.Equal(0, budget.Used);
+        Assert.False(e.NotSent);
         var attempts = http.Requests.Count;
 
-        await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        // Во время паузы запрос не уходит: такую попытку конвейер в журнал не пишет (#113)
+        var paused = await Assert.ThrowsAsync<LlmUnavailableException>(() => client.CompleteAsync(Ask, default));
+        Assert.True(paused.NotSent);
         Assert.Equal(attempts, http.Requests.Count);
 
         clock.Now = clock.Now.AddMinutes(6);
