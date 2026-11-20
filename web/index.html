@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>hh-autoapplier</title>
+  <!-- Логотип (вариант A логотипа бота, #120): «hh=#» -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Ctext x='16' y='21' font-family='Consolas,monospace' font-size='12' font-weight='700' text-anchor='middle' fill='%23e6edf3'%3Ehh%3Ctspan fill='%23f0a3a8'%3E=%23%3C/tspan%3E%3C/text%3E%3C/svg%3E">
+  <script>
+    // Тема (#120): system | dark | light, выбор в localStorage; до отрисовки, чтобы не мигало
+    try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <!-- Шаблон (#130): scripts/build-web.mjs подставляет файлы сборки с отпечатком в имени (app.[hash].css / .js) — новая сборка
+       меняет имена, и браузер берёт новые файлы без сброса кэша. Стили — UI kit (ui/) и каркас (app.css) одним файлом -->
+  <link rel="stylesheet" href="{{css}}">
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="brand" href="/dashboard" aria-label="hh-autoapplier — дашборд"><span class="mark">hh<b>=#</b></span><span class="name">autoapplier</span></a>
+    <!-- Шапка в одну строку (#128): логотип · разделы плашками · поиск Ctrl+K · данные · меню аккаунта · тема -->
+    <nav id="nav" hidden aria-label="Разделы"></nav>
+    <span id="find" class="find"></span>
+    <span id="viewing" hidden><label class="muted" for="view-as">Данные:</label> <select id="view-as"></select></span>
+    <!-- Меню аккаунта под именем (#128); на телефоне — в листе «Ещё», там же тема -->
+    <span id="account" class="account"></span>
+    <button id="theme" class="icon" type="button" title="Тема" aria-label="Тема"></button>
+  </div>
+</header>
+
+<main>
+  <form id="login" class="card" hidden>
+    <h1>Вход</h1>
+    <p class="sub">Email и пароль учётной записи backend.</p>
+    <div class="bar">
+      <input id="email" type="email" placeholder="Email" autocomplete="username" aria-label="Email" required>
+      <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" aria-label="Пароль" required>
+      <button class="primary">Войти</button>
+    </div>
+  </form>
+
+  <div class="bar" id="statusbar"><span id="status" role="status"></span></div>
+  <section id="view"></section>
+</main>
+
+<nav id="tabbar" class="tabbar" hidden aria-label="Разделы"></nav>
+
+<script type="module" src="{{js}}"></script>
+</body>
+</html>

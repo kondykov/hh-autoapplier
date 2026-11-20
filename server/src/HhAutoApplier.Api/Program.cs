@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using HhAutoApplier.Api;
 using HhAutoApplier.Api.Auth;
 using HhAutoApplier.Application;
 using HhAutoApplier.Infrastructure;
@@ -24,9 +25,8 @@ await app.Services.InitializeDatabaseAsync();
 
 app.UseMiddleware<HhAutoApplier.Api.ConcurrencyConflictMiddleware>();
 app.UseCors();
-// Страницы (wwwroot) — без входа: данных в них нет, вход они спрашивают сами. «/» — веб-интерфейс index.html (#46)
-app.UseDefaultFiles();
-app.UseStaticFiles();
+// Веб-интерфейс (wwwroot, сборка web/) — без входа: данных в страницах нет, вход они спрашивают сами (WebInterface.cs)
+app.UseWebInterface();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -35,6 +35,8 @@ app.MapOpenApi().AllowAnonymous();
 app.MapScalarApiReference().AllowAnonymous();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapControllers();
+// Пути разделов веба (/vacancies, /kit/frame) — index.html; после API, неизвестный /api/... — 404
+app.MapWebInterface();
 
 app.Run();
 

@@ -62,16 +62,16 @@ public class DialogsTests(ApiFactory factory) : IAsyncLifetime
     {
         await Applied();
 
-        // Первый сбор: старый отказ и собеседование; свой последний ответ работодателю не сохраняется
+        // Первый сбор: старый отказ и собеседование (#122 — отдельный статус); свой последний ответ работодателю не сохраняется
         var first = await Import(Chat(11, "1", "DISCARD", 101, Old), Chat(12, "2", "INTERVIEW", 102, Old), Chat(13, "3", "RESPONSE", 103, Old, fromEmployer: false));
-        Assert.Equal((3, 2, 1, 1), (first.GetProperty("received").GetInt32(), first.GetProperty("newMessages").GetInt32(),
-            first.GetProperty("rejected").GetInt32(), first.GetProperty("invited").GetInt32()));
+        Assert.Equal((3, 2, 1, 0, 1), (first.GetProperty("received").GetInt32(), first.GetProperty("newMessages").GetInt32(),
+            first.GetProperty("rejected").GetInt32(), first.GetProperty("invited").GetInt32(), first.GetProperty("interviews").GetInt32()));
         Assert.Empty(first.GetProperty("autoReplies").EnumerateArray());
         Assert.Equal(VacancyStatus.Rejected, await StatusOf("1"));
-        Assert.Equal(VacancyStatus.Invited, await StatusOf("2"));
+        Assert.Equal(VacancyStatus.Interview, await StatusOf("2"));
         Assert.Equal(VacancyStatus.Applied, await StatusOf("3"));
 
-        // Повтор того же сбора ничего не меняет; новый отказ после приглашения — с автоответом
+        // Повтор того же сбора ничего не меняет; новый отказ после собеседования — с автоответом
         var second = await Import(Chat(11, "1", "DISCARD", 101, Old), Chat(12, "2", "DISCARD", 104, DateTimeOffset.UtcNow.AddMinutes(1)));
         Assert.Equal(1, second.GetProperty("newMessages").GetInt32());
         Assert.Equal(VacancyStatus.Rejected, await StatusOf("2"));

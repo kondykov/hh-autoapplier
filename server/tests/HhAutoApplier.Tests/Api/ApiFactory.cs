@@ -60,6 +60,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             services.RemoveAll<IVacancySource>();
             services.AddSingleton<IVacancySource>(Source);
+            // Подключения сервера для выбора пользователем (#107): два выдуманных, ключей нет
+            services.RemoveAll<ILlmConnections>();
+            services.AddSingleton<ILlmConnections>(new FakeLlmConnections());
             services.RemoveAll<ILlmClient>();
             services.AddSingleton<ILlmClient>(Llm);
             services.RemoveAll<ITelegramBot>();
@@ -272,6 +275,23 @@ public sealed class FakeVacancySource : IVacancySource
 }
 
 // LLM для тестов: по умолчанию не настроена, как без LLM_API_KEY; ответы — по очереди из Answers
+public sealed class FakeLlmConnections : ILlmConnections
+{
+    public const string Fast = "groq-fast";
+
+    public const string Giga = "gigachat";
+
+    public IReadOnlyList<LlmConnectionStatus> Named() =>
+    [
+        new(Fast, "openai", "openai/gpt-oss-20b", true, null, null, 3, 300),
+        new(Giga, "gigachat", "GigaChat-2-Max", true, DateTimeOffset.UtcNow.AddMinutes(5), "провайдер ограничил частоту запросов", 10, 0),
+    ];
+
+    public LlmConnectionStatus DefaultFor(string task) => new("main", "openai", "openai/gpt-oss-120b", true, null, null, 0, 300);
+
+    public bool Exists(string name) => Named().Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+}
+
 public sealed class FakeLlmClient : ILlmClient
 {
     public Queue<string> Answers { get; } = new();

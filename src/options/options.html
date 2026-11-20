@@ -2,24 +2,84 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HH AutoApplier — настройки</title>
-  <style>
-    body { font: 14px/1.5 system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
-    h1 { font-size: 20px; }
-    code { background: #f3f4f6; padding: 1px 4px; border-radius: 4px; }
-    button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #0969da; background: #0969da; color: #fff; cursor: pointer; }
-    button:disabled { opacity: .5; cursor: default; }
-    #status { margin-top: 12px; }
-    .ok { color: #1a7f37; } .warn { color: #9a6700; }
-  </style>
 </head>
 <body>
-  <h1>HH AutoApplier: доступ к серверу</h1>
-  <p>Адрес сервера из панели: <code id="server">…</code></p>
-  <p>Chrome пускает расширение только на адреса, которые вы разрешили. <code>127.0.0.1</code> и <code>localhost</code> разрешены сразу,
-     адрес в домашней сети (например, <code>http://192.168.0.104:8080</code>) — этой кнопкой.</p>
-  <button id="grant" disabled>Разрешить доступ</button>
-  <p id="status"></p>
+  <main class="card">
+    <header>
+      <span class="mark">hh<b>=#</b></span>
+      <h1>Настройки</h1>
+      <span class="meta" id="meta"></span>
+    </header>
+    <form id="form" novalidate>
+      <section>
+        <h3>Сервер</h3>
+        <div class="field">
+          <label for="url">Адрес сервера</label>
+          <div><input id="url" type="text" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false"><div class="error" data-error="url"></div>
+            <small id="link" class="status"></small></div>
+        </div>
+        <div class="field">
+          <label for="apiKey">Токен</label>
+          <div><input id="apiKey" type="password" autocomplete="off" spellcheck="false">
+            <small>Выпустить — веб-интерфейс сервера, «Профиль». Пусто — оставить сохранённый.</small></div>
+        </div>
+        <div class="field" id="access-field">
+          <label>Доступ к адресу</label>
+          <div><button type="button" id="grant" disabled>Разрешить доступ</button>
+            <small id="access">Chrome пускает расширение только на разрешённые адреса: <code>127.0.0.1</code> и <code>localhost</code> — сразу, адрес в домашней сети — этой кнопкой.</small></div>
+        </div>
+        <div class="field">
+          <label for="importSearch">Поиск для выдачи</label>
+          <div><input id="importSearch" type="text" placeholder="имя поиска на сервере, например dotnet" autocomplete="off" spellcheck="false">
+            <small>Куда уходит страница выдачи по кнопке «Отправить страницу в поиск».</small></div>
+        </div>
+      </section>
+      <section>
+        <h3>Очередь</h3>
+        <div class="field">
+          <label for="dailyLimit">Дневной лимит</label>
+          <div><input id="dailyLimit" type="number" min="1" step="1"><div class="error" data-error="dailyLimit"></div></div>
+        </div>
+        <div class="field">
+          <label for="queueRunLimit">Откликов за запуск</label>
+          <div><input id="queueRunLimit" type="number" min="0" step="1"><div class="error" data-error="queueRunLimit"></div>
+            <small>0 — без ограничения. Пробный режим включается и выключается в панели.</small></div>
+        </div>
+      </section>
+      <section>
+        <h3>Тексты</h3>
+        <div class="field">
+          <label for="thanksOnReject">Ответ на отказ</label>
+          <div><label class="check"><input id="thanksOnReject" type="checkbox"> Отвечать «спасибо» на новые отказы при синхронизации чатов</label>
+            <input id="rejectionReply" type="text" style="margin-top:8px"><div class="error" data-error="rejectionReply"></div>
+            <small>Уходит только туда, где hh.ru разрешает писать; в пробном режиме не отправляется.</small></div>
+        </div>
+        <div class="field">
+          <label for="letter">Письмо, если сервер не прислал своё</label>
+          <div><textarea id="letter" rows="6"></textarea><div class="error" data-error="letter"></div></div>
+        </div>
+      </section>
+      <section>
+        <h3>Панель</h3>
+        <div class="field">
+          <label for="panelMode">Вид панели</label>
+          <div><select id="panelMode">
+              <option value="side">Боковая панель браузера</option>
+              <option value="floating">Плавающая на странице</option>
+              <option value="pill">Плашка в углу страницы</option>
+            </select>
+            <small>Боковая открывается значком расширения. Переключатель есть и в шапке панели.</small></div>
+        </div>
+      </section>
+      <div class="actions">
+        <button type="submit" class="primary" id="save">Сохранить</button>
+        <button type="button" id="check">Проверить связь</button>
+        <span class="status" id="status"></span>
+      </div>
+    </form>
+  </main>
   <script src="options.js"></script>
 </body>
 </html>

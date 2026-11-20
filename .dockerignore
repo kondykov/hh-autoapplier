@@ -1,0 +1,21 @@
+# Контекст сборки образа API — корень репозитория (server/Dockerfile, #130): только web/, scripts/build-web.mjs,
+# package*.json и server/. Остальное (зависимости, профиль dev-браузера, бэкапы, сборки, секреты) — мимо
+**/node_modules/
+**/bin/
+**/obj/
+.git/
+.claude/
+.profile/
+stage/
+dist/
+docs/
+tests/
+deploy/
+letter.local.txt
+**/.env
+**/llm-providers.env
+server/.tools/
+server/.idea/
+server/tests/
+# Сборка веба делается в образе: локальная копия не должна попасть внутрь
+server/src/HhAutoApplier.Api/wwwroot/

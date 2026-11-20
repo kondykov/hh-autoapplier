@@ -17,7 +17,9 @@ export interface CheckResult {
 
 export type QueueResult = { ok: true; items: QueueItem[] } | { ok: false; error: string };
 
-export type ReportResult = { ok: true } | { ok: false; error: string };
+export type StatsResult = { ok: true; counts: Record<string, number> } | { ok: false; status: number; error: string };
+
+export type ReportResult ={ ok: true } | { ok: false; error: string };
 
 export type ExtensionEvent = "Captcha" | "DailyLimit" | "SignedOut";
 
@@ -100,9 +102,17 @@ export class BackendClient {
     }
   }
 
+  // Число вакансий на сервере по статусам — сводка очереди в панели (#123); тот же запрос, что в check()
+  async getStats(quiet = false): Promise<StatsResult> {
+    const res = await this.call({ type: "hh-api", path: "/api/stats", quiet });
+    if (res.status !== 200) return { ok: false, status: res.status, error: describe(res) };
+    const counts = parse<Record<string, number>>(res);
+    return counts && typeof counts === "object" ? { ok: true, counts } : { ok: false, status: res.status, error: notJson(res) };
+  }
+
   // Версия backend и контракт API (#77): 404 — сборка старше этой проверки
-  async getServerVersion(): Promise<ServerVersionResult> {
-    const res = await this.call({ type: "hh-api", path: "/api/version" });
+  async getServerVersion(quiet = false): Promise<ServerVersionResult> {
+    const res = await this.call({ type: "hh-api", path: "/api/version", quiet });
     if (res.status === 404) return { state: "unknown" };
     if (res.status !== 200) return { state: "error", error: describe(res) };
 

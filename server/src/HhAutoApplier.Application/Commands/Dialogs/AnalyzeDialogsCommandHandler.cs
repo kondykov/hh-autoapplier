@@ -47,6 +47,8 @@ public class AnalyzeDialogsCommandHandler(
         var resumes = await db.Resumes.AsNoTracking().Where(r => r.UserId != null && userIds.Contains(r.UserId.Value))
             .ToDictionaryAsync(r => (r.UserId!.Value, r.Name), ct);
         var profiles = await db.CandidateProfiles.AsNoTracking().Where(p => p.UserId != null && userIds.Contains(p.UserId.Value)).ToListAsync(ct);
+        // Модели владельцев сообщений (#107)
+        var choices = await LlmChoices.LoadAsync(db, userIds.Select(id => (Guid?)id), ct);
 
         int analyzed = 0, failed = 0;
         string? stoppedBy = null;
@@ -66,7 +68,7 @@ public class AnalyzeDialogsCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request with { Purpose = DialogAnalysis.Purpose }, ct);
+                result = await llm.CompleteAsync(request with { Purpose = DialogAnalysis.Purpose, Provider = choices.For(message.UserId, DialogAnalysis.Purpose) }, ct);
             }
             catch (LlmUnavailableException e)
             {
@@ -82,7 +84,7 @@ public class AnalyzeDialogsCommandHandler(
                 ? LlmCall.Rejected(DialogAnalysis.Purpose, subject, result.Model, prompt, result.Content,
                     LlmCall.Unparsed, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())
                 : LlmCall.Succeeded(DialogAnalysis.Purpose, subject, result.Model, prompt, result.Content,
-                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(message.UserId));
+                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(message.UserId).Via(result.Connection));
 
             // Не разобрано — «прочее» без черновика: иначе сообщение разбиралось бы каждый проход и тратило лимит
             if (parsed is { } analysis)

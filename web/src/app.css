@@ -1,0 +1,80 @@
+/* Каркас веба (#46, #120): шапка, навигация, main, строка статуса и витрина /kit. Компоненты — ui/ui.css, токены — ui/tokens.css */
+
+header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+/* Шапка в одну строку (#128): логотип · разделы · поиск · аккаунт · тема. Разделы не переносятся — ряд прокручивается вбок */
+.top { margin: 0 auto; padding: 10px var(--sp-5); display: flex; flex-wrap: nowrap; gap: 12px; align-items: center; }
+.top > * { flex: none; }
+.mark { font: 700 var(--fs) var(--mono); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 3px 7px; background: var(--card); color: var(--text); text-decoration: none; white-space: nowrap; }
+.mark b { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; color: inherit; }
+.brand .name { font-family: var(--mono); font-size: var(--fs-sm); color: var(--muted); }
+#who { font: var(--fs-sm) var(--mono); color: var(--muted); }
+.attention { margin: 0; padding-left: 20px; }
+.attention li { margin: 4px 0; }
+/* Поле поиска сжимается первым (вес 10), до 150px, затем ряд разделов прокручивается; имя в меню — с многоточием */
+.top > nav#nav { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+nav#nav::-webkit-scrollbar { display: none; }
+nav#nav .tabs { flex-wrap: nowrap; gap: 2px; }
+nav#nav .tabs a { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; }
+/* Значки разделов — только в узкой шапке (ниже) */
+nav#nav .tabs a > .ic { display: none; width: 18px; height: 18px; }
+/* Поиск — справа от разделов, остальное за ним */
+.find { margin-left: auto; display: flex; flex: 0 10 260px; min-width: 150px; }
+.find .search-button { width: 100%; }
+.find .search-button kbd { margin-left: auto; }
+.top #who { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+@media (max-width: 1400px) { .brand .name { display: none; } }
+main { max-width: var(--page); margin: 0 auto; padding: var(--sp-5) var(--sp-4) 64px; }
+#status { color: var(--muted); min-height: 1.5em; }
+#status.error { color: var(--bad); }
+#statusbar:has(#status:empty) { display: none; }
+
+/* Узкий компьютер: поиск — значком, без подписи «autoapplier» */
+@media (max-width: 1100px) {
+  .top { gap: 10px; padding-inline: var(--sp-4); }
+  .find { flex: none; min-width: 0; }
+  .find .search-button { width: auto; padding: 6px; }
+  .find .search-button .search-text, .find .search-button kbd { display: none; }
+  /* Разделы — значками, подпись — только у текущего; у остальных — в подсказке и для чтения с экрана */
+  nav#nav .tabs a > .ic { display: block; }
+  nav#nav .tabs a:not(.active) > .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #viewing > label { display: none; }
+}
+
+@media (max-width: 720px) {
+  nav#nav { display: none; }
+  /* Меню аккаунта и тема на телефоне — в листе «Ещё» (#128) */
+  .account { display: none; }
+  .signed-in #theme { display: none; }
+  main { padding: 14px var(--sp-3) calc(96px + env(safe-area-inset-bottom)); }
+}
+
+/* Витрина /kit (#129) */
+.kit-sec { margin-bottom: var(--sp-6); }
+.kit-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
+.kit-row > .muted { font: var(--fs-2xs) var(--mono); min-width: 90px; }
+.kit-row > .track { flex: 1 1 200px; }
+.kit-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-2); }
+.kit-icons div { display: grid; justify-items: center; gap: var(--sp-1); padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--r); font: var(--fs-2xs) var(--mono); color: var(--muted); }
+.kit-icons .ic { width: 24px; height: 24px; color: var(--text); }
+.kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--sp-2); }
+.kit-swatches div { display: flex; align-items: center; gap: var(--sp-2); font: var(--fs-2xs) var(--mono); color: var(--muted); }
+.kit-swatches i { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--border); flex: none; }
+.kit-themes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.kit-themes > div { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-3); min-width: 0; }
+.kit-frame { width: 100%; height: 760px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg); display: block; margin: 0 auto; }
+@media (max-width: 900px) { .kit-themes { grid-template-columns: minmax(0, 1fr); } }
+
+/* Разделы (#128): скелетон загрузки, виды и фильтры «Вакансий» */
+.page-skel { max-width: 360px; margin-bottom: var(--sp-4); }
+.views { margin-bottom: var(--sp-3); }
+.filters .chips { margin-bottom: var(--sp-2); }
+.filters { margin-bottom: var(--sp-3); }
+@media (max-width: 720px) {
+  /* Виды — в одну строку с прокруткой, без переноса */
+  .views { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--sp-3)); padding-inline: var(--sp-3); }
+  .views a { white-space: nowrap; }
+}
+
+/* Тестовый стенд (#124): плашка над шапкой на всех страницах, включая вход */
+.stage { background: var(--warn-bg); color: var(--warn); border-bottom: 2px solid var(--warn); padding: 6px var(--sp-4); text-align: center; font-size: var(--fs-sm, 14px); }

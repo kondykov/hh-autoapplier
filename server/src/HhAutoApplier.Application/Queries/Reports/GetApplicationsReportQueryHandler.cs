@@ -14,7 +14,7 @@ public class GetApplicationsReportQueryHandler(
     ICurrentUser current
 ) : IQueryHandler<GetApplicationsReportQuery, ApplicationsReportResult>
 {
-    private const string Header = "Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме";
+    private const string Header = "Вакансия;Стек;Компания;Оплата;Формат;Ссылка;Дата;Резюме;Статус";
 
     private const string FormulaStart = "=+-@\t\r\n";
 
@@ -24,7 +24,9 @@ public class GetApplicationsReportQueryHandler(
         if (scope.IsT1)
             return scope.AsT1;
 
-        var rows = await db.Applications(scope.AsT0).AsNoTracking().Where(a => a.Status == VacancyStatus.Applied)
+        // Отправленные и ждущие: без ответа, приглашение, собеседование (#122); отказы — нет
+        var rows = await db.Applications(scope.AsT0).AsNoTracking()
+            .Where(a => a.Status == VacancyStatus.Applied || a.Status == VacancyStatus.Invited || a.Status == VacancyStatus.Interview)
             .OrderByDescending(a => a.AppliedAt).ToListAsync(ct);
 
         if (!string.Equals(query.Format, "csv", StringComparison.OrdinalIgnoreCase))
@@ -39,7 +41,7 @@ public class GetApplicationsReportQueryHandler(
         var lines = new List<string> { Header };
         lines.AddRange(rows.Select(a => string.Join(';',
             Quote(a.Vacancy.Title), Quote(string.Join(", ", a.Vacancy.Stack)), Quote(a.Vacancy.Company), Quote(a.Vacancy.Salary?.ToString() ?? "не указана"),
-            Quote(a.Vacancy.WorkFormat), Quote(a.Vacancy.Url), Quote(a.AppliedAt?.ToString("yyyy-MM-dd")), Quote(a.ResumeProfile))));
+            Quote(a.Vacancy.WorkFormat), Quote(a.Vacancy.Url), Quote(a.AppliedAt?.ToString("yyyy-MM-dd")), Quote(a.ResumeProfile), Quote(Application.Telegram.BotHtml.Status(a.Status)))));
 
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(string.Join("\r\n", lines))];
     }

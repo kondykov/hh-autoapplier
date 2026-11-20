@@ -295,6 +295,10 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.Property<int>("CompletionTokens")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Connection")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -336,6 +340,27 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "VacancyId");
 
                     b.ToTable("LlmCalls", (string)null);
+                });
+
+            modelBuilder.Entity("HhAutoApplier.Domain.Llm.UserLlmSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId"), false);
+
+                    b.ToTable("UserLlmSettings", (string)null);
                 });
 
             modelBuilder.Entity("HhAutoApplier.Domain.Notifications.Notification", b =>
@@ -1042,6 +1067,41 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("HhAutoApplier.Domain.Llm.UserLlmSettings", b =>
+                {
+                    b.HasOne("HhAutoApplier.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.OwnsMany("HhAutoApplier.Domain.Llm.LlmChoice", "Choices", b1 =>
+                        {
+                            b1.Property<int>("UserLlmSettingsId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<string>("Connection")
+                                .IsRequired();
+
+                            b1.Property<string>("Task")
+                                .IsRequired();
+
+                            b1.HasKey("UserLlmSettingsId", "__synthesizedOrdinal");
+
+                            b1.ToTable("UserLlmSettings");
+
+                            b1
+                                .ToJson("Choices")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("UserLlmSettingsId");
+                        });
+
+                    b.Navigation("Choices");
                 });
 
             modelBuilder.Entity("HhAutoApplier.Domain.Notifications.Notification", b =>

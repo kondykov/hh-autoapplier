@@ -69,7 +69,10 @@ public static class DependencyInjection
         // Маршруты под задачи (#104): у каждого свой клиент, счётчик дневного лимита и пауза
         var llmRoutes = LlmRoutes.Resolve(llmOptions);
         var routedPurposes = llmRoutes.Keys.SelectMany(LlmRoutes.PurposesOf).ToList();
-        // Счётчик после перезапуска продолжается по журналу: основной — без назначений маршрутов, маршрут — только свои
+        // Именованные подключения (#107): выбор пользователя по задачам, у каждого тоже свой клиент, счётчик и пауза
+        var llmConnections = LlmConnections.Resolve(llmOptions);
+        // Счётчик после перезапуска продолжается по журналу: основной — без назначений маршрутов, маршрут — только свои;
+        // запросы через подключение пользователя — только в счёт подключения
         static Func<DateOnly, int> UsedToday(IServiceProvider sp, Func<IQueryable<LlmCall>, IQueryable<LlmCall>> filter) => day =>
         {
             using var scope = sp.CreateScope();
@@ -79,10 +82,11 @@ public static class DependencyInjection
             // перезапуска сотни таких записей за сбойный день считались бы расходом и сразу закрывали лимит
             return filter(calls).Count(c => c.Model != null && c.Model != "");
         };
-        services.AddSingleton(sp => new LlmBudget(sp.GetRequiredService<TimeProvider>(), UsedToday(sp, q => q.Where(c => !routedPurposes.Contains(c.Purpose)))));
+        services.AddSingleton(sp => new LlmBudget(sp.GetRequiredService<TimeProvider>(),
+            UsedToday(sp, q => q.Where(c => c.Connection == null && !routedPurposes.Contains(c.Purpose)))));
 
-        var gigaChat = llmOptions.GetProfile().Name == LlmOptions.GigaChatProvider
-                       || llmRoutes.Values.Any(o => o.GetProfile().Name == LlmOptions.GigaChatProvider);
+        var gigaChat = new[] { llmOptions }.Concat(llmRoutes.Values).Concat(llmConnections.Values)
+            .Any(o => o.GetProfile().Name == LlmOptions.GigaChatProvider);
         var root = gigaChat ? GigaChatTls.LoadRoot() : null;
         if (root is not null)
             services.AddHttpClient(GigaChatTokenSource.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => GigaChatTls.CreateHandler(root));
@@ -95,25 +99,43 @@ public static class DependencyInjection
             services.AddSingleton<ILlmTokenSource, GigaChatTokenSource>();
         }
 
-        // Состояние маршрута живёт всё время работы приложения: счётчик и пауза, токен ГигаЧата — keyed-синглтоны по имени маршрута
-        foreach (var (name, options) in llmRoutes)
+        // Состояние маршрута и подключения живёт всё время работы приложения: счётчик и пауза, токен ГигаЧата — keyed-синглтоны
+        // по ключу llm:<маршрут> или llm-provider:<имя>
+        void AddEndpoint(string key, LlmOptions options, Func<IQueryable<LlmCall>, IQueryable<LlmCall>> used)
         {
-            var http = services.AddHttpClient(RouteClient(name));
-            var purposes = LlmRoutes.PurposesOf(name).ToList();
-            services.AddKeyedSingleton(name, (sp, _) => new LlmBudget(sp.GetRequiredService<TimeProvider>(), UsedToday(sp, q => q.Where(c => purposes.Contains(c.Purpose)))));
+            var http = services.AddHttpClient(key);
+            services.AddKeyedSingleton(key, (sp, _) => new LlmBudget(sp.GetRequiredService<TimeProvider>(), UsedToday(sp, used)));
             if (options.GetProfile().Name != LlmOptions.GigaChatProvider)
-                continue;
+                return;
             http.ConfigurePrimaryHttpMessageHandler(() => GigaChatTls.CreateHandler(root!));
-            services.AddKeyedSingleton<ILlmTokenSource>(name, (sp, _) =>
+            services.AddKeyedSingleton<ILlmTokenSource>(key, (sp, _) =>
                 new GigaChatTokenSource(sp.GetRequiredService<IHttpClientFactory>(), Options.Create(options), sp.GetRequiredService<TimeProvider>()));
         }
 
+        foreach (var (name, options) in llmRoutes)
+        {
+            var purposes = LlmRoutes.PurposesOf(name).ToList();
+            AddEndpoint(RouteClient(name), options, q => q.Where(c => c.Connection == null && purposes.Contains(c.Purpose)));
+        }
+
+        foreach (var (name, options) in llmConnections)
+            AddEndpoint(ConnectionClient(name), options, q => q.Where(c => c.Connection == name));
+
+        static ILlmClient EndpointClient(IServiceProvider sp, string key, LlmOptions options) => new OpenAiCompatibleClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(key), Options.Create(options),
+            sp.GetRequiredKeyedService<LlmBudget>(key), sp.GetRequiredService<ILogger<OpenAiCompatibleClient>>(),
+            tokens: sp.GetKeyedService<ILlmTokenSource>(key));
+
         services.AddTransient<ILlmClient>(sp => new RoutingLlmClient(
             sp.GetRequiredService<OpenAiCompatibleClient>(),
-            llmRoutes.ToDictionary(r => r.Key, r => (ILlmClient)new OpenAiCompatibleClient(
-                sp.GetRequiredService<IHttpClientFactory>().CreateClient(RouteClient(r.Key)), Options.Create(r.Value),
-                sp.GetRequiredKeyedService<LlmBudget>(r.Key), sp.GetRequiredService<ILogger<OpenAiCompatibleClient>>(),
-                tokens: sp.GetKeyedService<ILlmTokenSource>(r.Key)))));
+            llmRoutes.ToDictionary(r => r.Key, r => EndpointClient(sp, RouteClient(r.Key), r.Value)),
+            llmConnections.ToDictionary(c => c.Key, c => EndpointClient(sp, ConnectionClient(c.Key), c.Value), StringComparer.OrdinalIgnoreCase),
+            sp.GetRequiredService<ILogger<RoutingLlmClient>>()));
+
+        services.AddSingleton<ILlmConnections>(sp => new LlmConnectionRegistry(
+            new LlmEndpoint(LlmConnectionRegistry.MainName, llmOptions, sp.GetRequiredService<LlmBudget>()),
+            llmRoutes.ToDictionary(r => r.Key, r => new LlmEndpoint(r.Key, r.Value, sp.GetRequiredKeyedService<LlmBudget>(RouteClient(r.Key)))),
+            llmConnections.Select(c => new LlmEndpoint(c.Key, c.Value, sp.GetRequiredKeyedService<LlmBudget>(ConnectionClient(c.Key)))).ToList()));
 
         // Telegram: без токена бот выключен, уведомления не пишутся
         services.Configure<TelegramOptions>(config.GetSection(TelegramOptions.Section));
@@ -126,7 +148,7 @@ public static class DependencyInjection
         // Проверка связи по направлениям (#132): Bot API и провайдеры LLM с ключом — тем же прокси, что у HTTP-клиентов
         services.Configure<LinkOptions>(config.GetSection(LinkOptions.Section));
         var telegramOn = !string.IsNullOrWhiteSpace(config.GetSection(TelegramOptions.Section).Get<TelegramOptions>()?.BotToken);
-        var llmWithKey = new[] { llmOptions }.Concat(llmRoutes.Values).Where(o => !string.IsNullOrWhiteSpace(o.ApiKey)).ToList();
+        var llmWithKey = new[] { llmOptions }.Concat(llmRoutes.Values).Concat(llmConnections.Values).Where(o => !string.IsNullOrWhiteSpace(o.ApiKey)).ToList();
         // ГигаЧат — с тем же доверием к корню Минцифры, что у его HTTP-клиентов: иначе проверка видит «недоверенный сертификат» (#138)
         Dictionary<string, RemoteCertificateValidationCallback>? gigaChatCertificates = null;
         if (root is not null)
@@ -148,4 +170,6 @@ public static class DependencyInjection
     }
 
     private static string RouteClient(string route) => $"llm:{route}";
+
+    private static string ConnectionClient(string name) => $"llm-provider:{name}";
 }

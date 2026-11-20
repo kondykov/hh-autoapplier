@@ -23,6 +23,10 @@ public class LlmCall
 
     public string Model { get; private set; } = "";
 
+    // Подключение пользователя (#107, Llm:Providers:<имя>), которое ответило; null — маршрут сервера по умолчанию.
+    // По нему после перезапуска считается дневной лимит подключения
+    public string? Connection { get; private set; }
+
     public string Prompt { get; private set; } = "";
 
     public string? Response { get; private set; }
@@ -60,6 +64,12 @@ public class LlmCall
     public LlmCall For(Guid? userId)
     {
         UserId = userId;
+        return this;
+    }
+
+    public LlmCall Via(string? connection)
+    {
+        Connection = connection;
         return this;
     }
 

@@ -6,9 +6,11 @@
 
 ## Commands
 ```powershell
-npm run typecheck                 # tsc --noEmit
-npm test                          # vitest
+npm run typecheck                 # tsc --noEmit (расширение)
+npm run typecheck:web             # tsc -p web (веб)
+npm test                          # vitest: tests/ (расширение) и web/tests/ (веб)
 npm run build                     # dist/content.js + dist/background.js (esbuild)
+npm run build:web                 # веб web/ → server/src/HhAutoApplier.Api/wwwroot (генерируется, не в git); нужен до dotnet test и запуска API без Docker
 node scripts/dev-browser.mjs      # Chromium с расширением, профиль .profile, CDP :9222
 node scripts/cdp-queue-dry-run.mjs # пробный проход очереди в запущенном dev-браузере: журнал и снимок формы, без отправки
 node scripts/cdp-inspect.mjs [--form] # read-only: вкладки dev-браузера, флаги очереди/пробного режима, снимок формы
@@ -17,8 +19,8 @@ node scripts/server.mjs inspect   # read-only снимок сервера backen
 node scripts/server.mjs ps "..."  # pwsh на сервере по SSH (UTF-8); --windows — Windows PowerShell; изменения на сервере — только по решению владельца
 node scripts/gh-task.mjs status 86 "In Progress"  # статус в Project #5, done N --comment, board, ci --wait (справка — без аргументов)
 node scripts/real-check.mjs --env server/.env --query "..." --ids 1,2 --report <файл>  # живой прогон на настоящих hh.ru и LLM: одноразовая Postgres, API на :8093, отчёт; тратит запросы, откликов не отправляет
-cd server; dotnet test            # xunit (нужен запущенный Docker — Postgres для тестов API в Testcontainers)
-cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:8080
+cd server; dotnet test            # xunit (нужен запущенный Docker — Postgres для тестов API в Testcontainers); веб — после npm run build:web
+cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:8080; контекст образа — корень репозитория, веб собирается в образе
 ```
 Расширение читается только при старте браузера: после `build` браузер перезапускать (спросить, если у владельца открыта страница).
 
@@ -35,14 +37,17 @@ cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:808
 
 ## Testing
 - Чистая логика — тесты в `tests/` (vitest + happy-dom), без живого hh.ru; разметка формы отклика hh.ru — `tests/fixtures/response-form.ts` (по живой странице), её же брать для новых тестов конвейера
+- Веб — `web/tests/` (vitest + happy-dom): роутинг, расчёты дашборда, компоненты kit
 - Backend — `server/tests/HhAutoApplier.Tests`
-- Перед «готово»: typecheck + test + build (или `dotnet test`); то же гоняет CI (`.github/workflows/ci.yml`) на каждый push, плюс проверку, что модель EF совпадает с миграциями
+- Перед «готово»: typecheck + test + build (веб — ещё `typecheck:web` и `build:web`; или `dotnet test`); то же гоняет CI (`.github/workflows/ci.yml`) на каждый push, плюс проверку, что модель EF совпадает с миграциями
 - Живую страницу проверять read-only через CDP; не нажимать «Отправить». Перед открытием вакансии убедиться, что очередь выключена и пробный режим включён — режим очереди переживает перезапуск браузера. Перед закрытием или перезапуском dev-браузера проверить вкладки: открыто что-то кроме стартовой страницы — спросить владельца
 
 ## Project Structure
 - `src/content/main.ts` — композиция; `src/core/` — Controller (сборка и выбор шага), settings, config, selectors; `src/pages/*-step.ts` — шаги страниц (выдача → сервер, очередь, отказы) на `StepContext`
-- `src/{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra,ui}` — модули
+- `src/{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra}` — модули
+- `src/shared` — общее без hh.ru (панель, тема, протокол панели; вместе с `src/infra`): не импортирует hh-специфичное, проверяет `tests/settings.test.ts`. `src/sidepanel` — боковая панель, `src/options` — страница настроек (#123)
 - `src/api` — клиент backend и транспорт; `src/background/main.ts` — service worker, через который идут все запросы к backend (со страницы hh.ru Chrome блокирует запросы в локальную сеть)
+- `web/` — веб-интерфейс backend на TS (#130): `src/main.ts` — каркас (навигация, вход), `src/router.ts` — разделы на путях (`/review`, `/vacancies?status=…`), `src/pages/` — разделы, `src/api/` — типы ответов и fetch, `src/ui/` — UI kit; `scripts/build-web.mjs` (esbuild, имена с отпечатком) собирает в `wwwroot`, раздаёт тот же ASP.NET (`Api/WebInterface.cs`)
 - `server/src/HhAutoApplier.{Domain,Application,Infrastructure,Api}` — DDD + CQRS: агрегаты, команды/запросы, EF и источники, контроллеры (`docs/adr/0001-backend-ddd-cqrs.md`)
 - `deploy/` — деплой backend на сервер по кнопке через self-hosted runner (`docs/DEPLOY.md`); метку `home-server` в других workflow не использовать
 - `docs/` — для людей; план доработок — `docs/ROADMAP.md`
@@ -58,6 +63,7 @@ qs<HTMLElement>(SELECTORS.responseModalClose)?.click();
 // ❌ логика в контроллере или Program.cs; публичные сеттеры у агрегатов; HasData (сидировать через DbSeeder)
 ```
 Новое поле конфига — и в дефолты, и в слияние `loadConfig`.
+UI веба и расширения — только из UI kit (`web/src/ui/`: `tokens.css`, `icons.svg`, `ui.ts`, `ui.css`; `docs/design/ui-kit.md`): своих цветов, копий стилей и разметки повторяющихся блоков в разделах нет. Нужного элемента нет — сначала добавить в kit и витрину `/kit`, потом использовать (решение владельца 2026-11-18, #129).
 
 ## Git Workflow
 - Новая задача — новая ветка `№№-task_name` от `develop`, №№ — номер issue (например, `78-queue_captcha`). Цепочка взаимосвязанных задач, находящихся в работе, — в ветке родительской задачи; если родитель уже в Done — в новой ветке

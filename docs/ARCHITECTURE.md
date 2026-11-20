@@ -1,6 +1,6 @@
 # Архитектура расширения
 
-Chrome MV3, TypeScript. Исходники разбиты на модули, в поставке два файла (esbuild, IIFE): `dist/content.js` — на страницах hh.ru, `dist/background.js` — service worker для запросов к backend. Расширение перенесено из пользовательских скриптов Tampermonkey коллеги; старый код удалён, он остался в истории git.
+Chrome MV3, TypeScript. Исходники разбиты на модули, в поставке (esbuild, IIFE): `dist/content.js` — на страницах hh.ru, `dist/background.js` — service worker для запросов к backend, `dist/sidepanel.js` — боковая панель браузера, `dist/options.js` — страница настроек. Расширение перенесено из пользовательских скриптов Tampermonkey коллеги; старый код удалён, он остался в истории git.
 
 Backend описан в [BACKEND.md](BACKEND.md), план доработок — в [ROADMAP.md](ROADMAP.md). Отбор вакансий, выбор резюме и письмо — только на backend (#27, решение владельца 2026-10-26): расширение откликается из очереди backend, а выдачу со страницы может отправить на сервер как запасной сбор.
 
@@ -14,7 +14,7 @@ Backend описан в [BACKEND.md](BACKEND.md), план доработок �
 | `pages/search-step.ts` | выдача → backend: карточки текущей страницы в `POST /api/import` (запасной сбор) |
 | `pages/queue-step.ts` | режим «из очереди» |
 | `pages/reject-step.ts` | чаты: следующий отказ, авто-отказы |
-| `core/settings.ts` | настройки из панели: лимит, запасное письмо, сервер, поиск для выдачи, пробный режим |
+| `core/settings.ts` | настройки из панели: пробный режим, вид панели, индикатор связи; остальное — страница настроек |
 | `core/state.ts` | состояние (режим очереди, outline, unclear) и `StateRepository` |
 | `core/config.ts` | `AppConfig`, дефолты, `loadConfig`/`saveConfig` |
 | `core/selectors.ts` | все селекторы и текстовые маркеры hh.ru |
@@ -30,7 +30,10 @@ Backend описан в [BACKEND.md](BACKEND.md), план доработок �
 | `captcha/guard.ts` | детектор капчи: ставит очередь на паузу, решает человек |
 | `dom/` | хелперы: `qs`/`qsa`, тип страницы, ввод в поля React |
 | `infra/` | `KeyValueStorage` (Chrome и Memory), `Logger` с приёмниками |
-| `ui/` | панель-оверлей, модалки, стили |
+| `shared/panel/` | общая панель (#123): `model` (состояние, команды, `sectionsFor` — разделы по типу страницы), `store` (состояние вкладки, приёмник журнала), `view` (вид), `page-host` (плавающая панель и плашка в shadow root), `protocol` (сообщения страница ↔ боковая панель ↔ фон), `theme` |
+| `sidepanel/` | боковая панель браузера: состояние активной вкладки, команды в её content script, свой индикатор связи |
+| `options/` | страница настроек: сервер, токен, разрешение на адрес, поиск для выдачи, лимиты, тексты, вид панели (`form.ts` — проверка формы без DOM) |
+| `pages/page-kind.ts`, `pages/chat-sync.ts`, `pages/hh-view.ts` | hh.ru для общей панели: тип страницы → раздел, «Синхронизировать чаты» с любой страницы, подписи |
 | `api/` | `BackendClient` (проверка связи, очередь, резюме, статусы, анкеты, импорт выдачи, события) и транспорт `executeApiRequest` |
 | `queue/queue-mode.ts` | чистая логика режима «из очереди»: адрес страницы отклика, выбор следующей вакансии, исход → статус сервера |
 | `background/main.ts` | service worker: принимает `{ type: "hh-api", path, method, body }` только от своего расширения, сам берёт адрес и ключ из конфига и делает `fetch` |
@@ -86,6 +89,8 @@ node scripts/dev-browser.mjs   # Chromium с расширением, профи�
 ```
 
 Браузер читает расширение только при старте, поэтому после сборки его перезапускают.
+
+Веб-интерфейс backend — отдельный проект `web/` в том же `package.json` (#130): `npm run typecheck:web`, `npm run build:web`, тесты — в общем `npm test`. Описание — [BACKEND.md](BACKEND.md), компоненты — [design/ui-kit.md](design/ui-kit.md). До реорганизации репозитория (#131) расширение остаётся в корне.
 
 ## Не сделано
 

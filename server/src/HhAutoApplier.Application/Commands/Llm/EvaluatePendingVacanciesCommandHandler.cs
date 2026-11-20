@@ -31,12 +31,15 @@ public class EvaluatePendingVacanciesCommandHandler(
         var usage = await quota.LoadAsync(ct);
         var exhausted = usage.Exhausted;
         var pending = await db.ActiveApplications(await users.GetBlockedIdsAsync(ct)).Where(a => a.Status == VacancyStatus.Pending && !exhausted.Contains(a.UserId))
+            .Where(a => command.OnlyApplicationId == null || a.Id == command.OnlyApplicationId)
             // Свежие первыми (#85): старые карточки чаще уже в архиве, а новые не должны ждать их разбора
             .OrderByDescending(a => a.Vacancy.LastSeenAt).ThenByDescending(a => a.Vacancy.CollectedAt).Take(command.Limit).ToListAsync(ct);
         // Резюме — владельца отклика, правила — поиска, который нашёл вакансию
         var resumesByOwner = (await db.ResumesOf(pending).ToListAsync(ct)).ToLookup(r => r.UserId);
         // Профиль кандидата (#35) — владельца отклика
         var profiles = await db.ProfilesOf(pending).ToListAsync(ct);
+        // Модели владельцев откликов (#107); разовый прогон — заданное подключение
+        var choices = command.Provider is { } provider ? LlmChoices.Only(provider) : await LlmChoices.LoadAsync(db, pending.Select(a => a.UserId), ct);
 
         int fit = 0, doubtful = 0, rejected = 0;
         string? stoppedBy = null;
@@ -55,7 +58,7 @@ public class EvaluatePendingVacanciesCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request with { Purpose = VacancyAssessment.Purpose }, ct);
+                result = await llm.CompleteAsync(request with { Purpose = VacancyAssessment.Purpose, Provider = choices.For(application.UserId, VacancyAssessment.Purpose) }, ct);
             }
             catch (LlmUnavailableException e)
             {
@@ -71,7 +74,7 @@ public class EvaluatePendingVacanciesCommandHandler(
                 ? LlmCall.Rejected(VacancyAssessment.Purpose, application.VacancyId, result.Model, prompt, result.Content,
                     LlmCall.Unparsed, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())
                 : LlmCall.Succeeded(VacancyAssessment.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId));
+                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId).Via(result.Connection));
 
             // Неразобранный ответ — на ручную проверку, чтобы вакансия не застряла в Pending
             var assessment = parsed
@@ -81,7 +84,7 @@ public class EvaluatePendingVacanciesCommandHandler(
             // Доля кончилась или провайдер недоступен: просьбы неизвестны, отклик остаётся Pending и оценится заново
             if (assessment.Verdict != LlmVerdict.Reject)
             {
-                var (ready, unavailable) = await ExtractLetterRequestsAsync(application, profiles.FirstOrDefault(p => p.UserId == application.UserId), usage, ct);
+                var (ready, unavailable) = await ExtractLetterRequestsAsync(application, profiles.FirstOrDefault(p => p.UserId == application.UserId), usage, choices, ct);
                 if (!ready)
                 {
                     await db.SaveChangesAsync(ct);
@@ -124,7 +127,7 @@ public class EvaluatePendingVacanciesCommandHandler(
     // Ready — итог записан в отклик. Иначе отклик ждёт следующего прохода; Unavailable — причина остановить проход.
     // Неразобранный ответ — неизвестно, а не «просьб нет»: две попытки, затем сбой и ручная проверка. Запросов на отклик за сутки — не больше двух
     private async Task<(bool Ready, string? Unavailable)> ExtractLetterRequestsAsync(JobApplication application, CandidateProfile? profile,
-        LlmQuotaUsage usage, CancellationToken ct)
+        LlmQuotaUsage usage, LlmChoices choices, CancellationToken ct)
     {
         if (!LetterRequestExtraction.MayContainRequests(application.Vacancy.Description))
         {
@@ -145,7 +148,7 @@ public class EvaluatePendingVacanciesCommandHandler(
             LlmResult result;
             try
             {
-                result = await llm.CompleteAsync(request with { Purpose = LetterRequestExtraction.Purpose }, ct);
+                result = await llm.CompleteAsync(request with { Purpose = LetterRequestExtraction.Purpose, Provider = choices.For(application.UserId, LetterRequestExtraction.Purpose) }, ct);
             }
             catch (LlmUnavailableException e)
             {
@@ -158,7 +161,7 @@ public class EvaluatePendingVacanciesCommandHandler(
                 ? LlmCall.Rejected(LetterRequestExtraction.Purpose, application.VacancyId, result.Model, prompt, result.Content,
                     LlmCall.Unparsed, result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())
                 : LlmCall.Succeeded(LetterRequestExtraction.Purpose, application.VacancyId, result.Model, prompt, result.Content,
-                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId));
+                    result.PromptTokens, result.CompletionTokens, clock.GetUtcNow())).For(application.UserId).Via(result.Connection));
             if (requests is not null)
             {
                 application.RecordLetterRequests(requests, profile);
