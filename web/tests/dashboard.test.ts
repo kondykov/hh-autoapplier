@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Dashboard } from "../src/api/types";
-import { ago } from "../src/format";
+import { ago, responsesPill } from "../src/format";
 import { competitionRows, delta, funnelRows, seriesBars } from "../src/pages/dashboard-data";
 
 const NOW = new Date("2026-11-18T12:00:00Z").getTime();
@@ -94,5 +94,15 @@ describe("ago", () => {
     expect(ago(NOW - 5 * 60_000, NOW)).toBe("5 мин назад");
     expect(ago(NOW - 3 * 3_600_000, NOW)).toBe("3 ч назад");
     expect(ago(NOW - 50 * 3_600_000, NOW)).toBe("2 дн назад");
+  });
+});
+
+describe("метка числа откликов (#148)", () => {
+  it("нет данных — метки нет; при сборе — число; со своим откликом — «было → стало»", () => {
+    expect(responsesPill({ responsesAtCollect: null, responsesAtApply: null })).toBeNull();
+    expect(responsesPill({ responsesAtCollect: 156, responsesAtApply: null })?.textContent).toBe("откликов 156");
+    const both = responsesPill({ responsesAtCollect: 156, responsesAtApply: 180 });
+    expect(both?.textContent).toBe("откликов 156 → 180");
+    expect(both?.title).toBe("откликов на hh.ru при сборе: 156; перед своим откликом: 180");
   });
 });

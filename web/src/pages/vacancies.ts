@@ -3,7 +3,7 @@
 import { api, post } from "../api/http";
 import type { LetterRequest, LlmConnection, LlmProviders, Search, Vacancy } from "../api/types";
 import { connectionState } from "./llm";
-import { date, salary, sourcePill, STATUSES } from "../format";
+import { date, responsesPill, salary, sourcePill, STATUSES } from "../format";
 import { path, type Route } from "../router";
 import { act, app, readOnly, scoped } from "../state";
 import { Actions, Button, Card, Chips, Disclosure, el, EmptyState, Menu, Meta, PageHead, Pill, Pre, Result, safeUrl, StackTable, Tabs, Toast, Toolbar, type Child } from "@hh-autoapplier/ui";
@@ -194,13 +194,10 @@ function vacancyCard(v: Vacancy): HTMLElement {
   const pill = Pill(STATUSES[v.status] ?? v.status);
   return Card({ as: "article",
     head: el("div", {}, el("a", { href: safeUrl(v.url), target: "_blank", rel: "noopener", textContent: v.title, title: "Открыть вакансию" }), " ", pill, " ", sourcePill(v),
-      v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
+      responsesPill(v) ? [" ", responsesPill(v)] : null, v.hiddenAt ? [" ", Pill("скрыта")] : null, v.vacancyArchived ? [" ", Pill("в архиве")] : null),
     meta: [v.company, v.area, salary(v), v.workFormat, v.workExperience && `опыт: ${v.workExperience}`, `балл ${v.llmScore ?? v.score}`, v.resumeProfile && `резюме ${v.resumeProfile}`, v.searchName && `поиск ${v.searchName}`, v.appliedAt && `отклик ${date(v.appliedAt)}`] },
   // Вакансия общая: даты — когда её нашли впервые и когда она встретилась в сборе или импорте последний раз (#70)
-  Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`,
-    // Конкуренция (#148): сколько откликов было при сборе и перед своим
-    v.responsesAtCollect != null && `откликов при сборе ${v.responsesAtCollect}`,
-    v.responsesAtApply != null && `перед своим ${v.responsesAtApply}`]),
+  Meta([v.collectedAt && `найдена ${date(v.collectedAt)}`, v.lastSeenAt && `встречалась ${date(v.lastSeenAt)}`]),
   v.statusReason || v.llmReason ? el("div", { className: "reason", textContent: v.statusReason ?? v.llmReason }) : null,
   letterRequestsBlock(v),
   v.coverLetter ? Disclosure("Письмо", Pre(v.coverLetter)) : null,
