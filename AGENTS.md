@@ -6,14 +6,14 @@
 
 ## Commands
 ```powershell
-npm run typecheck                 # tsc --noEmit (расширение)
-npm run typecheck:web             # tsc -p web (веб)
-npm test                          # vitest: tests/ (расширение) и web/tests/ (веб)
-npm run build                     # dist/content.js + dist/background.js (esbuild)
+# Всё — из корня репозитория: npm workspaces (extensions/hh, web, packages/ui), один npm install / npm ci в корне
+npm run typecheck                 # tsc --noEmit во всех workspaces (расширение, веб, UI kit)
+npm test                          # vitest во всех workspaces: extensions/hh/tests, web/tests, packages/ui/tests
+npm run build                     # расширение → extensions/hh/dist (content.js, background.js, options, sidepanel; esbuild)
 npm run build:web                 # веб web/ → server/src/HhAutoApplier.Api/wwwroot (генерируется, не в git); нужен до dotnet test и запуска API без Docker
-node scripts/dev-browser.mjs      # Chromium с расширением, профиль .profile, CDP :9222
-node scripts/cdp-queue-dry-run.mjs # пробный проход очереди в запущенном dev-браузере: журнал и снимок формы, без отправки
-node scripts/cdp-inspect.mjs [--form] # read-only: вкладки dev-браузера, флаги очереди/пробного режима, снимок формы
+node extensions/hh/scripts/dev-browser.mjs      # Chromium с расширением из extensions/hh/dist, профиль .profile в корне, CDP :9222
+node extensions/hh/scripts/cdp-queue-dry-run.mjs # пробный проход очереди в запущенном dev-браузере: журнал и снимок формы, без отправки
+node extensions/hh/scripts/cdp-inspect.mjs [--form] # read-only: вкладки dev-браузера, флаги очереди/пробного режима, снимок формы
 node scripts/db-query.mjs "select ..." # read-only запрос к базе docker compose
 node scripts/server.mjs inspect   # read-only снимок сервера backend по SSH (Debian 13; хост — псевдоним home-server-root из ~/.ssh/config)
 node scripts/server.mjs ps "..."  # pwsh на сервере по SSH (UTF-8); --windows — Windows PowerShell; изменения на сервере — только по решению владельца
@@ -28,33 +28,36 @@ cd server; docker compose up -d --build   # postgres:17 + api на 127.0.0.1:808
 У расширения и backend версии свои, совместимость между ними — номер контракта API (#77). Мажорная версия обеих частей — 0, пока сервис в альфа- и бета-тестировании (решение владельца 2026-11-09): не поднимать без его слова.
 Флагман системы — сервер (backend), расширение — один из его клиентов (решение владельца 2026-11-18, #125): релиз называется по версии backend, отметка Latest в GitHub Releases — у backend.
 - Версии не поднимаются по задачам: только в ветке релиза — `-rc.N` на время сбора, итоговая перед слиянием релиза в `develop` (см. «Релиз»)
-- Расширение: `manifest.json`, `package.json`, `package-lock.json` — вместе, если в релизе есть изменения `src/`
+- Расширение: `extensions/hh/manifest.json`, `extensions/hh/package.json`, `package-lock.json` (корень) — вместе, если в релизе есть изменения `extensions/hh/src` или `packages/ui`
 - Backend: `server/Directory.Build.props` — если в релизе есть изменения `server/src` (SemVer); `GET /api/version` отдаёт версию, коммит и контракт
-- Контракт: `ApiContract.Version` и `API_VERSION` в `src/api/version.ts` — поднимать в задаче, а не при релизе, вместе и только при несовместимом изменении (удалили или переименовали поле или эндпоинт, поменяли смысл статуса); новое необязательное поле контракт не меняет. Расхождение ловит `npm test`
+- Контракт: `ApiContract.Version` и `API_VERSION` в `extensions/hh/src/api/version.ts` — поднимать в задаче, а не при релизе, вместе и только при несовместимом изменении (удалили или переименовали поле или эндпоинт, поменяли смысл статуса); новое необязательное поле контракт не меняет. Расхождение ловит `npm test`
 - Известное расхождение контракта не даёт запустить очередь; сборка без `/api/version` — предупреждение
 - Сборка образа с коммитом: `GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build`
-- Релиз (порядок с 2026-11-16): ветки задач → ветка релиза → `develop` → `master`. Перед сбором — issue о релизе: какие задачи включить, какие оставить и почему, версия расширения и backend; состав и версию согласовать с владельцем. По просьбе владельца ветка релиза `release-<версия backend>` (например, `release-0.5.0`; не `release/0.5.0`) ответвляется от `develop`, в неё сливаются ветки задач из согласованного состава, там релиз собирается и проверяется. Два релиза одновременно — каждый в своей ветке. Проверенный и согласованный владельцем релиз сливается в `develop`, затем `develop` — в `master`. Пока идёт сбор, версия каждой выпускаемой части — с суффиксом `-rc.N`: например, `0.5.0-rc.1` в `server/Directory.Build.props` и `0.8.0-rc.1` в `package.json`, `package-lock.json`, теги `backend-v0.5.0-rc.1` и `ext-v0.8.0-rc.1`, GitHub Release с отметкой pre-release. В `manifest.json` поле `version` без суффикса (Chrome принимает только цифры с точками), метка — в `version_name`; при выпуске `version_name` убрать. Перед слиянием релиза в `develop` — итоговые версии отдельным коммитом в ветке релиза; на merge-коммит `develop` → `master` — аннотированный тег `backend-v<версия>`, если менялся backend, и `ext-v<версия>`, если менялось расширение; GitHub Release — по одному на каждую выпущенную часть: «Backend Y» на `backend-v…` с отметкой Latest и «Расширение X» на `ext-v…` без неё (Latest у GitHub один); в описании — список изменений, совместимая версия другой части и контракт API. Релиз только расширения — один релиз расширения без Latest, Latest остаётся у backend. Общей версии проекта нет, релиз называется по версии backend; в релизе без изменений backend — по версии расширения. До первого релиза backend после 2026-11-18 Latest стоит на `ext-v0.7.2`, задним числом не переносить. Разрывы в номерах допустимы: важен только рост, Chrome обновляет расширение лишь при большем `version` в `manifest.json`. Невыпущенный pre-release не удалять, а дописать в описание, в какой релиз он вошёл
+- Релиз (порядок с 2026-11-16): ветки задач → ветка релиза → `develop` → `master`. Перед сбором — issue о релизе: какие задачи включить, какие оставить и почему, версия расширения и backend; состав и версию согласовать с владельцем. По просьбе владельца ветка релиза `release-<версия backend>` (например, `release-0.5.0`; не `release/0.5.0`) ответвляется от `develop`, в неё сливаются ветки задач из согласованного состава, там релиз собирается и проверяется. Два релиза одновременно — каждый в своей ветке. Проверенный и согласованный владельцем релиз сливается в `develop`, затем `develop` — в `master`. Пока идёт сбор, версия каждой выпускаемой части — с суффиксом `-rc.N`: например, `0.5.0-rc.1` в `server/Directory.Build.props` и `0.8.0-rc.1` в `extensions/hh/package.json`, `package-lock.json`, теги `backend-v0.5.0-rc.1` и `ext-v0.8.0-rc.1`, GitHub Release с отметкой pre-release. В `manifest.json` поле `version` без суффикса (Chrome принимает только цифры с точками), метка — в `version_name`; при выпуске `version_name` убрать. Перед слиянием релиза в `develop` — итоговые версии отдельным коммитом в ветке релиза; на merge-коммит `develop` → `master` — аннотированный тег `backend-v<версия>`, если менялся backend, и `ext-v<версия>`, если менялось расширение; GitHub Release — по одному на каждую выпущенную часть: «Backend Y» на `backend-v…` с отметкой Latest и «Расширение X» на `ext-v…` без неё (Latest у GitHub один); в описании — список изменений, совместимая версия другой части и контракт API. Релиз только расширения — один релиз расширения без Latest, Latest остаётся у backend. Общей версии проекта нет, релиз называется по версии backend; в релизе без изменений backend — по версии расширения. До первого релиза backend после 2026-11-18 Latest стоит на `ext-v0.7.2`, задним числом не переносить. Разрывы в номерах допустимы: важен только рост, Chrome обновляет расширение лишь при большем `version` в `manifest.json`. Невыпущенный pre-release не удалять, а дописать в описание, в какой релиз он вошёл
 
 ## Testing
-- Чистая логика — тесты в `tests/` (vitest + happy-dom), без живого hh.ru; разметка формы отклика hh.ru — `tests/fixtures/response-form.ts` (по живой странице), её же брать для новых тестов конвейера
-- Веб — `web/tests/` (vitest + happy-dom): роутинг, расчёты дашборда, компоненты kit
+- Чистая логика расширения — тесты в `extensions/hh/tests/` (vitest + happy-dom), без живого hh.ru; разметка формы отклика hh.ru — `extensions/hh/tests/fixtures/response-form.ts` (по живой странице), её же брать для новых тестов конвейера
+- Веб — `web/tests/` (vitest + happy-dom): роутинг, расчёты дашборда, разделы; UI kit — `packages/ui/tests/`
 - Backend — `server/tests/HhAutoApplier.Tests`
-- Перед «готово»: typecheck + test + build (веб — ещё `typecheck:web` и `build:web`; или `dotnet test`); то же гоняет CI (`.github/workflows/ci.yml`) на каждый push, плюс проверку, что модель EF совпадает с миграциями
+- Перед «готово»: typecheck + test + build (веб — ещё `build:web`; или `dotnet test`); то же гоняет CI (`.github/workflows/ci.yml`) на каждый push, плюс проверку, что модель EF совпадает с миграциями
 - Живую страницу проверять read-only через CDP; не нажимать «Отправить». Перед открытием вакансии убедиться, что очередь выключена и пробный режим включён — режим очереди переживает перезапуск браузера. Перед закрытием или перезапуском dev-браузера проверить вкладки: открыто что-то кроме стартовой страницы — спросить владельца
 
 ## Project Structure
-- `src/content/main.ts` — композиция; `src/core/` — Controller (сборка и выбор шага), settings, config, selectors; `src/pages/*-step.ts` — шаги страниц (выдача → сервер, очередь, отказы) на `StepContext`
-- `src/{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra}` — модули
-- `src/shared` — общее без hh.ru (панель, тема, протокол панели; вместе с `src/infra`): не импортирует hh-специфичное, проверяет `tests/settings.test.ts`. `src/sidepanel` — боковая панель, `src/options` — страница настроек (#123)
-- `src/api` — клиент backend и транспорт; `src/background/main.ts` — service worker, через который идут все запросы к backend (со страницы hh.ru Chrome блокирует запросы в локальную сеть)
-- `web/` — веб-интерфейс backend на TS (#130): `src/main.ts` — каркас (навигация, вход), `src/router.ts` — разделы на путях (`/review`, `/vacancies?status=…`), `src/pages/` — разделы, `src/api/` — типы ответов и fetch, `src/ui/` — UI kit; `scripts/build-web.mjs` (esbuild, имена с отпечатком) собирает в `wwwroot`, раздаёт тот же ASP.NET (`Api/WebInterface.cs`)
+Верхний уровень (#131): `server/` — backend, `web/` — сайт, `extensions/` — расширения браузера (сейчас одно — `extensions/hh`), `packages/` — общий код (UI kit), `scripts/` — общие инструменты репозитория (сервер по SSH, база, задачи GitHub, живой прогон), `docs/`. npm — workspaces корневого `package.json`.
+- `extensions/hh/` — MV3-расширение для hh.ru: `manifest.json`, `scripts/` (сборка, dev-браузер, CDP-проверки), `src/`, `tests/`. Дальше пути — от `extensions/hh/src`:
+  - `content/main.ts` — композиция; `core/` — Controller (сборка и выбор шага), settings, config, selectors; `pages/*-step.ts` — шаги страниц (выдача → сервер, очередь, отказы) на `StepContext`
+  - `{apply,search,resume,report,questions,rejects,letters,captcha,dom,infra}` — модули
+  - `shared` — общее без hh.ru (панель, тема, протокол панели; вместе с `infra`): не импортирует hh-специфичное, кроме UI kit, — проверяет `extensions/hh/tests/settings.test.ts`. `sidepanel` — боковая панель, `options` — страница настроек (#123)
+  - `api` — клиент backend и транспорт; `background/main.ts` — service worker, через который идут все запросы к backend (со страницы hh.ru Chrome блокирует запросы в локальную сеть)
+- `packages/ui/` — UI kit, пакет `@hh-autoapplier/ui` (#129): `src/tokens.css`, `src/icons.svg`, `src/ui.ts`, `src/ui.css`; импортируют веб и расширение (`import … from "@hh-autoapplier/ui"`, стили — `@hh-autoapplier/ui/ui.css`)
+- `web/` — веб-интерфейс backend на TS (#130): `src/main.ts` — каркас (навигация, вход), `src/router.ts` — разделы на путях (`/review`, `/vacancies?status=…`), `src/pages/` — разделы, `src/api/` — типы ответов и fetch; `scripts/build.mjs` (esbuild, имена с отпечатком) собирает в `wwwroot`, раздаёт тот же ASP.NET (`Api/WebInterface.cs`)
 - `server/src/HhAutoApplier.{Domain,Application,Infrastructure,Api}` — DDD + CQRS: агрегаты, команды/запросы, EF и источники, контроллеры (`docs/adr/0001-backend-ddd-cqrs.md`)
-- `deploy/` — деплой backend на сервер по кнопке через self-hosted runner (`docs/DEPLOY.md`); метку `home-server` в других workflow не использовать
+- `server/deploy/` — деплой backend на сервер по кнопке через self-hosted runner (`docs/DEPLOY.md`); метку `home-server` в других workflow не использовать
 - `docs/` — для людей; план доработок — `docs/ROADMAP.md`
 
 ## Code Style
 ```ts
-// ✅ селектор из реестра src/core/selectors.ts
+// ✅ селектор из реестра extensions/hh/src/core/selectors.ts
 qs<HTMLElement>(SELECTORS.responseModalClose)?.click();
 // ❌ document.querySelector('[data-qa="..."]') в логике
 ```
@@ -63,7 +66,7 @@ qs<HTMLElement>(SELECTORS.responseModalClose)?.click();
 // ❌ логика в контроллере или Program.cs; публичные сеттеры у агрегатов; HasData (сидировать через DbSeeder)
 ```
 Новое поле конфига — и в дефолты, и в слияние `loadConfig`.
-UI веба и расширения — только из UI kit (`web/src/ui/`: `tokens.css`, `icons.svg`, `ui.ts`, `ui.css`; `docs/design/ui-kit.md`): своих цветов, копий стилей и разметки повторяющихся блоков в разделах нет. Нужного элемента нет — сначала добавить в kit и витрину `/kit`, потом использовать (решение владельца 2026-11-18, #129).
+UI веба и расширения — только из UI kit (`packages/ui/src/`: `tokens.css`, `icons.svg`, `ui.ts`, `ui.css`; `docs/design/ui-kit.md`): своих цветов, копий стилей и разметки повторяющихся блоков в разделах нет. Нужного элемента нет — сначала добавить в kit и витрину `/kit`, потом использовать (решение владельца 2026-11-18, #129).
 
 ## Git Workflow
 - Новая задача — новая ветка `№№-task_name` от `develop`, №№ — номер issue (например, `78-queue_captcha`). Цепочка взаимосвязанных задач, находящихся в работе, — в ветке родительской задачи; если родитель уже в Done — в новой ветке
@@ -85,7 +88,7 @@ UI веба и расширения — только из UI kit (`web/src/ui/`:
 - PR от посторонних авторов (не владелец, в том числе из форков) не сливать ни в какую ветку без отдельного подтверждения владельца: сначала показать автора, что меняет PR и что из этого попадёт в код. Общая просьба вроде «закрой PR» подтверждением не считается
 
 ## Boundaries
-- ✅ Править `src/`, `server/`, `tests/`, `docs/`; запускать тесты/сборку; локальный docker compose
+- ✅ Править `extensions/`, `web/`, `packages/`, `server/`, `docs/`; запускать тесты/сборку; локальный docker compose
 - ✅ Без вопроса (разрешение владельца от 2026-10-24): push веток задач (слияние в `develop` — только по согласованию, см. Git Workflow), закрытие сделанных issues, запуск Docker Desktop и dev-браузера, read-only проверки на hh.ru
 - ⚠️ Спросить: новые зависимости, миграции EF, смена задержек/лимитов, перезапуск dev-браузера, если у владельца открыта страница
 - ❌ Реальные отклики без согласия (режим «из очереди» проверять только в пробном режиме — галочка в панели); коммит `letter.local.txt`, `server/.env`, `.profile/`, токенов; обход/автоматическое решение капчи

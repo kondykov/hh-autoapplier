@@ -1,6 +1,6 @@
 # Архитектура расширения
 
-Chrome MV3, TypeScript. Исходники разбиты на модули, в поставке (esbuild, IIFE): `dist/content.js` — на страницах hh.ru, `dist/background.js` — service worker для запросов к backend, `dist/sidepanel.js` — боковая панель браузера, `dist/options.js` — страница настроек. Расширение перенесено из пользовательских скриптов Tampermonkey коллеги; старый код удалён, он остался в истории git.
+Chrome MV3, TypeScript. Проект — `extensions/hh/` (#131), пути ниже — от `extensions/hh/src`, если не сказано иное. Исходники разбиты на модули, в поставке (esbuild, IIFE, `extensions/hh/dist`): `dist/content.js` — на страницах hh.ru, `dist/background.js` — service worker для запросов к backend, `dist/sidepanel.js` — боковая панель браузера, `dist/options.js` — страница настроек. Расширение перенесено из пользовательских скриптов Tampermonkey коллеги; старый код удалён, он остался в истории git.
 
 Backend описан в [BACKEND.md](BACKEND.md), план доработок — в [ROADMAP.md](ROADMAP.md). Отбор вакансий, выбор резюме и письмо — только на backend (#27, решение владельца 2026-10-26): расширение откликается из очереди backend, а выдачу со страницы может отправить на сервер как запасной сбор.
 
@@ -38,7 +38,7 @@ Backend описан в [BACKEND.md](BACKEND.md), план доработок �
 | `queue/queue-mode.ts` | чистая логика режима «из очереди»: адрес страницы отклика, выбор следующей вакансии, исход → статус сервера |
 | `background/main.ts` | service worker: принимает `{ type: "hh-api", path, method, body }` только от своего расширения, сам берёт адрес и ключ из конфига и делает `fetch` |
 
-Зависимости идут сверху вниз: UI → шаги страниц и настройки → модули → `dom`/`infra`. Новый режим — новый `PageStep` и место в списке `pickStep` в `Controller.init`; шаги тестируются на подменном `StepContext` (`tests/steps.test.ts`). Ядро не обращается к `chrome.*` напрямую, только через `KeyValueStorage`, поэтому его можно тестировать без браузера.
+Зависимости идут сверху вниз: UI → шаги страниц и настройки → модули → `dom`/`infra`. Новый режим — новый `PageStep` и место в списке `pickStep` в `Controller.init`; шаги тестируются на подменном `StepContext` (`extensions/hh/tests/steps.test.ts`). Ядро не обращается к `chrome.*` напрямую, только через `KeyValueStorage`, поэтому его можно тестировать без браузера.
 
 ## Связь с backend
 
@@ -82,15 +82,15 @@ Backend описан в [BACKEND.md](BACKEND.md), план доработок �
 ## Сборка и запуск
 
 ```powershell
-npm install
+npm install                                  # в корне: npm workspaces
 npm run typecheck; npm test
-npm run build                  # dist/
-node scripts/dev-browser.mjs   # Chromium с расширением, профиль .profile, CDP :9222
+npm run build                                # extensions/hh/dist
+node extensions/hh/scripts/dev-browser.mjs   # Chromium с расширением, профиль .profile в корне, CDP :9222
 ```
 
 Браузер читает расширение только при старте, поэтому после сборки его перезапускают.
 
-Веб-интерфейс backend — отдельный проект `web/` в том же `package.json` (#130): `npm run typecheck:web`, `npm run build:web`, тесты — в общем `npm test`. Описание — [BACKEND.md](BACKEND.md), компоненты — [design/ui-kit.md](design/ui-kit.md). До реорганизации репозитория (#131) расширение остаётся в корне.
+Веб-интерфейс backend — отдельный проект `web/` (#130), UI kit — `packages/ui` (пакет `@hh-autoapplier/ui`); все три — workspaces корневого `package.json` (#131): `npm run typecheck` и `npm test` идут по всем, веб собирает `npm run build:web`. Описание — [BACKEND.md](BACKEND.md), компоненты — [design/ui-kit.md](design/ui-kit.md).
 
 ## Не сделано
 
@@ -109,4 +109,4 @@ node scripts/dev-browser.mjs   # Chromium с расширением, профи�
 
 Текстовые вопросы анкеты лежат в той же обёртке `textarea-native-wrapper`, что и поле письма, — `getCoverLetterField` пропускает поля внутри `task-body`.
 
-Разметка анкеты в тестах — `tests/fixtures/response-form.ts` (`questionnaire: true`), по живой странице.
+Разметка анкеты в тестах — `extensions/hh/tests/fixtures/response-form.ts` (`questionnaire: true`), по живой странице.
