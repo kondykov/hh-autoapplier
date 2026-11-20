@@ -29,8 +29,8 @@ public class CollectVacanciesCommandHandler(
     // Сколько новых откликов может пропасть при сбое: загрузка страницы выдачи занимает минуты
     private const int SaveEvery = 10;
 
-    // Сколько вакансия должна не встречаться, чтобы её проверить, и как часто проверять снова (#70)
-    private static readonly TimeSpan ArchiveCheckAfter = TimeSpan.FromHours(24);
+    // Сколько вакансия должна не встречаться, чтобы её проверить, и как часто проверять снова (#70); тот же срок у переоценки (#147)
+    public static readonly TimeSpan ArchiveCheckAfter = TimeSpan.FromHours(24);
 
     // Незавершённые отклики, которые может закрыть уход вакансии в архив; New закрывает подтверждение карточки
     private static readonly VacancyStatus[] AwaitingStatuses =

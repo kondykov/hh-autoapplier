@@ -73,16 +73,20 @@ public class VacanciesController : ApiController
     /// Письмо LLM и ответы анкеты сбрасываются, письмо, поправленное человеком, остаётся.
     /// ?provider=имя — разовый прогон (#107): прошедшая правила вакансия сразу оценивается этим подключением сервера
     /// (GET /api/llm/providers), письмо потом пишет конвейер обычным выбором. Провайдер не ответил — вакансия ждёт обычной оценки.
+    /// Сначала — страница вакансии на hh.ru (#147), если вакансия не встречалась в выдаче и не проверялась за 24 ч: в архиве или страницы нет —
+    /// не оценивается, ответ 200 с откликом в Skipped и причиной «вакансия в архиве» / «вакансия недоступна».
     /// </summary>
     /// <response code="400">Нет такого подключения LLM.</response>
     /// <response code="404">Вакансия не найдена.</response>
     /// <response code="409">Вакансия не отсеяна: оценить заново нельзя.</response>
+    /// <response code="502">hh.ru не отвечает или блокирует сервер: архив не проверен, статус не меняется.</response>
     /// <response code="503">LLM не настроена, статус не меняется.</response>
     [HttpPost("vacancies/{id}/reevaluate")]
     [ProducesResponseType(typeof(VacancyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(NotFoundError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ConflictError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(SourceUnavailableError), StatusCodes.Status502BadGateway)]
     [ProducesResponseType(typeof(LlmUnavailableError), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Reevaluate(
         string id,
@@ -131,6 +135,7 @@ public class VacanciesController : ApiController
     /// <summary>
     /// Массовое действие над своими откликами (#127): Requeue — в очередь, Skip — обратно в отсев с причиной LLM, Reevaluate — оценить заново
     /// (provider — разовый прогон через подключение, #107), Hide / Unhide. До 500 id; что не вышло — в failed с причиной, чужие id — «не найдена».
+    /// Reevaluate проверяет архив (#147): archived и unavailable — не переоценённые id, паузы между запросами к hh.ru — как у сбора
     /// </summary>
     [HttpPost("vacancies/bulk")]
     [ProducesResponseType(typeof(BulkVacanciesResultDto), StatusCodes.Status200OK)]

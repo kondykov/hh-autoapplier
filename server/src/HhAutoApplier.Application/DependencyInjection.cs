@@ -31,6 +31,7 @@ public static class DependencyInjection
             .AsSelfWithInterfaces()
             .WithScopedLifetime());
 
+        services.AddScoped<Commands.Vacancies.VacancyArchiveCheck>();
         services.AddScoped<Notifier>();
         services.AddScoped<LlmUserQuota>();
         services.AddScoped<LlmQualityMonitor>();
