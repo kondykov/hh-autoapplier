@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8">
+<!-- Концепт #128: ревизия разделов веба после редизайна — что оставить, объединить, упразднить -->
+<style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c222b;--line:#263040;--grid:#1a222d;--text:#e6edf3;--muted:#8b98a8;--accent:#f0a3a8;--ok:#7ee2a8;--bad:#ff8b8b;--warn:#f2c66d;--info:#8fb4ff;--vio:#c9a7ff;--mono:"Cascadia Mono",Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#e9ecf1;font:14px/1.45 var(--sans);color:var(--text);width:1600px}
+.wrap{padding:28px}
+.cap{font:600 15px var(--sans);color:#1d2330;margin:0 0 10px}.cap small{display:block;font-weight:400;color:#5b6576;font-size:13px;margin-top:2px;max-width:1100px}
+.app{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:22px;background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:22px 22px}
+.cols{display:grid;grid-template-columns:330px 80px minmax(0,1fr);gap:0;align-items:start}
+h3{margin:0 0 12px;font:600 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.old{display:grid;gap:8px}
+.o{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;display:flex;align-items:center;gap:8px;height:52px}
+.o small{color:var(--muted);font-size:11.5px;display:block}
+.tag{margin-left:auto;font:600 11px var(--mono);border-radius:6px;padding:1px 7px;border:1px solid;white-space:nowrap}
+.keep{color:var(--ok);border-color:#24503a}.merge{color:var(--info);border-color:#2c3f63}.drop{color:var(--bad);border-color:#5a2a2e}.new{color:var(--accent);border-color:#5a3a3e}.move{color:var(--vio);border-color:#43345f}
+.arrows{display:grid;gap:8px}.arrows div{height:52px;display:flex;align-items:center;justify-content:center;color:var(--muted);font:16px var(--mono)}
+.newnav{display:grid;gap:10px}
+.n{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.n .t{display:flex;align-items:center;gap:10px;font-weight:600}
+.n .t i{font-style:normal;font:700 13px var(--mono);width:26px;height:26px;border-radius:7px;background:var(--card2);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;color:var(--accent)}
+.n ul{margin:6px 0 0 36px;padding:0;color:var(--muted);font-size:12.5px;line-height:1.55}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.menu{background:var(--card2);border:1px dashed var(--line);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted)}
+.menu b{color:var(--text)}
+.q{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.q div{background:var(--card);border:1px solid #5a4a1e;border-radius:10px;padding:10px 12px;font-size:12.5px}
+.q b{color:var(--warn);font:600 11px var(--mono);display:block;margin-bottom:4px}
+</style>
+<body><div class="wrap">
+<p class="cap">Ревизия разделов веба (#128): было → предлагается<small>Цель — меньше разделов в навигации, каждое действие в одном месте; на телефоне 4 главных + «Ещё». Решение по каждому пункту — за владельцем (вопросы внизу)</small></p>
+<div class="app"><div class="cols">
+  <div><h3>Было (9 разделов)</h3><div class="old">
+    <div class="o">Дашборд<small>&nbsp;демо #121</small><span class="tag keep">оставить</span></div>
+    <div class="o">Обзор<small>&nbsp;счётчики, «что дальше»</small><span class="tag drop">упразднить</span></div>
+    <div class="o">Проверка<span class="tag keep">оставить</span></div>
+    <div class="o">Ответы работодателей<span class="tag keep">+ ссылки #126</span></div>
+    <div class="o">Вакансии<span class="tag merge">реорганизовать</span></div>
+    <div class="o">Поиски<span class="tag keep">оставить</span></div>
+    <div class="o">Резюме<small>&nbsp;+ профиль кандидата</small><span class="tag merge">→ Кандидат</span></div>
+    <div class="o">Профиль<small>&nbsp;пароль, токены, Telegram, CSV</small><span class="tag move">→ меню аккаунта</span></div>
+    <div class="o">Администрирование<span class="tag merge">→ Система + LLM</span></div>
+  </div></div>
+  <div><h3>&nbsp;</h3><div class="arrows"><div>→</div><div>⤳</div><div>→</div><div>→</div><div>→</div><div>→</div><div>→</div><div>⤳</div><div>⤳</div></div></div>
+  <div><h3>Предлагается (7 + меню аккаунта)</h3><div class="newnav">
+    <div class="grid2">
+      <div class="n"><div class="t"><i>◫</i>Дашборд <span class="tag keep">главная</span></div><ul><li>воронка, отклики по дням, по поискам (#121)</li><li><b style="color:var(--text)">«Требует внимания»</b> — бывший «Обзор»: на проверке N, ошибки, ссылки вне hh.ru, LLM на паузе</li></ul></div>
+      <div class="n"><div class="t"><i>✎</i>Проверка</div><ul><li>как сейчас + клавиши J/K/A/R, отмена решения тостом</li></ul></div>
+      <div class="n"><div class="t"><i>✉</i>Ответы</div><ul><li>Ждут ответа · 🔗 Ссылки вне hh.ru (#126) · Все</li><li>время последней синхронизации чатов</li></ul></div>
+      <div class="n"><div class="t"><i>☰</i>Вакансии</div><ul><li>виды-вкладки: В очереди · Отправлено · Приглашения · Отказы · Все</li><li>фильтры чипами, сохраняются в адресе; источник (#32)</li><li>отсеянные LLM — ссылкой в LLM → Отсев</li></ul></div>
+      <div class="n"><div class="t"><i>✦</i>LLM <span class="tag new">новый</span></div><ul><li>Обзор · Отсев · Журнал · Письма · Мои модели (#107) · Подключения</li><li>ручной запуск задач — из Администрирования</li></ul></div>
+      <div class="n"><div class="t"><i>⌕</i>Поиски</div><ul><li>карточки поисков со статистикой (собрано / отправлено / конверсия)</li><li>правила отбора — раскрываемым блоком</li></ul></div>
+      <div class="n"><div class="t"><i>☺</i>Кандидат</div><ul><li>профиль кандидата (общая часть, навыки, зарплата, тестовое)</li><li>резюме и шаблоны писем</li></ul></div>
+      <div class="n"><div class="t"><i>⚙</i>Система <span class="tag keep">администратор</span></div><ul><li>пользователи, сбор вакансий, версия и коммит</li><li>неотправленные уведомления, бэкап (если #121 п.3)</li></ul></div>
+    </div>
+    <div class="menu"><b>Меню аккаунта</b> (имя в шапке ▾): пароль · токены расширения · Telegram · отчёт CSV · тема · выйти. На телефоне — в «Ещё».</div>
+    <div class="menu"><b>Телефон:</b> Дашборд · Проверка · Ответы · Вакансии · Ещё (LLM, Поиски, Кандидат, Система, аккаунт).</div>
+  </div></div>
+</div>
+<div class="q">
+  <div><b>ВОПРОС 1</b>«Обзор» упразднить, а его «Что дальше» перенести в дашборд блоком «Требует внимания»?</div>
+  <div><b>ВОПРОС 2</b>Резюме и профиль кандидата — один раздел «Кандидат»?</div>
+  <div><b>ВОПРОС 3</b>«Профиль» (пароль, токены, Telegram) — в меню под именем вместо раздела?</div>
+  <div><b>ВОПРОС 4</b>Отсеянные LLM — только в LLM → Отсев, а в «Вакансиях» без отдельного вида «пропущенные»?</div>
+  <div><b>ВОПРОС 5</b>Приёмы современного UI (Ctrl+K, отмена тостом, клавиши, SVG-иконки) — все в этот релиз или часть позже?</div>
+  <div><b>ВОПРОС 6</b>«Администрирование» → «Система», ручной запуск LLM — во вкладку LLM?</div>
+</div>
+</div></div></body></html>
