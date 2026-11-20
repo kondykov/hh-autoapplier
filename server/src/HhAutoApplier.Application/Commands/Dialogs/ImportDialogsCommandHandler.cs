@@ -9,13 +9,15 @@ using Microsoft.EntityFrameworkCore;
 namespace HhAutoApplier.Application.Commands.Dialogs;
 
 // Сообщения работодателей — в EmployerMessages (разбор LLM потом, в фоне), состояние hh.ru — в статус отклика:
-// отказ → Rejected, приглашение или собеседование → Invited. Чат по вакансии есть только после отклика: отклик, чей статус
+// отказ → Rejected, приглашение → Invited, собеседование → Interview (#122). Чат по вакансии есть только после отклика: отклик, чей статус
 // потерялся (Failed, Queued…), становится Applied (2026-10-27 так потерялся 137435290). В ответе — чаты, где ждёт автоответ на отказ.
 // Первый сбор пользователя только запоминает старые отказы: автоответ — на отказы, пришедшие после него
 public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current, TimeProvider clock)
     : ICommandHandler<ImportDialogsCommand, ImportDialogsResult>
 {
     public const int MaxAutoReplies = 20;
+
+    public const string InterviewReason = "собеседование (чат hh.ru)";
 
     public async Task<ImportDialogsResult> Handle(ImportDialogsCommand command, CancellationToken ct = default)
     {
@@ -34,7 +36,7 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
         var known = await db.EmployerMessages.Where(m => m.UserId == userId && chatIds.Contains(m.ChatId)).ToDictionaryAsync(m => m.ChatId, ct);
         var applications = await db.JobApplications.Where(a => a.UserId == userId && vacancyIds.Contains(a.VacancyId)).ToDictionaryAsync(a => a.VacancyId, ct);
 
-        int newMessages = 0, rejected = 0, invited = 0, recovered = 0;
+        int newMessages = 0, rejected = 0, invited = 0, interviews = 0, recovered = 0;
         foreach (var chat in chats)
         {
             if (chat.VacancyId is { } vacancyId && applications.GetValueOrDefault(vacancyId) is { } application)
@@ -45,12 +47,17 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
                     recovered++;
                 }
 
-                if (chat.State == EmployerMessage.Rejected && application.Status is VacancyStatus.Applied or VacancyStatus.Invited)
+                if (chat.State == EmployerMessage.Rejected && application.Status is VacancyStatus.Applied or VacancyStatus.Invited or VacancyStatus.Interview)
                 {
                     application.Reject("работодатель отказал (чат hh.ru)", now);
                     rejected++;
                 }
-                else if (EmployerMessage.IsInvitationState(chat.State) && application.Status == VacancyStatus.Applied)
+                else if (chat.State == EmployerMessage.Interview && application.Status is VacancyStatus.Applied or VacancyStatus.Invited)
+                {
+                    application.ScheduleInterview(InterviewReason, now);
+                    interviews++;
+                }
+                else if (chat.State == EmployerMessage.Invitation && application.Status == VacancyStatus.Applied)
                 {
                     application.Invite("приглашение (чат hh.ru)", now);
                     invited++;
@@ -93,6 +100,6 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
             .OrderBy(m => m.At).Take(MaxAutoReplies)
             .Select(m => new AutoReplyDto(m.ChatId, m.VacancyId, m.Title, m.Company))
             .ToListAsync(ct);
-        return new ImportDialogsResultDto(chats.Count, newMessages, rejected, invited, recovered, autoReplies);
+        return new ImportDialogsResultDto(chats.Count, newMessages, rejected, invited, recovered, autoReplies, interviews);
     }
 }

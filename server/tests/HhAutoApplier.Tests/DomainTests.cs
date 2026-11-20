@@ -23,6 +23,30 @@ public class DomainTests
         return a;
     }
 
+    // Собеседование (#122): после отклика или приглашения; из него — только отказ; время не раньше прошлого перехода
+    [Fact]
+    public void Interview_AfterAppliedOrInvited_ThenOnlyRejection()
+    {
+        var direct = Sent(VacancyStatus.Applied);
+        direct.ScheduleInterview("собеседование", Now.AddHours(1));
+        Assert.Equal((VacancyStatus.Interview, "собеседование"), (direct.Status, direct.StatusReason));
+        Assert.True(direct.Sent);
+
+        var invited = Sent(VacancyStatus.Invited);
+        invited.ScheduleInterview(null, Now.AddDays(-5));
+        var last = invited.History[^1];
+        Assert.Equal((VacancyStatus.Invited, VacancyStatus.Interview, Now), (last.From!.Value, last.To, last.At));
+
+        Assert.Throws<DomainException>(() => invited.ScheduleInterview(null, Now));
+        Assert.Throws<DomainException>(() => invited.Invite(null, Now));
+        Assert.Throws<DomainException>(() => invited.Skip(null, Now));
+        invited.Reject("отказ после собеседования", Now);
+        Assert.Equal(VacancyStatus.Rejected, invited.Status);
+
+        Assert.Throws<DomainException>(() => Queued().ScheduleInterview(null, Now));
+        Assert.Throws<DomainException>(() => Sent(VacancyStatus.Rejected).ScheduleInterview(null, Now));
+    }
+
     [Fact]
     public void Application_GoesThroughStatuses()
     {
@@ -264,6 +288,8 @@ public class DomainTests
         a.MarkApplied(null, Now);
         if (status == VacancyStatus.Invited)
             a.Invite(null, Now);
+        else if (status == VacancyStatus.Interview)
+            a.ScheduleInterview(null, Now);
         else if (status == VacancyStatus.Rejected)
             a.Reject(null, Now);
         return a;
@@ -305,6 +331,7 @@ public class DomainTests
     [Theory]
     [InlineData(VacancyStatus.Applied)]
     [InlineData(VacancyStatus.Invited)]
+    [InlineData(VacancyStatus.Interview)]
     [InlineData(VacancyStatus.Rejected)]
     public void CloseVacancy_SentApplications_NotTouched(VacancyStatus status)
     {

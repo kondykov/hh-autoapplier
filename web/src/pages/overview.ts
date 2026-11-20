@@ -13,7 +13,7 @@ export async function overview(): Promise<Child> {
     api<StatusStats>(scoped("/api/stats")),
     readOnly() ? null : api<Telegram>("/api/telegram").catch(() => null),
   ]);
-  const order: VacancyStatus[] = ["Queued", "Review", "Questionnaire", "Pending", "Applied", "Invited", "Rejected", "Skipped", "Failed", "New"];
+  const order: VacancyStatus[] = ["Queued", "Review", "Questionnaire", "Pending", "Applied", "Invited", "Interview", "Rejected", "Skipped", "Failed", "New"];
   const total = Object.values(stats).reduce((a, b) => a + (b ?? 0), 0);
   const tiles = order.filter((s) => stats[s]).map((s) => Stat({ value: stats[s] ?? 0, label: STATUSES[s], href: path("vacancies", { status: s }) }));
 
