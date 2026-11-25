@@ -20,6 +20,8 @@ public class ReportAutoReplyCommandHandler(
         var message = await db.EmployerMessages.FirstOrDefaultAsync(m => m.UserId == current.Id && m.ChatId == command.ChatId, ct);
         if (message is null)
             return new NotFoundError($"Чат {command.ChatId} не найден");
+        if (command.MessageId is { } messageId && message.MessageId != messageId)
+            return new ConflictError("В чате уже новое сообщение работодателя");
 
         try
         {
@@ -30,7 +32,14 @@ public class ReportAutoReplyCommandHandler(
             return new ConflictError(e.Message);
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new ConflictError("Сообщение уже обновлено другим запросом");
+        }
         return extractor.Extract(message);
     }
 }

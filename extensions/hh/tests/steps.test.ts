@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutoReply } from "../src/api/client";
+import type { AutoReply, ReportResult } from "../src/api/client";
 import { API_VERSION, type ServerVersionResult } from "../src/api/version";
 import type { ArchiveCheck } from "../src/apply/archive-check";
 import type { ApplyResult } from "../src/apply/pipeline";
@@ -51,7 +51,7 @@ function context(opts: { url?: string; queue?: QueueItem[]; result?: ApplyResult
         ok: true as const,
         result: { received: chats.length, newMessages: 1, rejected: 1, invited: 0, autoReplies: opts.autoReplies ?? [] },
       })),
-      reportAutoReply: vi.fn(async (_chatId: number, _sent: boolean, _error?: string) => ({ ok: true as const })),
+      reportAutoReply: vi.fn(async (_chatId: number, _sent: boolean, _error?: string, _messageId?: number): Promise<ReportResult> => ({ ok: true })),
     },
     pipeline: {
       applyOnPage: vi.fn(async (_v: Vacancy) => opts.result ?? "success"),
@@ -811,6 +811,34 @@ describe("DialogStep", () => {
 
     expect(send).not.toHaveBeenCalled();
     expect(ctx.backend.reportAutoReply).toHaveBeenCalledWith(12, false, "чат не открылся");
+  });
+
+  it("повторяет только отчёт, если сервер был недоступен после отправки", async () => {
+    const candidate = { ...reply(1), messageId: 101 };
+    const { ctx, setUrl, visited } = context({ url: `${CHATS}/1`, autoReplies: [candidate], config: { queueDryRun: false } });
+    ctx.state.autoReplies = [candidate];
+    ctx.backend.reportAutoReply.mockResolvedValueOnce({ ok: false, error: "сервер недоступен" });
+    const send = vi.fn(async () => ({ ok: true as const }));
+
+    await run(new DialogStep(ctx, reader([1]), send).resume());
+    setUrl(CHATS);
+    await run(new DialogStep(ctx, reader([1]), send).run());
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(ctx.backend.reportAutoReply.mock.calls).toEqual([[1, true, undefined, 101], [1, true, undefined, 101]]);
+    expect(visited).toEqual([]);
+  });
+
+  it("после потери страницы в момент отправки не нажимает повторно", async () => {
+    const { ctx } = context({ url: `${CHATS}/1`, config: { queueDryRun: false } });
+    ctx.state.autoReplies = [{ ...reply(1), messageId: 101 }];
+    const send = vi.fn(async () => ({ ok: true as const })).mockRejectedValueOnce(new Error("страница сменилась"));
+
+    await expect(new DialogStep(ctx, reader([1]), send).resume()).rejects.toThrow("страница сменилась");
+    await run(new DialogStep(ctx, reader([1]), send).resume());
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(ctx.backend.reportAutoReply).toHaveBeenCalledWith(1, false, expect.stringContaining("результат отправки неизвестен"), 101);
   });
 
   it("пробный режим включили во время автоответов — остановиться, не отправляя", async () => {

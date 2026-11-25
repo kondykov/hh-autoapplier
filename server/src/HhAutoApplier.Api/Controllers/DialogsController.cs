@@ -75,9 +75,9 @@ public class DialogsController : ApiController
         CancellationToken ct
     )
     {
-        var command = new ReportAutoReplyCommand { ChatId = chatId, Sent = request.Sent, Error = request.Error };
+        var command = new ReportAutoReplyCommand { ChatId = chatId, MessageId = request.MessageId, Sent = request.Sent, Error = request.Error };
         return FromResult((await handler.Handle(command, ct)).Value);
     }
 }
 
-public record AutoReplyRequest(bool Sent, [MaxLength(500)] string? Error);
+public record AutoReplyRequest(bool Sent, [MaxLength(500)] string? Error, long? MessageId = null);
