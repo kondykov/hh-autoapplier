@@ -6,6 +6,9 @@ namespace HhAutoApplier.Application.Dtos;
 // Карточка вакансии и отклик на неё одним объектом: поля и имена совпадают с прежним ответом API — клиенты не ломаются
 public record VacancyDto
 {
+    public string? DuplicateOfVacancyId { get; init; }
+
+    public IReadOnlyList<RegionalVacancyDto> OtherRegions { get; init; } = [];
     public required string Id { get; init; }
 
     public required string Title { get; init; }
@@ -93,6 +96,8 @@ public record VacancyDto
 
     public List<LetterRequestDto> LetterRequests { get; init; } = [];
 }
+
+public record RegionalVacancyDto(string Id, string Region, string Url);
 
 // Text — цитата работодателя для показа; Value — выражение или кодовое слово; Answer — проверенное значение; Problem — почему не закрывается сама
 public record LetterRequestDto(LetterRequestType Type, string Text, string? Value, string? Answer, bool Closed, string? Problem);

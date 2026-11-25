@@ -22,7 +22,7 @@ public class GetVacanciesQueryHandler(
         if (scope.IsT1)
             return scope.AsT1;
 
-        var q = db.Applications(scope.AsT0).AsNoTracking();
+        var q = db.Applications(scope.AsT0).AsNoTracking().Where(application => application.DuplicateOfVacancyId == null);
         if (query.Status is not null)
             q = q.Where(a => a.Status == query.Status);
 
@@ -48,6 +48,6 @@ public class GetVacanciesQueryHandler(
 
         var rows = await q.OrderByDescending(a => a.Vacancy.PublishedAt)
             .Skip(Math.Max(query.Skip, 0)).Take(take).ToListAsync(ct);
-        return rows.Select(extractor.Extract).ToList();
+        return await RegionalVacancyVariants.EnrichAsync(db, scope.AsT0, rows.Select(extractor.Extract).ToList(), ct);
     }
 }
