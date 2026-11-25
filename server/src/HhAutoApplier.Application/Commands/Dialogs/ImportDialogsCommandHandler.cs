@@ -98,7 +98,7 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
         var autoReplies = await db.EmployerMessages.AsNoTracking()
             .Where(m => m.UserId == userId && m.AutoReply == AutoReplyState.Pending)
             .OrderBy(m => m.At).Take(MaxAutoReplies)
-            .Select(m => new AutoReplyDto(m.ChatId, m.VacancyId, m.Title, m.Company))
+            .Select(m => new AutoReplyDto(m.ChatId, m.VacancyId, m.Title, m.Company, m.MessageId))
             .ToListAsync(ct);
         return new ImportDialogsResultDto(chats.Count, newMessages, rejected, invited, recovered, autoReplies, interviews);
     }

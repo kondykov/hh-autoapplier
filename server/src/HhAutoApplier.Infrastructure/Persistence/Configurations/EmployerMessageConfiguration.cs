@@ -19,7 +19,8 @@ public class EmployerMessageConfiguration : IEntityTypeConfiguration<EmployerMes
         builder.Property(x => x.Summary).HasMaxLength(EmployerMessage.MaxSummary);
         builder.Property(x => x.SuggestedReply).HasMaxLength(EmployerMessage.MaxText);
         builder.Property(x => x.LlmModel).HasMaxLength(100);
-        builder.Property(x => x.AutoReply).HasConversion<string>().HasMaxLength(16);
+        builder.Property(x => x.MessageId).IsConcurrencyToken();
+        builder.Property(x => x.AutoReply).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
         builder.Property(x => x.AutoReplyError).HasMaxLength(500);
         // Одна запись на чат пользователя
         builder.HasIndex(x => new { x.UserId, x.ChatId }).IsUnique();

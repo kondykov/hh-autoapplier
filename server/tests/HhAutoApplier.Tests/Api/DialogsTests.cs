@@ -77,8 +77,11 @@ public class DialogsTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(VacancyStatus.Rejected, await StatusOf("2"));
         var reply = Assert.Single(second.GetProperty("autoReplies").EnumerateArray());
         Assert.Equal(12, reply.GetProperty("chatId").GetInt64());
+        Assert.Equal(104, reply.GetProperty("messageId").GetInt64());
 
-        await Json(await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true }));
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true, messageId = 102 })).StatusCode);
+        await Json(await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true, messageId = 104 }));
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.PostAsJsonAsync("/api/dialogs/99/auto-reply", new { sent = true })).StatusCode);
 
