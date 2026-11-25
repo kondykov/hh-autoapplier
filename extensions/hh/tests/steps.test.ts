@@ -232,7 +232,7 @@ describe("QueueStep", () => {
   });
 
   it("«Отправить» нажата, новая страница — «Вы откликнулись»: Applied", async () => {
-    document.body.innerHTML = "<main><div>Вы откликнулись</div></main>";
+    document.body.innerHTML = `<main><div data-qa="already-responded-text">Вы откликнулись</div></main>`;
     const { ctx } = context({ url: "https://hh.ru/vacancy/1", queue: [item("1")], config: { queueDryRun: false } });
     Object.assign(ctx.state, { queueRunning: true, queueCurrent: item("1"), queueTried: ["1"], queueOpened: true, queueSubmitted: "1" });
 

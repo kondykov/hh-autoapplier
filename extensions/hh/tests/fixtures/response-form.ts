@@ -32,8 +32,10 @@ const letterBlock = (visible: boolean) =>
     ? `<textarea data-qa="vacancy-response-popup-form-letter-input"></textarea>`
     : `<button data-qa="vacancy-response-letter-toggle" id="letter-toggle">Приложить письмо</button>`;
 
+const respondedMarker = `<div data-qa="already-responded-text">Вы откликнулись</div>`;
+
 function body(o: FormOptions): string {
-  if (o.responded) return `<h1>Отклик на вакансию</h1><div>Вы откликнулись</div>`;
+  if (o.responded) return `<h1>Отклик на вакансию</h1>${respondedMarker}`;
   if (o.questionnaire) o = { letterVisible: false, ...o };
   const outline = o.outline ? `<div data-qa="title-description">Для отклика необходимо ответить на несколько вопросов работодателя</div>` : "";
   return `
@@ -69,7 +71,7 @@ const questionnaireBlock = `
 export function renderResponsePage(o: FormOptions = {}): void {
   document.body.innerHTML = `<main id="form">${body(o)}</main>`;
   wire(o, () => {
-    document.getElementById("form")!.innerHTML = "<div>Вы откликнулись</div>";
+    document.getElementById("form")!.innerHTML = respondedMarker;
   });
 }
 
@@ -108,11 +110,11 @@ function wire(o: FormOptions, close: () => void): void {
     }
     if (o.afterSubmit === "navigate" || o.afterSubmit === "navigate-responded") {
       (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL("https://hh.ru/vacancy/1");
-      if (o.afterSubmit === "navigate-responded") document.body.innerHTML = "<main><div>Вы откликнулись</div></main>";
+      if (o.afterSubmit === "navigate-responded") document.body.innerHTML = `<main>${respondedMarker}</main>`;
       return;
     }
     if (o.afterSubmit === "close") close();
-    else document.body.innerHTML = "<main><div>Вы откликнулись</div></main>";
+    else document.body.innerHTML = `<main>${respondedMarker}</main>`;
   };
 }
 
