@@ -28,7 +28,7 @@ public class GetDashboardQueryHandler(IAppDbContext db, ICurrentUser current, IO
         var prevFrom = now.AddDays(-2 * query.Period);
         // Собранные за два периода (этот и прошлый) и все отправленные: ответ на старый отклик — тоже событие периода
         var rows = await db.JobApplications.AsNoTracking()
-            .Where(a => a.UserId == owner && (a.CreatedAt >= prevFrom || a.AppliedAt != null))
+            .Where(a => a.UserId == owner && a.DuplicateOfVacancyId == null && (a.CreatedAt >= prevFrom || a.AppliedAt != null))
             .Select(a => new DashboardRow(a.CreatedAt, a.Status, a.StatusReason, a.LlmScore, a.AppliedAt,
                 a.Search != null ? a.Search.Name : a.Vacancy.SearchName, HhSource, a.History,
                 a.Vacancy.ResponsesAtCollect, a.ResponsesAtApply))

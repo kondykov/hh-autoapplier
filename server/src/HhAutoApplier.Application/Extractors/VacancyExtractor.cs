@@ -13,6 +13,7 @@ public class VacancyExtractor : IExtractor<JobApplication, VacancyDto>
         return new VacancyDto
         {
             Id = vacancy.Id,
+            DuplicateOfVacancyId = source.DuplicateOfVacancyId,
             Title = vacancy.Title,
             Company = vacancy.Company,
             Url = vacancy.Url,

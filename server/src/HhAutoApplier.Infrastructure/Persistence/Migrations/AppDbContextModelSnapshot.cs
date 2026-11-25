@@ -46,6 +46,10 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DuplicateOfVacancyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTimeOffset?>("HiddenAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -69,6 +73,10 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.Property<string>("LlmVerdict")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
+
+                    b.Property<string>("RegionalGroupKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int?>("ResponsesAtApply")
                         .HasColumnType("integer");
@@ -110,6 +118,15 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("Status", "Score");
+
+                    b.HasIndex("UserId", "DuplicateOfVacancyId")
+                        .HasFilter("\"DuplicateOfVacancyId\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "RegionalGroupKey")
+                        .IsUnique()
+                        .HasFilter("\"RegionalGroupKey\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "RegionalGroupKey"), false);
 
                     b.HasIndex("VacancyId", "UserId")
                         .IsUnique();

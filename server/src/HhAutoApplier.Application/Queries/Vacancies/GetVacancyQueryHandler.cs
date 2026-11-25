@@ -16,6 +16,9 @@ public class GetVacancyQueryHandler(
     public async Task<GetVacancyResult> Handle(GetVacancyQuery query, CancellationToken ct = default)
     {
         var application = await db.Applications(current.Id).AsNoTracking().FirstOrDefaultAsync(a => a.VacancyId == query.VacancyId, ct);
-        return application is null ? new NotFoundError($"Вакансия {query.VacancyId} не найдена") : extractor.Extract(application);
+        if (application is null)
+            return new NotFoundError($"Вакансия {query.VacancyId} не найдена");
+        var cards = await RegionalVacancyVariants.EnrichAsync(db, current.Id, [extractor.Extract(application)], ct);
+        return cards[0];
     }
 }

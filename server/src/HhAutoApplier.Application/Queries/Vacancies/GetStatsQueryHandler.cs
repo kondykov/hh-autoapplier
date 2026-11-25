@@ -13,7 +13,7 @@ public class GetStatsQueryHandler(IAppDbContext db, ICurrentUser current) : IQue
             return scope.AsT1;
 
         var owner = scope.AsT0;
-        var rows = await db.JobApplications.Where(a => a.UserId == owner).GroupBy(a => a.Status)
+        var rows = await db.JobApplications.Where(a => a.UserId == owner && a.DuplicateOfVacancyId == null).GroupBy(a => a.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
         return rows.ToDictionary(r => r.Status.ToString(), r => r.Count);

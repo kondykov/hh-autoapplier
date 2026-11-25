@@ -28,6 +28,8 @@ export interface Question {
 }
 
 export interface Vacancy {
+  duplicateOfVacancyId?: string;
+  otherRegions?: { id: string; region: string; url: string }[];
   id: string;
   title: string;
   url: string;

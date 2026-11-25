@@ -45,7 +45,7 @@ public class GetLlmRejectsQueryHandler(IAppDbContext db, ICurrentUser current, T
 
         var owner = scope.AsT0;
         var mine = db.JobApplications.AsNoTracking().Where(a => a.UserId == owner && a.LlmVerdict == LlmVerdict.Reject);
-        var rejected = mine.Where(a => a.Status == VacancyStatus.Skipped && a.HiddenAt == null);
+        var rejected = mine.Where(a => a.Status == VacancyStatus.Skipped && a.HiddenAt == null && a.DuplicateOfVacancyId == null);
         if (query.Period is { } days)
         {
             var since = clock.GetUtcNow().AddDays(-days);
