@@ -28,5 +28,12 @@ public class EmployerMessageConfiguration : IEntityTypeConfiguration<EmployerMes
         builder.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         builder.Ignore(x => x.AwaitsAnalysis);
         builder.Ignore(x => x.IsRejection);
+        builder.Property<uint>("Version").IsRowVersion();
+        builder.OwnsMany(x => x.ExternalLinks, links =>
+        {
+            links.ToJson();
+            links.Property(link => link.Kind).HasConversion<string>();
+            links.Property(link => link.State).HasConversion<string>();
+        });
     }
 }

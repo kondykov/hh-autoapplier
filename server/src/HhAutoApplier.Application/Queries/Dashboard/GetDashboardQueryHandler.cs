@@ -2,6 +2,7 @@ using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Errors;
+using HhAutoApplier.Domain.Dialogs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -52,6 +53,9 @@ public class GetDashboardQueryHandler(IAppDbContext db, ICurrentUser current, IO
             return new DashboardChatsDto(null, 0);
 
         var messages = db.EmployerMessages.Where(m => m.UserId == userId);
-        return new DashboardChatsDto(await messages.MaxAsync(m => (DateTimeOffset?)m.ReceivedAt, ct), await messages.CountAsync(ct));
+        var actionMessages = await messages.Where(m => m.ExternalLinks.Any(link => link.State == EmployerLinkState.Pending
+            && link.RequiresAction != false)).AsNoTracking().ToListAsync(ct);
+        var pending = actionMessages.Sum(m => m.ExternalLinks.Count(link => link.State == EmployerLinkState.Pending && link.RequiresAction != false));
+        return new DashboardChatsDto(await messages.MaxAsync(m => (DateTimeOffset?)m.ReceivedAt, ct), await messages.CountAsync(ct), pending);
     }
 }

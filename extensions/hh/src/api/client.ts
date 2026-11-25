@@ -54,6 +54,7 @@ export interface DialogsCounts {
   invited: number;
   // Отклики, чей статус потерялся, найденные по чатам: на сервере стали Applied
   recovered?: number;
+  externalLinks?: number;
   autoReplies: AutoReply[];
 }
 

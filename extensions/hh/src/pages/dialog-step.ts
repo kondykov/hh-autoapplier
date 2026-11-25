@@ -57,6 +57,8 @@ export class DialogStep implements PageStep {
       const r = res.result;
       logger.log(`Чатов: ${r.received}, новых сообщений работодателей: ${r.newMessages}, отказов: ${r.rejected}, приглашений: ${r.invited}${r.recovered ? `, найдено потерянных откликов: ${r.recovered}` : ""}. ` +
         "Разбор и черновики ответов — в Telegram и в веб-интерфейсе backend («Ответы работодателей»)", "success");
+      if (r.externalLinks)
+        logger.log("Новые ссылки вне hh.ru: " + r.externalLinks + " — в «Ответах работодателей» в веб-интерфейсе", "success");
 
       // «Спасибо» выключено в настройках (#123): ничего не пишем и сервер не трогаем — включат, ответы уйдут со следующей синхронизацией
       if (!config.thanksOnReject) {
