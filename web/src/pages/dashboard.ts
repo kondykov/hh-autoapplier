@@ -34,7 +34,6 @@ export async function dashboard(): Promise<HTMLElement> {
   const root = el("div");
   // «Требует внимания» (#128) — от периода и агрегатора не зависит: что ждёт решения сейчас
   const openDialogs = chats.filter((m) => !m.handledAt && m.kind !== "Rejection").length;
-  const attention = AttentionCard(attentionItems(stats, telegram, readOnly(), openDialogs));
   const lastCollect = collect?.current ? "идёт сбор" : collect?.last?.finishedAt ? `сбор ${date(collect.last.finishedAt)}` : null;
   const renders = page.renders;
   let sys = system;
@@ -67,7 +66,7 @@ export async function dashboard(): Promise<HTMLElement> {
       PageHead("Дашборд", [synced, lastCollect, d.llm.limit ? `LLM сегодня ${d.llm.requests} из ${d.llm.limit}` : null].filter(Boolean).join(" · "),
         Segmented(PERIODS.map((p) => ({ value: p as number, label: `${p} дн` })), state.period, (p) => { state.period = p; void reload(); }, { label: "Период" })),
       Chips(AGGREGATORS, state.source, (s) => { state.source = s; void reload(); }, { label: "Агрегатор" }),
-      attention,
+      AttentionCard(attentionItems(stats, telegram, readOnly(), openDialogs, d.chats.externalLinksPending)),
       el("div", { className: "dash-body" },
         Stats([
           Stat({ value: t.collected, label: "собрано вакансий", ...delta(t.collected, t.prevCollected, d.period) }),

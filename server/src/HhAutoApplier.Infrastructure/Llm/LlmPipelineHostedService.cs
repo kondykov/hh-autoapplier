@@ -90,6 +90,7 @@ public class LlmPipelineHostedService(
 
         // После писем: в сообщении о проверке уже есть письмо
         await services.GetRequiredService<NotifyReviewsCommandHandler>().Handle(new NotifyReviewsCommand(), stop);
+        await services.GetRequiredService<NotifyEmployerLinksCommandHandler>().Handle(new NotifyEmployerLinksCommand(), stop);
     }
 
     // Сообщение на перерыв и на восстановление (#108); ключ — начало перерыва, повтор того же перерыва не пишется

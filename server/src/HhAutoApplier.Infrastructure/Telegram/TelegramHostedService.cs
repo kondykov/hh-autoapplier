@@ -306,7 +306,7 @@ public class TelegramHostedService(
                     await DigestAsync(client, chat, chatId, BotTexts.Short(notification.Text, 400), await digest.ButtonsAsync(notification.UserId, ct), ct);
                 else
                 {
-                    var buttons = BotTexts.NotificationButtons(notification.Kind, notification.Key, notification.VacancyId);
+                    var buttons = BotTexts.NotificationButtons(notification.Kind, notification.Key, notification.VacancyId, notification.Text);
                     await client.SendMessage(chatId, BotHtml.Fit(Staged(new BotMessage(notification.Text))).Text, replyMarkup: Keyboard(buttons),
                         linkPreviewOptions: NoPreview, cancellationToken: ct);
                 }

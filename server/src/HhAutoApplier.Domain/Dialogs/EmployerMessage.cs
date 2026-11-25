@@ -77,6 +77,8 @@ public class EmployerMessage
 
     public string? AutoReplyError { get; private set; }
 
+    public List<EmployerLink> ExternalLinks { get; private set; } = [];
+
     public bool AwaitsAnalysis => Kind is null;
 
     public bool IsRejection => HhState == Rejected;
@@ -149,6 +151,16 @@ public class EmployerMessage
     }
 
     public void MarkHandled(DateTimeOffset at) => HandledAt ??= at;
+
+    public int RecordExternalLinks(DateTimeOffset now)
+    {
+        if (IsRejection)
+            return 0;
+        var count = ExternalLinks.Count;
+        var known = ExternalLinks.Select(link => link.Url).ToHashSet(StringComparer.Ordinal);
+        ExternalLinks.AddRange(EmployerLink.Extract(Text, MessageId, now).Where(link => known.Add(link.Url)).Take(12));
+        return ExternalLinks.Count - count;
+    }
 
     // Итог автоответа от расширения; error — почему не отправлено
     public void ReportAutoReply(bool sent, string? error, DateTimeOffset at)

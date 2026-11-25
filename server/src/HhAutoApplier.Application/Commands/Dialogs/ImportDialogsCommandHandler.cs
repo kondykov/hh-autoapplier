@@ -36,7 +36,7 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
         var known = await db.EmployerMessages.Where(m => m.UserId == userId && chatIds.Contains(m.ChatId)).ToDictionaryAsync(m => m.ChatId, ct);
         var applications = await db.JobApplications.Where(a => a.UserId == userId && vacancyIds.Contains(a.VacancyId)).ToDictionaryAsync(a => a.VacancyId, ct);
 
-        int newMessages = 0, rejected = 0, invited = 0, interviews = 0, recovered = 0;
+        int newMessages = 0, rejected = 0, invited = 0, interviews = 0, recovered = 0, externalLinks = 0;
         foreach (var chat in chats)
         {
             if (chat.VacancyId is { } vacancyId && applications.GetValueOrDefault(vacancyId) is { } application)
@@ -69,12 +69,17 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
             {
                 if (message is null)
                 {
-                    db.EmployerMessages.Add(EmployerMessage.Create(userId, chat.ChatId, chat.VacancyId, chat.Title, chat.Company,
-                        chat.MessageId, chat.Text, chat.At, chat.State, now, autoReply: !firstSync && chat.At >= since));
+                    message = EmployerMessage.Create(userId, chat.ChatId, chat.VacancyId, chat.Title, chat.Company,
+                        chat.MessageId, chat.Text, chat.At, chat.State, now, autoReply: !firstSync && chat.At >= since);
+                    if (!firstSync && chat.At >= since)
+                        externalLinks += message.RecordExternalLinks(now);
+                    db.EmployerMessages.Add(message);
                     newMessages++;
                 }
                 else if (message.Receive(chat.VacancyId, chat.Title, chat.Company, chat.MessageId, chat.Text, chat.At, chat.State, now, autoReply: chat.At >= since))
                 {
+                    if (chat.At >= since)
+                        externalLinks += message.RecordExternalLinks(now);
                     newMessages++;
                 }
             }
@@ -100,6 +105,6 @@ public class ImportDialogsCommandHandler(IAppDbContext db, ICurrentUser current,
             .OrderBy(m => m.At).Take(MaxAutoReplies)
             .Select(m => new AutoReplyDto(m.ChatId, m.VacancyId, m.Title, m.Company, m.MessageId))
             .ToListAsync(ct);
-        return new ImportDialogsResultDto(chats.Count, newMessages, rejected, invited, recovered, autoReplies, interviews);
+        return new ImportDialogsResultDto(chats.Count, newMessages, rejected, invited, recovered, autoReplies, interviews, externalLinks);
     }
 }

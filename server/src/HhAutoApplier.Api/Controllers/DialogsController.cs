@@ -11,6 +11,16 @@ namespace HhAutoApplier.Api.Controllers;
 [Route("api/dialogs")]
 public class DialogsController : ApiController
 {
+    [HttpGet("external-links")]
+    public async Task<IActionResult> GetExternalLinks([FromQuery] GetEmployerLinksQuery query,
+        [FromServices] GetEmployerLinksQueryHandler handler, CancellationToken ct) =>
+        FromResult((await handler.Handle(query, ct)).Value);
+
+    [HttpPost("{chatId:long}/external-links/{key}")]
+    public async Task<IActionResult> DecideExternalLink(long chatId, string key, [FromBody] EmployerLinkRequest request,
+        [FromServices] DecideEmployerLinkCommandHandler handler, CancellationToken ct) =>
+        FromResult((await handler.Handle(new DecideEmployerLinkCommand(chatId, key, request.Decision), ct)).Value);
+
     /// <summary>
     /// Сообщения работодателей с разбором LLM, новые сверху; handled=false — необработанные. Страница — веб-интерфейс, «Ответы работодателей» (/dialogs).
     /// </summary>
@@ -81,3 +91,5 @@ public class DialogsController : ApiController
 }
 
 public record AutoReplyRequest(bool Sent, [MaxLength(500)] string? Error, long? MessageId = null);
+
+public record EmployerLinkRequest(EmployerLinkDecision Decision);

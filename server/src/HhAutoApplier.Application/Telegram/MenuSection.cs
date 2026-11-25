@@ -1,14 +1,17 @@
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Notifications;
+using HhAutoApplier.Application.Queries.Dialogs;
 using HhAutoApplier.Application.Queries.Vacancies;
+using HhAutoApplier.Domain.Dialogs;
 using HhAutoApplier.Domain.Vacancies;
 using static HhAutoApplier.Application.Telegram.BotHtml;
 
 namespace HhAutoApplier.Application.Telegram;
 
 // Экран-меню (#115): вход во все разделы, справка и отвязка чата с подтверждением
-public class MenuSection(GetStatsQueryHandler stats, BotDigest digest, BotChat chat, ICurrentUser current) : IBotSection
+public class MenuSection(GetStatsQueryHandler stats, BotDigest digest, BotChat chat, ICurrentUser current,
+    GetEmployerLinksQueryHandler externalLinks) : IBotSection
 {
     public const string Show = "menu";
 
@@ -41,6 +44,8 @@ public class MenuSection(GetStatsQueryHandler stats, BotDigest digest, BotChat c
         var counts = (await stats.Handle(new GetStatsQuery(), ct)).Value is Dictionary<string, int> d ? d : [];
         var review = counts.GetValueOrDefault(VacancyStatus.Review.ToString());
         var dialogs = await digest.OpenDialogsAsync(ct);
+        var links = await externalLinks.Handle(new GetEmployerLinksQuery(), ct);
+        var pendingLinks = links.IsT0 ? links.AsT0.Count(link => link.State == EmployerLinkState.Pending) : 0;
         var rows = new List<IReadOnlyList<BotButton>>
         {
             new[] { new BotButton(review > 0 ? $"📝 Проверка ({review})" : "📝 Проверка", $"{ReviewSection.Card}:0"),
@@ -51,6 +56,8 @@ public class MenuSection(GetStatsQueryHandler stats, BotDigest digest, BotChat c
                 : new[] { new BotButton("🔎 Поиски", $"{SearchesSection.Show}:") },
             new[] { new BotButton("❓ Помощь", $"{Help}:") },
         };
+        if (pendingLinks > 0)
+            rows.Insert(1, [new BotButton($"🔗 Ссылки вне hh.ru ({pendingLinks})", $"{EmployerLinksSection.Show}:")]);
         var text = $"☰ {B("hh-autoapplier")}\nНа проверке: {review} · ответов работодателей: {dialogs} · в очереди: {counts.GetValueOrDefault(VacancyStatus.Queued.ToString())}";
         return new BotMessage(text) { Html = true, Rows = rows };
     }
