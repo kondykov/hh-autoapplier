@@ -2,6 +2,7 @@ using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Errors;
+using HhAutoApplier.Domain.Dialogs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -27,7 +28,7 @@ public class GetDashboardQueryHandler(IAppDbContext db, ICurrentUser current, IO
         var prevFrom = now.AddDays(-2 * query.Period);
         // Собранные за два периода (этот и прошлый) и все отправленные: ответ на старый отклик — тоже событие периода
         var rows = await db.JobApplications.AsNoTracking()
-            .Where(a => a.UserId == owner && (a.CreatedAt >= prevFrom || a.AppliedAt != null))
+            .Where(a => a.UserId == owner && a.DuplicateOfVacancyId == null && (a.CreatedAt >= prevFrom || a.AppliedAt != null))
             .Select(a => new DashboardRow(a.CreatedAt, a.Status, a.StatusReason, a.LlmScore, a.AppliedAt,
                 a.Search != null ? a.Search.Name : a.Vacancy.SearchName, HhSource, a.History,
                 a.Vacancy.ResponsesAtCollect, a.ResponsesAtApply))
@@ -52,6 +53,9 @@ public class GetDashboardQueryHandler(IAppDbContext db, ICurrentUser current, IO
             return new DashboardChatsDto(null, 0);
 
         var messages = db.EmployerMessages.Where(m => m.UserId == userId);
-        return new DashboardChatsDto(await messages.MaxAsync(m => (DateTimeOffset?)m.ReceivedAt, ct), await messages.CountAsync(ct));
+        var actionMessages = await messages.Where(m => m.ExternalLinks.Any(link => link.State == EmployerLinkState.Pending
+            && link.RequiresAction != false)).AsNoTracking().ToListAsync(ct);
+        var pending = actionMessages.Sum(m => m.ExternalLinks.Count(link => link.State == EmployerLinkState.Pending && link.RequiresAction != false));
+        return new DashboardChatsDto(await messages.MaxAsync(m => (DateTimeOffset?)m.ReceivedAt, ct), await messages.CountAsync(ct), pending);
     }
 }

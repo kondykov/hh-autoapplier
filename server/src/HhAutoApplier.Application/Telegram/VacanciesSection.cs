@@ -233,7 +233,9 @@ public class VacanciesSection(
         var pills = new[] { Status(v.Status), v.HiddenAt is null ? "" : "скрыта", v.VacancyArchived ? "в архиве" : "" };
         var meta = new[]
         {
-            v.Company, v.Area, Salary(v), v.WorkFormat, v.WorkExperience is { } exp ? $"опыт: {exp}" : "", $"балл {v.LlmScore ?? v.Score}",
+            v.Company, string.Join(", ", v.OtherRegions.Select(variant => variant.Region).Prepend(v.Area)
+                .Where(region => !string.IsNullOrWhiteSpace(region)).Distinct()), Salary(v), v.WorkFormat,
+            v.WorkExperience is { } exp ? $"опыт: {exp}" : "", $"балл {v.LlmScore ?? v.Score}",
             v.ResumeProfile is { } r ? $"резюме {r}" : "", v.SearchName is { Length: > 0 } s ? $"поиск {s}" : "", v.AppliedAt is { } at ? $"отклик {Date(at)}" : "",
         };
         var text = new StringBuilder()

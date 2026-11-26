@@ -8,6 +8,11 @@ import { pageOf, type PageStep, type StepContext } from "./step-context";
 
 export type ChatReader = Pick<ChatSource, "recent" | "writePossibility">;
 
+interface AutoReplyAttempt {
+  outcome?: SendResult;
+  reported?: boolean;
+}
+
 // «Синхронизировать чаты с сервером» (бывший «Автоответ», #26, #123): чаты откликов → на сервер (статусы, разбор LLM, Telegram);
 // на новые отказы — короткое «спасибо», где hh.ru разрешает писать (решение владельца 2026-10-26).
 // Обычно после отказа переписка закрыта до приглашения — тогда сервер узнаёт, что автоответ невозможен.
@@ -57,16 +62,22 @@ export class DialogStep implements PageStep {
       const r = res.result;
       logger.log(`Чатов: ${r.received}, новых сообщений работодателей: ${r.newMessages}, отказов: ${r.rejected}, приглашений: ${r.invited}${r.recovered ? `, найдено потерянных откликов: ${r.recovered}` : ""}. ` +
         "Разбор и черновики ответов — в Telegram и в веб-интерфейсе backend («Ответы работодателей»)", "success");
+      if (r.externalLinks)
+        logger.log("Новые ссылки вне hh.ru: " + r.externalLinks + " — в «Ответах работодателей» в веб-интерфейсе", "success");
+
+      const pending: AutoReply[] = [];
+      for (const reply of r.autoReplies)
+        if (!await this.deliverReply(reply)) pending.push(reply);
 
       // «Спасибо» выключено в настройках (#123): ничего не пишем и сервер не трогаем — включат, ответы уйдут со следующей синхронизацией
       if (!config.thanksOnReject) {
-        if (r.autoReplies.length) logger.log(`«Спасибо» на отказы выключено в настройках — не отвечаю (${r.autoReplies.length})`);
+        if (pending.length) logger.log(`«Спасибо» на отказы выключено в настройках — не отвечаю (${pending.length})`);
         panel.setStep("Синхронизация чатов: готово");
         return;
       }
 
       const writable: AutoReply[] = [];
-      for (const reply of r.autoReplies) {
+      for (const reply of pending) {
         const label = reply.title || `чат ${reply.chatId}`;
         let possibility;
         try {
@@ -77,8 +88,7 @@ export class DialogStep implements PageStep {
         }
         if (!possibility.canWrite) {
           const reason = describeWriteReason(possibility.reason);
-          await backend.reportAutoReply(reply.chatId, false, reason);
-          logger.log(`«${label}»: автоответ невозможен — ${reason}`);
+          await this.deliverReply(reply, async () => ({ ok: false, error: reason }));
           continue;
         }
         if (config.queueDryRun) {
@@ -103,7 +113,7 @@ export class DialogStep implements PageStep {
 
   // Открыт чат первого автоответа: отправить, сообщить итог, перейти к следующему
   async resume(): Promise<void> {
-    const { state, logger, panel, backend, config, nav } = this.ctx;
+    const { state, logger, panel, config, nav } = this.ctx;
     const current = state.autoReplies[0];
     if (!current) return;
     // Пробный режим включили, пока шли переходы, — не отправлять
@@ -121,15 +131,12 @@ export class DialogStep implements PageStep {
       return;
     }
 
-    const label = current.title || `чат ${current.chatId}`;
     // Не тот чат (hh.ru перенаправил) — не писать в чужой
-    const result: SendResult = isChatPage(nav.url(), current.chatId)
-      ? await this.send(config.rejectionReply)
-      : { ok: false, error: "чат не открылся" };
-    await backend.reportAutoReply(current.chatId, result.ok, result.ok ? undefined : result.error);
-    logger.log(result.ok ? `«${label}»: ответ на отказ отправлен` : `«${label}»: ответ не отправлен — ${result.error}`, result.ok ? "success" : "warn");
+    await this.deliverReply(current, async () => isChatPage(nav.url(), current.chatId)
+      ? this.send(config.rejectionReply)
+      : { ok: false, error: "чат не открылся" });
 
-    state.autoReplies = state.autoReplies.slice(1);
+    if (state.autoReplies[0] === current) state.autoReplies = state.autoReplies.slice(1);
     await this.ctx.persist();
     const next = state.autoReplies[0];
     if (!next) {
@@ -138,5 +145,37 @@ export class DialogStep implements PageStep {
     }
     await pause(DELAYS.step);
     nav.go(chatUrl(next.chatId, new URL(nav.url()).origin));
+  }
+
+  // Запись до клика переживает перезагрузку. Блокировка события не даёт двум вкладкам одного hh.ru кликнуть одновременно.
+  private async deliverReply(reply: AutoReply, send?: () => Promise<SendResult>): Promise<boolean> {
+    const { storage, backend, logger } = this.ctx;
+    const key = `hh_auto_reply:${reply.chatId}:${reply.messageId ?? "legacy"}`;
+    const deliver = async (): Promise<boolean> => {
+      const previous = await storage.get<AutoReplyAttempt | null>(key, null);
+      if (previous?.reported) return true;
+      if (!previous && !send) return false;
+
+      let outcome = previous?.outcome;
+      if (!previous && send) {
+        await storage.set<AutoReplyAttempt>(key, {});
+        outcome = await send();
+      }
+      // Вкладка исчезла между кликом и подтверждением отправки. Повтор мог бы написать работодателю дважды.
+      outcome ??= { ok: false, error: "результат отправки неизвестен — проверьте чат hh.ru" };
+      if (!previous?.outcome) await storage.set<AutoReplyAttempt>(key, { outcome });
+
+      const label = reply.title || `чат ${reply.chatId}`;
+      const error = outcome.ok ? undefined : outcome.error;
+      if (!previous?.outcome)
+        logger.log(outcome.ok ? `«${label}»: ответ на отказ отправлен` : `«${label}»: ${error}`, outcome.ok ? "success" : "warn");
+      const result = reply.messageId === undefined
+        ? await backend.reportAutoReply(reply.chatId, outcome.ok, error)
+        : await backend.reportAutoReply(reply.chatId, outcome.ok, error, reply.messageId);
+      if (result.ok) await storage.set<AutoReplyAttempt>(key, { reported: true });
+      else logger.log(`«${label}»: результат автоответа ждёт отправки на сервер — ${result.error}`, "warn");
+      return true;
+    };
+    return navigator.locks ? navigator.locks.request(key, deliver) : deliver();
   }
 }

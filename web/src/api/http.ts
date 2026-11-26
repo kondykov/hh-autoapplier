@@ -3,6 +3,8 @@
 
 export class Unauthorized extends Error {}
 
+export const apiChanges = new EventTarget();
+
 export async function api<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, { ...options, headers: { "Content-Type": "application/json" } });
   const body = res.status === 204 ? null : await res.json().catch(() => null);
@@ -11,6 +13,8 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
   // Ошибки проверки полей (400) — списком по полям
   const fields = body?.errors ? Object.values(body.errors as Record<string, string[]>).flat().join("; ") : null;
   if (!res.ok) throw new Error(body?.message ?? fields ?? body?.title ?? `сервер ответил ${res.status}`);
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(options.method?.toUpperCase() ?? ""))
+    apiChanges.dispatchEvent(new CustomEvent("write", { detail: path }));
   return body as T;
 }
 

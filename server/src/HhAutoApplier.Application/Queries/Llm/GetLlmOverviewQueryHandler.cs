@@ -54,7 +54,7 @@ public class GetLlmOverviewQueryHandler(
             await mine.CountAsync(a => a.LlmVerdict == LlmVerdict.Reject && a.LlmEvaluatedAt >= since, ct),
             await mine.CountAsync(a => a.LlmVerdict != null && a.LlmEvaluatedAt >= since, ct),
             await mine.CountAsync(a => a.LlmVerdict == LlmVerdict.Reject && a.Status != VacancyStatus.Skipped, ct),
-            await mine.CountAsync(a => a.LlmVerdict == LlmVerdict.Reject && a.Status == VacancyStatus.Skipped && a.HiddenAt == null
+            await mine.CountAsync(a => a.LlmVerdict == LlmVerdict.Reject && a.Status == VacancyStatus.Skipped && a.HiddenAt == null && a.DuplicateOfVacancyId == null
                 && a.LlmScore >= BorderlineFrom && a.LlmScore <= BorderlineTo, ct));
         var letters = new LlmLettersSummaryDto(
             await mine.CountAsync(a => a.Status == VacancyStatus.Review && a.StatusReason != null && a.StatusReason.StartsWith(JobApplication.LetterReviewPrefix), ct),

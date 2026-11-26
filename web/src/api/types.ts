@@ -28,6 +28,8 @@ export interface Question {
 }
 
 export interface Vacancy {
+  duplicateOfVacancyId?: string;
+  otherRegions?: { id: string; region: string; url: string }[];
   id: string;
   title: string;
   url: string;
@@ -68,6 +70,23 @@ export interface Vacancy {
 }
 
 export type Stats = Partial<Record<VacancyStatus, number>>;
+
+export interface EmployerLink {
+  chatId: number;
+  title: string;
+  company: string;
+  key: string;
+  url: string;
+  domain: string;
+  kind: "Form" | "Test";
+  state: "Pending" | "Completed" | "Dismissed";
+  quote: string;
+  action?: string;
+  detectedAt: string;
+  dueAt?: string;
+  remindAt?: string;
+  remindedAt?: string;
+}
 
 export interface Dialog {
   chatId: number | string;
@@ -371,7 +390,7 @@ export interface Dashboard {
   sources: { source: string; collected: number; sent: number; invited: number; interviews: number }[];
   llm: { requests: number; errors: number; limit: number };
   // syncedAt — когда пришло последнее новое сообщение работодателя (время синхронизации сервер не хранит)
-  chats: { syncedAt: string | null; messages: number };
+  chats: { syncedAt: string | null; messages: number; externalLinksPending?: number };
   // Исходы отправленных за период по числу откликов на вакансию (#148); последняя строка — «нет данных»
   competition?: { atCollect: CompetitionRow[]; atApply: CompetitionRow[]; growth: CompetitionRow[] };
 }

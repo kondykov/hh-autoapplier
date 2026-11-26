@@ -3,12 +3,36 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using HhAutoApplier.Application.Llm;
+using HhAutoApplier.Domain.Vacancies;
+using Microsoft.EntityFrameworkCore;
 
 namespace HhAutoApplier.Tests.Api;
 
 [Collection(ApiCollection.Name)]
 public class ApiTests(ApiFactory factory) : IAsyncLifetime
 {
+    [Fact]
+    public async Task Collect_RegionalDuplicates_KeepTheFirstRemoteApplication()
+    {
+        var api = factory.CreateApiClient();
+        (await api.PutAsJsonAsync("/api/searches", new { name = "regions", query = "dotnet" })).EnsureSuccessStatusCode();
+        foreach (var id in new[] { "501", "502", "503", "504" })
+            factory.Source.Add(id, "Backend C# разработчик", "Разработка на .NET и PostgreSQL");
+        factory.Source.RegionalCards["501"] = ("Москва", Vacancy.RemoteWorkFormat);
+        factory.Source.RegionalCards["502"] = ("Тверь", Vacancy.RemoteWorkFormat);
+        factory.Source.RegionalCards["503"] = ("Тверь", "Гибрид");
+        factory.Source.RegionalCards["504"] = ("Москва", Vacancy.RemoteWorkFormat);
+
+        (await api.PostAsync("/api/collect", null)).EnsureSuccessStatusCode();
+        (await api.PostAsync("/api/collect", null)).EnsureSuccessStatusCode();
+        var list = await api.GetFromJsonAsync<JsonElement>("/api/vacancies");
+        Assert.Equal(new[] { "501", "503", "504" }, list.EnumerateArray().Select(item => item.GetProperty("id").GetString()).Order());
+        var original = list.EnumerateArray().Single(item => item.GetProperty("id").GetString() == "501");
+        Assert.Equal("Тверь", Assert.Single(original.GetProperty("otherRegions").EnumerateArray()).GetProperty("region").GetString());
+        Assert.Equal("501", await factory.WithDbAsync(db => db.JobApplications.Where(item => item.VacancyId == "502")
+            .Select(item => item.DuplicateOfVacancyId).SingleAsync()));
+        Assert.Equal(HttpStatusCode.Conflict, (await api.PostAsJsonAsync("/api/vacancies/502/status", new { status = "Queued" })).StatusCode);
+    }
     private readonly HttpClient _api = factory.CreateApiClient();
 
     public Task InitializeAsync() => factory.ResetAsync();

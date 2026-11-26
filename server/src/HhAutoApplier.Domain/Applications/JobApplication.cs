@@ -42,6 +42,10 @@ public class JobApplication
 
     public DateTimeOffset? AppliedAt { get; private set; }
 
+    public string? RegionalGroupKey { get; private set; }
+
+    public string? DuplicateOfVacancyId { get; private set; }
+
     // Сколько откликов было на вакансию перед своим (#148): расширение читает со страницы вакансии перед «Отправить».
     // null — отправлено раньше #148, восстановлено по чату или число не прочиталось
     public int? ResponsesAtApply { get; private set; }
@@ -95,12 +99,29 @@ public class JobApplication
     // Оценка правилами поиска. awaitLlm — прошедший правила отклик ждёт LLM-оценки (Pending), а не идёт сразу в очередь
     public void Evaluate(VacancyEvaluator evaluator, FilterRules rules, IEnumerable<ResumeProfile> resumes, DateTimeOffset at, bool awaitLlm = false)
     {
+        EnsureNotRegionalDuplicate();
         if (Status is not (VacancyStatus.New or VacancyStatus.Queued or VacancyStatus.Skipped))
             throw new DomainException($"Отклик в статусе {Status} нельзя переоценить");
 
         var evaluation = evaluator.Evaluate(Vacancy, rules, resumes);
         (Score, ResumeProfile) = (evaluation.Score, evaluation.ResumeProfile);
         MoveTo(awaitLlm && evaluation.Status == VacancyStatus.Queued ? VacancyStatus.Pending : evaluation.Status, evaluation.Reason, at);
+    }
+
+    public void KeepAsRegionalOriginal(string groupKey) => RegionalGroupKey ??= groupKey;
+
+    public void GroupRegionalDuplicate(JobApplication original, DateTimeOffset at)
+    {
+        if (Status != VacancyStatus.New || UserId != original.UserId || VacancyId == original.VacancyId || original.DuplicateOfVacancyId is not null)
+            throw new DomainException("Нельзя объединить эти отклики");
+        DuplicateOfVacancyId = original.VacancyId;
+        MoveTo(VacancyStatus.Skipped, "региональный дубль", at);
+    }
+
+    private void EnsureNotRegionalDuplicate()
+    {
+        if (DuplicateOfVacancyId is not null)
+            throw new DomainException("Вакансия входит в группу региональных дублей");
     }
 
     // Страница вакансии недоступна, подтвердить импортную карточку нечем: отклик больше не ждёт (#59).
@@ -420,6 +441,7 @@ public class JobApplication
             throw new DomainException("Отклик на вакансию уже отправлен");
 
         AppliedAt = at;
+        DuplicateOfVacancyId = null;
         MoveTo(VacancyStatus.Applied, "восстановлен по чату hh.ru", at);
     }
 
@@ -474,6 +496,7 @@ public class JobApplication
     // Вернуть в очередь пропущенный или упавший отклик. С незакрытыми просьбами — на проверку: из очереди он бы не вышел
     public void Requeue(DateTimeOffset at)
     {
+        EnsureNotRegionalDuplicate();
         if (Status is not (VacancyStatus.Skipped or VacancyStatus.Failed))
             throw new DomainException($"Из статуса {Status} в очередь вернуть нельзя");
 
@@ -485,13 +508,14 @@ public class JobApplication
 
     // Отсеян до отклика — человеком, LLM или правилами: такой отклик можно оценить заново и скрыть (#71).
     // Failed не входит: отклик «не подтверждён» мог уйти на hh.ru, для него есть «В очередь»
-    public bool Dismissed => Status == VacancyStatus.Skipped;
+    public bool Dismissed => Status == VacancyStatus.Skipped && DuplicateOfVacancyId is null;
 
     // Оценить заново: письмо LLM и ответы анкеты привязаны к прежнему резюме и сбрасываются, письмо человека остаётся.
     // Импортная карточка ждёт в New, её подтвердит и оценит сбор; остальные — сразу правилами и затем в Pending на LLM.
     // Без настроенной LLM сценарий не запускается: это проверяет обработчик
     public void Reevaluate(VacancyEvaluator evaluator, FilterRules rules, IEnumerable<ResumeProfile> resumes, DateTimeOffset at)
     {
+        EnsureNotRegionalDuplicate();
         if (!Dismissed)
             throw new DomainException($"Из статуса {Status} оценить заново нельзя");
 

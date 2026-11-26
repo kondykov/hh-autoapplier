@@ -90,7 +90,14 @@ public class AnalyzeDialogsCommandHandler(
             // Не разобрано — «прочее» без черновика: иначе сообщение разбиралось бы каждый проход и тратило лимит
             if (parsed is { } analysis)
             {
-                message.ApplyAnalysis(analysis.Kind, analysis.Summary, analysis.Reply, result.Model, clock.GetUtcNow());
+                var now = clock.GetUtcNow();
+                message.ApplyAnalysis(analysis.Kind, analysis.Summary, analysis.Reply, result.Model, now);
+                foreach (var link in message.ExternalLinks.Where(link => link.MessageId == message.MessageId))
+                {
+                    var action = analysis.ExternalActions?.FirstOrDefault(action => action.Key == link.Key);
+                    if (analysis.Kind == DialogKind.Rejection || analysis.ExternalActions is not null)
+                        link.ApplyAnalysis(analysis.Kind != DialogKind.Rejection && action is not null, action?.Action, action?.DueAt, now);
+                }
                 analyzed++;
             }
             else

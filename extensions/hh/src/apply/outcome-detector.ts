@@ -2,7 +2,7 @@ import { DELAYS, wait } from "../core/delays";
 import { SELECTORS, TEXT_MARKERS } from "../core/selectors";
 import { getCoverLetterField } from "../dom/cover-letter";
 import { detectPageType } from "../dom/page-type";
-import { normalizeText, qs } from "../dom/query";
+import { normalizeText, qs, qsa } from "../dom/query";
 
 export type ApplyOutcome = "outline" | "modal" | "response" | "letter" | "responded" | "none";
 
@@ -14,7 +14,12 @@ const HYBRID_GRACE_MS = 2500;
 const pageText = () => normalizeText(document.body.textContent);
 
 export function isAlreadyRespondedOnPage(): boolean {
-  return !!qs(SELECTORS.alreadyRespondedText) || pageText().includes(TEXT_MARKERS.alreadyResponded);
+  if (qsa(SELECTORS.alreadyRespondedText).some(marker => !marker.closest(SELECTORS.vacancyCard))) return true;
+
+  // Запасной поиск по тексту только там, где hh.ru показывает действие по текущей вакансии.
+  const { responseModal, vacancyResponseForm, vacancyApplyTop, vacancyApplyBottom } = SELECTORS;
+  return qsa([responseModal, vacancyResponseForm, vacancyApplyTop, vacancyApplyBottom].join(", "))
+    .some(element => !element.closest(SELECTORS.vacancyCard) && normalizeText(element.textContent).includes(TEXT_MARKERS.alreadyResponded));
 }
 
 export function isOutlineDetected(): boolean {

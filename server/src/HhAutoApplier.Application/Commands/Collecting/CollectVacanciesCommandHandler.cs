@@ -1,4 +1,5 @@
 using HhAutoApplier.Application.Abstractions;
+using HhAutoApplier.Application.Commands.Vacancies;
 using HhAutoApplier.Application.Cqrs;
 using HhAutoApplier.Application.Dtos;
 using HhAutoApplier.Application.Errors;
@@ -178,7 +179,8 @@ public class CollectVacanciesCommandHandler(
                         if (vacancy.Imported)
                             continue;
 
-                        application.Evaluate(evaluator, search.Rules, resumes[search.UserId], now, awaitLlm: llm.IsConfigured);
+                        if (!await RegionalVacancyDuplicates.GroupAsync(db, application, now, ct))
+                            application.Evaluate(evaluator, search.Rules, resumes[search.UserId], now, awaitLlm: llm.IsConfigured);
                         if (application.Status is VacancyStatus.Queued or VacancyStatus.Pending)
                             queued++;
                         else
@@ -254,7 +256,7 @@ public class CollectVacanciesCommandHandler(
                     application.CloseVacancyArchived(now);
                 else if (state == VacancyPageState.Unavailable)
                     application.MarkVacancyUnavailable(now);
-                else
+                else if (!await RegionalVacancyDuplicates.GroupAsync(db, application, now, ct))
                     application.Evaluate(evaluator, application.Rules, resumes[application.UserId], now, awaitLlm: llm.IsConfigured);
             }
 
