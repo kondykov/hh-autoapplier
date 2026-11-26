@@ -2,7 +2,7 @@
 // Вход — пароль, дальше cookie. Разметка — компонентами UI kit (packages/ui, #129); данные с hh.ru и от LLM — только текстом
 import "./styles.css";
 import iconsUrl from "@hh-autoapplier/ui/icons.svg";
-import { api, post, Unauthorized } from "./api/http";
+import { api, apiChanges, post, Unauthorized } from "./api/http";
 import type { Dialog, LlmOverview, Me, Stats, User, Vacancy } from "./api/types";
 import { llmAlert, paletteGroups, vacancySource, visibleSections, type Section } from "./commands";
 import { account } from "./pages/account";
@@ -19,7 +19,7 @@ import { vacancies } from "./pages/vacancies";
 import { isAppLink, legacyHashPath, parseRoute, path, renamedPath, type Route, type RouteName } from "./router";
 import { act, app, page, scoped, session, setStatus } from "./state";
 import { cycleTheme, initThemeButton, themeLabel } from "./theme";
-import { Alert, Caption, Card, CommandPalette, el, Icon, Menu, MenuItems, nodes, SearchButton, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child,
+import { Alert, Caption, Card, CommandPalette, Count, el, Icon, Menu, MenuItems, nodes, SearchButton, setIconSprite, Sheet, SheetLinks, TabBar, Tabs, type Child,
   type MenuElement, type MenuEntry, type NavAlert, type NavItem, type PaletteElement, Skeleton } from "@hh-autoapplier/ui";
 
 setIconSprite(iconsUrl);
@@ -115,16 +115,58 @@ async function logout() {
 }
 
 // Счётчики в навигации: на проверке и необработанные ответы (кроме отказов) — как в «Ответах работодателей»
-async function loadCounts() {
-  const [stats, open] = await Promise.all([
-    api<Stats>(scoped("/api/stats")).catch(() => ({} as Stats)),
-    api<Dialog[]>(scoped("/api/dialogs?take=200&handled=false")).catch(() => [] as Dialog[]),
-  ]);
-  counts.review = stats.Review ?? 0;
-  counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
-  const overview = await api<LlmOverview>(scoped("/api/llm/overview")).catch(() => null);
-  alerts = { llm: llmAlert(overview) };
+let indicatorRequest = 0;
+
+function setIndicator(parent: Element, selector: string, next: HTMLElement | null) {
+  const old = parent.querySelector(selector);
+  if (!next) old?.remove();
+  else if (old) old.replaceWith(next);
+  else parent.append(next);
 }
+
+function drawIndicators() {
+  for (const container of [nav, tabbar, more]) {
+    for (const link of container.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+      switch (link.getAttribute("href")) {
+        case path("review"): setIndicator(link, ".count", Count(counts.review)); break;
+        case path("dialogs"): setIndicator(link, ".count", Count(counts.dialogs)); break;
+        case path("llm"): setIndicator(link, ".alert", Alert(alerts.llm)); break;
+      }
+    }
+  }
+  const moreButton = tabbar.querySelector('button[aria-label="Ещё разделы"]');
+  if (moreButton) setIndicator(moreButton, ".alert", Alert(alerts.llm));
+}
+
+function resetIndicators() {
+  indicatorRequest++;
+  counts.review = counts.dialogs = 0;
+  alerts = {};
+  drawIndicators();
+}
+
+async function loadCounts() {
+  if (!session.me) return;
+  const request = ++indicatorRequest;
+  const [stats, open, overview] = await Promise.all([
+    api<Stats>(scoped("/api/stats")).catch(() => undefined),
+    api<Dialog[]>(scoped("/api/dialogs?take=200&handled=false")).catch(() => undefined),
+    api<LlmOverview>(scoped("/api/llm/overview")).catch(() => undefined),
+  ]);
+  if (request !== indicatorRequest) return;
+  if (stats) counts.review = stats.Review ?? 0;
+  if (open) counts.dialogs = open.filter((m) => m.kind !== "Rejection").length;
+  if (overview) alerts.llm = llmAlert(overview);
+  drawIndicators();
+}
+
+apiChanges.addEventListener("write", (event) => {
+  const endpoint = (event as CustomEvent<string>).detail.split("?")[0];
+  if (/^\/api\/(?:vacancies|dialogs|llm|profile\/llm|collect)(?:\/|$)/.test(endpoint)) void loadCounts();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void loadCounts();
+});
 
 // Скелетон (#128): пока раздел грузится, вместо пустого экрана — его каркас. Только при смене раздела:
 // перерисовка того же раздела (фильтр, сохранение) не мигает, старое содержимое остаётся до прихода нового
@@ -169,6 +211,7 @@ function navigate(url: string, { replace = false, render: draw = true }: { repla
   if (!draw) return;
   setStatus(session.viewedUser ? status.textContent ?? "" : "");
   window.scrollTo(0, 0);
+  void loadCounts();
   render();
 }
 
@@ -184,6 +227,8 @@ async function loadUsers() {
 
 function showLogin() {
   session.me = null;
+  session.viewedUser = null;
+  resetIndicators();
   shownRoute = null;
   view.replaceChildren();
   nav.hidden = tabbar.hidden = more.hidden = true;
@@ -200,6 +245,7 @@ function showLogin() {
 
 async function showSession(user: Me) {
   session.me = user;
+  resetIndicators();
   loginForm.hidden = true;
   nav.hidden = tabbar.hidden = false;
   document.body.classList.add("signed-in");
@@ -229,7 +275,9 @@ loginForm.onsubmit = async (e) => {
 viewAs.onchange = () => {
   session.viewedUser = viewAs.value || null;
   setStatus(session.viewedUser ? `Данные ${viewAs.selectedOptions[0].textContent} — только просмотр` : "");
-  loadCounts().then(render);
+  resetIndicators();
+  void loadCounts();
+  void render();
 };
 
 // Ссылки на разделы — без перезагрузки страницы; новая вкладка, файлы и /api — как обычно
@@ -243,7 +291,7 @@ document.addEventListener("click", (e) => {
   navigate(url.pathname + url.search);
 });
 
-window.addEventListener("popstate", () => { setStatus(session.viewedUser ? status.textContent ?? "" : ""); render(); });
+window.addEventListener("popstate", () => { setStatus(session.viewedUser ? status.textContent ?? "" : ""); void loadCounts(); render(); });
 
 // Старые ссылки и закладки на якорях (/#review, /#vacancies/Queued) — на пути
 const legacy = legacyHashPath(location.hash);

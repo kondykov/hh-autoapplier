@@ -58,8 +58,9 @@ public class ImportVacanciesCommandHandler(
             }
 
             var application = JobApplication.Create(vacancy, current.Id, now, search.Id);
-            application.Evaluate(evaluator, search.Rules, resumes, now, awaitLlm: llm.IsConfigured);
             db.JobApplications.Add(application);
+            if (!await RegionalVacancyDuplicates.GroupAsync(db, application, now, ct))
+                application.Evaluate(evaluator, search.Rules, resumes, now, awaitLlm: llm.IsConfigured);
             added++;
             if (application.Status is VacancyStatus.Queued or VacancyStatus.Pending)
                 queued++;

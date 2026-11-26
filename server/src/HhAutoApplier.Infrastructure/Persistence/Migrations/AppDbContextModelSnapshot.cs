@@ -46,6 +46,10 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DuplicateOfVacancyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTimeOffset?>("HiddenAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -69,6 +73,10 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.Property<string>("LlmVerdict")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
+
+                    b.Property<string>("RegionalGroupKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int?>("ResponsesAtApply")
                         .HasColumnType("integer");
@@ -110,6 +118,15 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("Status", "Score");
+
+                    b.HasIndex("UserId", "DuplicateOfVacancyId")
+                        .HasFilter("\"DuplicateOfVacancyId\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "RegionalGroupKey")
+                        .IsUnique()
+                        .HasFilter("\"RegionalGroupKey\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "RegionalGroupKey"), false);
 
                     b.HasIndex("VacancyId", "UserId")
                         .IsUnique();
@@ -201,6 +218,12 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
 
                     b.Property<long>("MessageId")
                         .HasColumnType("bigint");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1068,6 +1091,61 @@ namespace HhAutoApplier.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsMany("HhAutoApplier.Domain.Dialogs.EmployerLink", "ExternalLinks", b1 =>
+                        {
+                            b1.Property<long>("EmployerMessageId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<string>("Action");
+
+                            b1.Property<DateTimeOffset>("DetectedAt");
+
+                            b1.Property<string>("Domain")
+                                .IsRequired();
+
+                            b1.Property<DateTimeOffset?>("DueAt");
+
+                            b1.Property<string>("Key")
+                                .IsRequired();
+
+                            b1.Property<string>("Kind")
+                                .IsRequired();
+
+                            b1.Property<long>("MessageId");
+
+                            b1.Property<DateTimeOffset?>("NotifiedAt");
+
+                            b1.Property<string>("Quote")
+                                .IsRequired();
+
+                            b1.Property<DateTimeOffset?>("RemindAt");
+
+                            b1.Property<DateTimeOffset?>("RemindedAt");
+
+                            b1.Property<bool?>("RequiresAction");
+
+                            b1.Property<string>("State")
+                                .IsRequired();
+
+                            b1.Property<string>("Url")
+                                .IsRequired();
+
+                            b1.HasKey("EmployerMessageId", "__synthesizedOrdinal");
+
+                            b1.ToTable("EmployerMessages");
+
+                            b1
+                                .ToJson("ExternalLinks")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployerMessageId");
+                        });
+
+                    b.Navigation("ExternalLinks");
                 });
 
             modelBuilder.Entity("HhAutoApplier.Domain.Llm.LlmCall", b =>

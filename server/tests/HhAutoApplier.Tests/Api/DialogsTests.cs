@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using HhAutoApplier.Application.Abstractions;
 using HhAutoApplier.Application.Commands.Dialogs;
+using HhAutoApplier.Application.Commands.Notifications;
 using HhAutoApplier.Application.Commands.Telegram;
+using HhAutoApplier.Application.Notifications;
 using HhAutoApplier.Domain.Dialogs;
 using HhAutoApplier.Domain.Notifications;
 using HhAutoApplier.Domain.Vacancies;
@@ -58,6 +60,65 @@ public class DialogsTests(ApiFactory factory) : IAsyncLifetime
         factory.WithDbAsync(db => db.JobApplications.Where(a => a.VacancyId == id).Select(a => a.Status).SingleAsync());
 
     [Fact]
+    public async Task ExternalLinks_OnlyNewFormsAndTests_ResolveWithoutHandlingChat()
+    {
+        await Import(Chat(11, "1", "RESPONSE", 101, Old, text: "Архивная анкета https://forms.gle/old"));
+        var now = DateTimeOffset.UtcNow.AddMinutes(1);
+        var imported = await Import(
+            Chat(11, "1", "RESPONSE", 102, now, text: "Заполните forms.gle/new и пройдите https://hiringscore.ai/test. https://hh.ru/other"),
+            Chat(12, "2", "DISCARD", 201, now, text: "К сожалению, отказ. https://forms.gle/refusal"),
+            Chat(13, "3", "RESPONSE", 301, now, text: "Наш сайт https://forms.gle.evil.com/path"));
+        Assert.Equal(2, imported.GetProperty("externalLinks").GetInt32());
+        var duplicate = await Import(Chat(11, "1", "RESPONSE", 103, now, text: "Напоминаем: https://forms.gle/new"));
+        Assert.Equal(0, duplicate.GetProperty("externalLinks").GetInt32());
+
+        var links = await Json(await _admin.GetAsync("/api/dialogs/external-links"));
+        Assert.Equal(2, links.GetArrayLength());
+        var form = links.EnumerateArray().Single(link => link.GetProperty("kind").GetString() == "Form");
+        Assert.Equal("https://forms.gle/new", form.GetProperty("url").GetString());
+        var endpoint = $"/api/dialogs/11/external-links/{form.GetProperty("key").GetString()}";
+        await Json(await _admin.PostAsJsonAsync(endpoint, new { decision = "Remind" }));
+        var done = await Json(await _admin.PostAsJsonAsync(endpoint, new { decision = "Complete" }));
+        Assert.Equal("Completed", done.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, done.GetProperty("remindAt").ValueKind);
+        Assert.False(await factory.WithDbAsync(db => db.EmployerMessages.AnyAsync(message => message.ChatId == 11 && message.HandledAt != null)));
+    }
+
+    [Fact]
+    public async Task ExternalLinks_AnalysisCannotInsertOrReplaceAddress()
+    {
+        await Import(Chat(11, "1", "RESPONSE", 101, Old));
+        await Import(Chat(11, "1", "RESPONSE", 102, DateTimeOffset.UtcNow.AddMinutes(1), text: "Форма https://forms.gle/actual"));
+        factory.Llm.Configured = true;
+        factory.Llm.Answers.Enqueue("""{"kind":"other","summary":"Внешний адрес","externalActions":[{"key":"0000000000000000","url":"https://forms.gle/injected"}]}""");
+        await InScope(services => services.GetRequiredService<AnalyzeDialogsCommandHandler>().Handle(new AnalyzeDialogsCommand()));
+
+        Assert.Empty((await Json(await _admin.GetAsync("/api/dialogs/external-links"))).EnumerateArray());
+        var stored = await factory.WithDbAsync(async db => (await db.EmployerMessages.SingleAsync()).ExternalLinks.Single().Url);
+        Assert.Equal("https://forms.gle/actual", stored);
+    }
+
+    [Fact]
+    public async Task ExternalLinks_FallbackNotificationIsImportantAndQueuedOnce()
+    {
+        factory.Telegram.Configured = true;
+        var code = (await Json(await _admin.PostAsync("/api/telegram/link", null))).GetProperty("code").GetString()!;
+        await InScope(services => services.GetRequiredService<HandleTelegramMessageCommandHandler>().Handle(
+            new HandleTelegramMessageCommand { ChatId = 100, IsPrivate = true, Text = $"/start {code}" }));
+        await Import(Chat(11, "1", "RESPONSE", 101, Old));
+        await Import(Chat(11, "1", "RESPONSE", 102, DateTimeOffset.UtcNow.AddMinutes(1), text: "Заполните https://forms.gle/first"));
+
+        async Task<int> Notify() => await InScope(services => services.GetRequiredService<NotifyEmployerLinksCommandHandler>()
+            .Handle(new NotifyEmployerLinksCommand()));
+        Assert.Equal(1, await Notify());
+        Assert.Equal(0, await Notify());
+        var notification = await factory.WithDbAsync(db => db.Notifications.SingleAsync(item => item.Kind == NotificationKind.ExternalLink));
+        Assert.Equal(NotificationDelivery.Important, BotTexts.Delivery(notification.Kind));
+        var buttons = BotTexts.NotificationButtons(notification.Kind, notification.Key, null, notification.Text).SelectMany(row => row);
+        Assert.Contains(buttons, button => button.Url == "https://forms.gle/first");
+    }
+
+    [Fact]
     public async Task Import_SetsStatuses_AutoReplyOnlyForNewRejections()
     {
         await Applied();
@@ -77,8 +138,11 @@ public class DialogsTests(ApiFactory factory) : IAsyncLifetime
         Assert.Equal(VacancyStatus.Rejected, await StatusOf("2"));
         var reply = Assert.Single(second.GetProperty("autoReplies").EnumerateArray());
         Assert.Equal(12, reply.GetProperty("chatId").GetInt64());
+        Assert.Equal(104, reply.GetProperty("messageId").GetInt64());
 
-        await Json(await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true }));
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true, messageId = 102 })).StatusCode);
+        await Json(await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true, messageId = 104 }));
         Assert.Equal(HttpStatusCode.Conflict, (await _admin.PostAsJsonAsync("/api/dialogs/12/auto-reply", new { sent = true })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _admin.PostAsJsonAsync("/api/dialogs/99/auto-reply", new { sent = true })).StatusCode);
 

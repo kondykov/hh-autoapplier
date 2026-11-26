@@ -42,6 +42,7 @@ export interface ResumeMatch {
 // Чат, где ждёт автоответ на отказ
 export interface AutoReply {
   chatId: number;
+  messageId?: number;
   vacancyId: string | null;
   title: string;
   company: string;
@@ -54,6 +55,7 @@ export interface DialogsCounts {
   invited: number;
   // Отклики, чей статус потерялся, найденные по чатам: на сервере стали Applied
   recovered?: number;
+  externalLinks?: number;
   autoReplies: AutoReply[];
 }
 
@@ -186,9 +188,10 @@ export class BackendClient {
     return result ? { ok: true, result } : { ok: false, error: notJson(res) };
   }
 
-  async reportAutoReply(chatId: number, sent: boolean, error?: string): Promise<ReportResult> {
-    const res = await this.call({ type: "hh-api", path: `/api/dialogs/${chatId}/auto-reply`, method: "POST", body: { sent, error } });
-    return res.status === 200 ? { ok: true } : { ok: false, error: describe(res) };
+  async reportAutoReply(chatId: number, sent: boolean, error?: string, messageId?: number): Promise<ReportResult> {
+    const res = await this.call({ type: "hh-api", path: `/api/dialogs/${chatId}/auto-reply`, method: "POST", body: { sent, error, messageId } });
+    // Чат удалён, сообщение заменено или автоответ уже обработан — повторять отчёт бессмысленно.
+    return [200, 404, 409].includes(res.status) ? { ok: true } : { ok: false, error: describe(res) };
   }
 
   // Событие для Telegram владельца (#28): сервер сам гасит повторы и молчит, если чат не привязан

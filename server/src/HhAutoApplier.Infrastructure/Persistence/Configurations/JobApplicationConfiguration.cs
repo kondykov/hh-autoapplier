@@ -13,6 +13,13 @@ public class JobApplicationConfiguration : IEntityTypeConfiguration<JobApplicati
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(x => x.LlmVerdict).HasConversion<string>().HasMaxLength(16);
         builder.HasIndex(x => new { x.Status, x.Score });
+        builder.HasIndex(x => x.UserId);
+        builder.Property(x => x.RegionalGroupKey).HasMaxLength(64);
+        builder.Property(x => x.DuplicateOfVacancyId).HasMaxLength(64);
+        builder.HasIndex(x => new { x.UserId, x.RegionalGroupKey }).IsUnique().AreNullsDistinct(false)
+            .HasFilter("\"RegionalGroupKey\" IS NOT NULL");
+        builder.HasIndex(x => new { x.UserId, x.DuplicateOfVacancyId })
+            .HasFilter("\"DuplicateOfVacancyId\" IS NOT NULL");
 
         // Один отклик пользователя на вакансию; UserId = null (владелец по умолчанию до #9) — тоже один
         builder.HasIndex(x => new { x.VacancyId, x.UserId }).IsUnique().AreNullsDistinct(false);

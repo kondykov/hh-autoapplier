@@ -58,7 +58,7 @@ public record DashboardLlmDto(int Requests, int Errors, int Limit);
 
 // Свежесть ответов работодателей: чаты приходят только синхронизацией в расширении. Время синхронизации не хранится —
 // SyncedAt — когда сервер последний раз получил новое сообщение работодателя (синхронизация без новых сообщений его не двигает)
-public record DashboardChatsDto(DateTimeOffset? SyncedAt, int Messages);
+public record DashboardChatsDto(DateTimeOffset? SyncedAt, int Messages, int ExternalLinksPending = 0);
 
 // Система (#121, только администратор): сборка, сбор, LLM сервера, пользователи, уведомления
 public record SystemDashboardDto(

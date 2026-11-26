@@ -192,6 +192,8 @@ public sealed class FakeVacancySource : IVacancySource
     // Требуемый опыт со страницы вакансии (#72)
     public Dictionary<string, string> WorkExperience { get; } = [];
 
+    public Dictionary<string, (string Region, string Format)> RegionalCards { get; } = [];
+
     // Число откликов в выдаче и на странице вакансии (#148)
     public Dictionary<string, int> SearchResponses { get; } = [];
 
@@ -229,6 +231,7 @@ public sealed class FakeVacancySource : IVacancySource
         ErrorPages.Clear();
         BlockedDetails.Clear();
         WorkExperience.Clear();
+        RegionalCards.Clear();
         SearchResponses.Clear();
         PageResponses.Clear();
         WhileLoadingDetails = null;
@@ -281,6 +284,8 @@ public sealed class FakeVacancySource : IVacancySource
             return VacancyPageState.Unavailable;
 
         vacancy.UpdateCard(null, null, Salary.From(card.SalaryFrom, null, card.SalaryFrom is null ? null : "RUR"), null, null, null);
+        if (RegionalCards.TryGetValue(vacancy.Id, out var regional))
+            vacancy.UpdateCard("Acme", regional.Region, null, regional.Format, null, null);
         vacancy.UpdateDetails(card.Title, card.Description, [], WorkExperience.GetValueOrDefault(vacancy.Id));
         vacancy.RecordResponses(PageResponses.TryGetValue(vacancy.Id, out var responses) ? responses : null, DateTimeOffset.UtcNow);
         return ArchivedPages.Contains(vacancy.Id) ? VacancyPageState.Archived : VacancyPageState.Available;

@@ -1,5 +1,6 @@
 using System.Text;
 using HhAutoApplier.Application.Dtos;
+using HhAutoApplier.Application.Telegram;
 using HhAutoApplier.Domain.Applications;
 using HhAutoApplier.Domain.Dialogs;
 using HhAutoApplier.Domain.Notifications;
@@ -88,13 +89,15 @@ public static class BotTexts
     };
 
     // Кнопки важного уведомления по его виду; у сводки кнопки — по счётчикам (BotDigest)
-    public static IReadOnlyList<IReadOnlyList<BotButton>> NotificationButtons(NotificationKind kind, string key, string? vacancyId) => kind switch
+    public static IReadOnlyList<IReadOnlyList<BotButton>> NotificationButtons(NotificationKind kind, string key, string? vacancyId, string? text = null) => kind switch
     {
         NotificationKind.EmployerReply when key.Split(':') is ["dialog", var chatId, ..] =>
         [
             [BotButton.Link("💬 Открыть чат", $"https://hh.ru/chat/{chatId}"), new BotButton("✔ Обработано", $"{Handled}:{chatId}")],
             [new BotButton("📝 Подробнее", $"{Open}:dc:{chatId}:0:o")],
         ],
+        NotificationKind.ExternalLink when key.Split(':') is ["ext", var externalChatId, var linkKey, ..] =>
+            EmployerLinksSection.NotificationButtons(externalChatId, linkKey, text?.Split('\n').LastOrDefault()),
         NotificationKind.SourceBlocked => [[new BotButton("🛠 Сбор", $"{Open}:cs:"), new BotButton("✔ Понятно", $"{Dismiss}:")]],
         NotificationKind.Captcha or NotificationKind.DailyLimit or NotificationKind.SignedOut or NotificationKind.LlmUnavailable or NotificationKind.LlmQuality
             or NotificationKind.MissedDigest =>

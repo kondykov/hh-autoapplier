@@ -10,6 +10,11 @@ export const STATUSES: Record<string, string> = {
 export const date = (value: string | number | null | undefined): string =>
   (value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "");
 
+export function vacancyRegions(vacancy: Pick<Vacancy, "area" | "otherRegions">): string {
+  const regions = [vacancy.area, ...(vacancy.otherRegions ?? []).map(variant => variant.region)].filter(Boolean);
+  return [...new Set(regions)].join(", ");
+}
+
 // «5 мин назад», «3 ч назад», «2 дн назад»; now — для тестов
 export function ago(value: string | number, now = Date.now()): string {
   const minutes = Math.max(0, Math.floor((now - new Date(value).getTime()) / 60000));

@@ -10,6 +10,8 @@ public record ReportAutoReplyCommand
 {
     public long ChatId { get; init; }
 
+    public long? MessageId { get; init; }
+
     public bool Sent { get; init; }
 
     [MaxLength(500)]

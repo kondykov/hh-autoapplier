@@ -180,5 +180,11 @@ public class Vacancy
     }
 
     // Просьба работодателя часто в самом конце описания (#72); промпты всё равно берут только начало
-    private const int MaxDescriptionLength = 20_000;
+    public const int MaxDescriptionLength = 20_000;
+
+    public const string RemoteWorkFormat = "Удалённо";
+
+    public bool CanGroupRemote() => !Imported && WorkFormat == RemoteWorkFormat
+        && !string.IsNullOrWhiteSpace(Company) && !string.IsNullOrWhiteSpace(Title)
+        && !string.IsNullOrWhiteSpace(Area) && !string.IsNullOrWhiteSpace(Description) && Description.Length < MaxDescriptionLength;
 }
